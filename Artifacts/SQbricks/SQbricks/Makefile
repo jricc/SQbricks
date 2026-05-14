@@ -192,6 +192,9 @@ container-pull:
 
 # Container Start
 
-start:
-	docker start -ai sqbricks
+start1:
+	docker start -ai sqbricks1
+
+start2:
+	docker start -ai sqbricks2
 

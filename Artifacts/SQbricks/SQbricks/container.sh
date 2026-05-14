@@ -55,7 +55,13 @@ else
 fi
 
 _pwd="$(pwd)"
-docker create --name="sqbricks" -ti \
+docker create --name="sqbricks1" -ti \
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v "${_pwd}/:/sqbricks/" \
+  "$IMAGE"
+
+docker create --name="sqbricks2" -ti \
   -e DISPLAY=$DISPLAY \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v "${_pwd}/:/sqbricks/" \
