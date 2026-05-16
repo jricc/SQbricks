@@ -56,3 +56,6 @@ Thumbs.db
 *.o
 *.a
 *.so
+
+.agents
+.codex
