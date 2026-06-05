@@ -34,6 +34,8 @@ tmp_dir="_tmp/light"
 timeout_s="${SQBRICKS_LIGHT_TIMEOUT:-120s}"
 memory_kb="${SQBRICKS_LIGHT_MEMORY_KB:-7340032}"
 perf_threshold="${SQBRICKS_LIGHT_PERF_THRESHOLD:-1.25}"
+min_perf_seconds="${SQBRICKS_LIGHT_MIN_PERF_SECONDS:-0.01}"
+run_count="${SQBRICKS_LIGHT_RUNS:-3}"
 
 suite_filter=""
 output=""
@@ -41,10 +43,16 @@ baseline=""
 save_baseline=""
 stable_mode="false"
 check_mode="false"
+quiet_mode="false"
 status_failed=0
 perf_failed=0
+row_count=0
+status_failure_count=0
+perf_failure_count=0
 
 declare -A baseline_times
+declare -a status_failure_messages
+declare -a perf_failure_messages
 
 usage() {
 	cat <<'USAGE'
@@ -58,12 +66,15 @@ Options:
   --save-baseline PATH  Save the current full light CSV result for later use.
   --stable              Print only stable status columns, without timings.
   --check               Exit non-zero on status mismatch or performance slowdown.
+  --quiet               Do not print the detailed CSV result to the terminal.
   -h, --help            Show this help.
 
 Environment:
   SQBRICKS_LIGHT_TIMEOUT=120s
   SQBRICKS_LIGHT_MEMORY_KB=7340032
   SQBRICKS_LIGHT_PERF_THRESHOLD=1.25
+  SQBRICKS_LIGHT_MIN_PERF_SECONDS=0.01
+  SQBRICKS_LIGHT_RUNS=3
 USAGE
 }
 
@@ -105,6 +116,9 @@ while [[ $# -gt 0 ]]; do
 	--check)
 		check_mode="true"
 		;;
+	--quiet)
+		quiet_mode="true"
+		;;
 	-h | --help)
 		usage
 		exit 0
@@ -120,6 +134,11 @@ done
 
 if [[ "$stable_mode" == "true" && -n "$save_baseline" ]]; then
 	echo "--save-baseline requires the full output, without --stable" >&2
+	exit 1
+fi
+
+if [[ ! "$run_count" =~ ^[1-9][0-9]*$ ]]; then
+	echo "SQBRICKS_LIGHT_RUNS must be a positive integer." >&2
 	exit 1
 fi
 
@@ -154,6 +173,37 @@ normalize_number() {
 	value="$(trim "$1")"
 	value="${value/,/.}"
 	printf "%s" "$value"
+}
+
+join_by() {
+	local delimiter="$1"
+	shift || true
+	local first="true"
+	local item
+
+	for item in "$@"; do
+		if [[ "$first" == "true" ]]; then
+			printf "%s" "$item"
+			first="false"
+		else
+			printf "%s%s" "$delimiter" "$item"
+		fi
+	done
+}
+
+median_numbers() {
+	printf "%s\n" "$@" | sort -n | awk '
+		{ values[NR] = $1 }
+		END {
+			if (NR == 0) {
+				exit 1
+			}
+			if (NR % 2 == 1) {
+				printf "%.6f", values[int((NR + 1) / 2)]
+			} else {
+				printf "%.6f", (values[NR / 2] + values[(NR / 2) + 1]) / 2
+			}
+		}'
 }
 
 list_or_empty() {
@@ -306,6 +356,11 @@ perf_info() {
 	perf_status="NA"
 
 	if is_number "$actual_time" && is_number "$baseline_seconds" && [[ "$baseline_seconds" != "0" && "$baseline_seconds" != "0.0" ]]; then
+		if awk -v actual="$actual_time" -v base="$baseline_seconds" -v min="$min_perf_seconds" \
+			'BEGIN { exit !(actual < min && base < min) }'; then
+			perf_status="TOO_FAST"
+			return
+		fi
 		ratio="$(awk -v actual="$actual_time" -v base="$baseline_seconds" 'BEGIN { printf "%.6f", actual / base }')"
 		perf_status="$(awk -v ratio="$ratio" -v threshold="$perf_threshold" 'BEGIN { if (ratio > threshold) print "SLOWER"; else if (ratio < 1 / threshold) print "FASTER"; else print "OK" }')"
 	fi
@@ -334,9 +389,13 @@ emit_row() {
 	local key
 	local raw_clean
 
+	row_count=$((row_count + 1))
+
 	if [[ "$expected" != "$actual" ]]; then
 		match="FAIL"
 		status_failed=1
+		status_failure_count=$((status_failure_count + 1))
+		status_failure_messages+=("$suite/$case_name $kind $opt: expected $expected, got $actual")
 	fi
 
 	if [[ "$stable_mode" == "true" ]]; then
@@ -349,6 +408,8 @@ emit_row() {
 	perf_info "$key" "$time_seconds"
 	if [[ "$perf_status" == "SLOWER" ]]; then
 		perf_failed=1
+		perf_failure_count=$((perf_failure_count + 1))
+		perf_failure_messages+=("$suite/$case_name $kind $opt: ${time_seconds}s vs ${baseline_seconds}s baseline, ratio $ratio > threshold $perf_threshold")
 	fi
 
 	raw_clean="$(clean_csv "$raw")"
@@ -453,22 +514,57 @@ run_sqv_result() {
 	local meas1="$8"
 	local meas2="$9"
 	local raw
+	local run_index
+	local run_status
+	local run_time
+	local last_raw=""
+	local statuses=()
+	local times=()
+	local run_summaries=()
 
-	if run_command dune exec -- ./bin/main.exe -sqv "$algo" s \
-		"$path1" "$path2" \
-		"$inputs1" "$inputs2" "$outputs1" "$outputs2" \
-		"$meas1" "$meas2" false; then
-		actual_status="$(normalize_success "$cmd_stdout")"
-		time_seconds="$(time_from_stdout "$cmd_stdout")"
-		raw="$(combined_raw "$cmd_stdout" "$cmd_stderr")"
-		raw_text="$raw"
-		return
+	for ((run_index = 1; run_index <= run_count; run_index++)); do
+		if run_command dune exec -- ./bin/main.exe -sqv "$algo" s \
+			"$path1" "$path2" \
+			"$inputs1" "$inputs2" "$outputs1" "$outputs2" \
+			"$meas1" "$meas2" false; then
+			run_status="$(normalize_success "$cmd_stdout")"
+			run_time="$(time_from_stdout "$cmd_stdout")"
+			raw="$(combined_raw "$cmd_stdout" "$cmd_stderr")"
+		else
+			raw="$(combined_raw "$cmd_stdout" "$cmd_stderr")"
+			run_status="$(normalize_failure "$cmd_code" "$raw")"
+			run_time=""
+		fi
+
+		statuses+=("$run_status")
+		if [[ -n "$run_time" ]]; then
+			times+=("$run_time")
+		fi
+		last_raw="$raw"
+		run_summaries+=("run${run_index}:status=${run_status},time=${run_time:-NA},raw=$(clean_csv "$raw")")
+	done
+
+	actual_status="${statuses[0]}"
+	for run_status in "${statuses[@]}"; do
+		if [[ "$run_status" != "$actual_status" ]]; then
+			actual_status="FLAKY"
+			time_seconds=""
+			raw_text="runs=$run_count statuses=[$(join_by "," "${statuses[@]}")] details=[$(join_by " | " "${run_summaries[@]}")]"
+			return
+		fi
+	done
+
+	if [[ "${#times[@]}" -gt 0 ]]; then
+		time_seconds="$(median_numbers "${times[@]}")"
+	else
+		time_seconds=""
 	fi
 
-	raw="$(combined_raw "$cmd_stdout" "$cmd_stderr")"
-	actual_status="$(normalize_failure "$cmd_code" "$raw")"
-	time_seconds=""
-	raw_text="$raw"
+	if [[ "$run_count" -eq 1 ]]; then
+		raw_text="$last_raw"
+	else
+		raw_text="runs=$run_count status=$actual_status times=[$(join_by "," "${times[@]}")] median=${time_seconds:-NA}"
+	fi
 }
 
 run_case_modes() {
@@ -709,6 +805,34 @@ run_all() {
 	run_transform_manifest
 }
 
+print_check_summary() {
+	local detail_path="$output"
+
+	if [[ "$check_mode" != "true" ]]; then
+		return
+	fi
+
+	if [[ "$status_failed" -eq 0 && "$perf_failed" -eq 0 ]]; then
+		echo "Light regression check OK: $row_count rows matched expected statuses; no median slowdown exceeded the threshold across $run_count run(s)."
+	else
+		echo "Light regression check FAILED: $status_failure_count status mismatch(es), $perf_failure_count performance regression(s) across $run_count run(s)."
+
+		if [[ "$status_failure_count" -gt 0 ]]; then
+			echo "Status mismatches:"
+			printf "  - %s\n" "${status_failure_messages[@]}"
+		fi
+
+		if [[ "$perf_failure_count" -gt 0 ]]; then
+			echo "Performance regressions:"
+			printf "  - %s\n" "${perf_failure_messages[@]}"
+		fi
+	fi
+
+	if [[ -n "$detail_path" ]]; then
+		echo "Detailed CSV: $detail_path"
+	fi
+}
+
 load_baseline
 
 result_file="$(mktemp "$tmp_dir/results.XXXXXX")" || exit 1
@@ -726,7 +850,11 @@ if [[ -n "$save_baseline" ]]; then
 	cp "$result_file" "$save_baseline"
 fi
 
-cat "$result_file"
+if [[ "$quiet_mode" != "true" ]]; then
+	cat "$result_file"
+fi
+
+print_check_summary
 
 if [[ "$check_mode" == "true" && ( "$status_failed" -ne 0 || "$perf_failed" -ne 0 ) ]]; then
 	exit 1

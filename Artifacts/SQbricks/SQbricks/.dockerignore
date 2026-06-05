@@ -2,6 +2,7 @@ tmp/*
 _tmp/*
 _build_*/
 benchmarks/result/
+benchmarks/baseline/
 .vscode/
 
 myqlm-env/
