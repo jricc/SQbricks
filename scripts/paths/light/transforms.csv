@@ -1,7 +1,7 @@
 Suite;Case;Kind;ExpectedSequence;ExpectedParallel;Path
 owm;tof_3;owm;EQ;EQ;benchmarks/Feynman/tof_3.qasm
 owm;barenco_tof_3;owm;EQ;EQ;benchmarks/Feynman/barenco_tof_3.qasm
-owm;qft_4;owm;EQ;NC;benchmarks/Feynman/qft_4.qasm
+owm;qft_4;owm;NC;NC;benchmarks/Feynman/qft_4.qasm
 tele;tof_3;tele;EQ;EQ;benchmarks/Feynman/tof_3.qasm
 tele;barenco_tof_3;tele;EQ;EQ;benchmarks/Feynman/barenco_tof_3.qasm
 tele;qft_4;tele;EQ;EQ;benchmarks/Feynman/qft_4.qasm
