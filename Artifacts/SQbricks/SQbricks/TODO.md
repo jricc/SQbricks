@@ -2,15 +2,16 @@
 
 ## Next
 
-- [ ] Regenerate the local light baseline:
-  `make regression-light-baseline`
-- [ ] Run the light non-regression check:
-  `make regression-light-check`
-- [ ] If the check fails, read the terminal summary first.
-- [ ] If needed, inspect the detailed CSV written under `benchmarks/result/`.
-- [ ] Update this file with the next action.
+- [x] Regenerate the local light baseline.
+- [x] Run the light non-regression check successfully.
+- [ ] Consolidate `scripts/benchmarks-light.sh` in quality mode.
+- [ ] Review and validate the consolidated light benchmark.
+- [ ] Design an intermediate benchmark with a representative sample of larger
+  circuits.
 
 ## Notes
 
 - The light baseline is local to the machine and is not versioned.
 - The manifest remains the functional oracle.
+- The light check currently uses five complete rounds and median timings.
+- The last successful check covered 29 rows with no detected regression.
