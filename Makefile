@@ -29,7 +29,7 @@ RESULT_FOLDER := benchmarks/result/$(DATE)
 LOG_FOLDER := test/logs/$(DATE)
 LIGHT_BASELINE ?= benchmarks/baseline/light.csv
 LIGHT_RESULT ?= benchmarks/result/light_$(DATE_FILE).csv
-LIGHT_RUNS ?= 3
+LIGHT_RUNS ?= 5
 MAKEFLAGS += --no-print-directory
 
 # Documentation generation
@@ -115,11 +115,11 @@ benchmarks: tele owm  owm-vs-qiskit owm-vs-tele qiskit-hybrid veriqc unit-vs-hyb
 
 regression-light:
 	@SQBRICKS_LIGHT_RUNS=$(LIGHT_RUNS) ./scripts/benchmarks-light.sh --output $(LIGHT_RESULT) --quiet
-	@echo "Light regression benchmark written to $(LIGHT_RESULT) using $(LIGHT_RUNS) run(s) per verification"
+	@echo "Light regression benchmark written to $(LIGHT_RESULT) using $(LIGHT_RUNS) round(s)"
 
 regression-light-baseline:
 	@SQBRICKS_LIGHT_RUNS=$(LIGHT_RUNS) ./scripts/benchmarks-light.sh --save-baseline $(LIGHT_BASELINE) --quiet
-	@echo "Light regression baseline written to $(LIGHT_BASELINE) using $(LIGHT_RUNS) run(s) per verification"
+	@echo "Light regression baseline written to $(LIGHT_BASELINE) using $(LIGHT_RUNS) round(s)"
 
 regression-light-check:
 	@SQBRICKS_LIGHT_RUNS=$(LIGHT_RUNS) ./scripts/benchmarks-light.sh --baseline $(LIGHT_BASELINE) --check --output $(LIGHT_RESULT) --quiet
