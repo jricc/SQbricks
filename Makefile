@@ -19,7 +19,7 @@
 .PHONY: all benchmark sanity sanity-unit sanity-hybrid sanity-partial benchmarks \
         regression-light regression-light-baseline regression-light-check \
         owm tele unit-vs-hybrid qiskit-hybrid owm-vs-qiskit owm-vs-tele veriqc \
-        tests tests_prim tests_qiskit tests_mbqc tests_unit \
+        tests tests_prim tests_qiskit tests_mbqc tests_unit tests_regression_light \
         build container start fig6 fig7 examples \
 				doc clean_doc
 
@@ -29,7 +29,7 @@ RESULT_FOLDER := benchmarks/result/$(DATE)
 LOG_FOLDER := test/logs/$(DATE)
 LIGHT_BASELINE ?= benchmarks/baseline/light.csv
 LIGHT_RESULT ?= benchmarks/result/light_$(DATE_FILE).csv
-LIGHT_RUNS ?= 5
+LIGHT_RUNS ?= 3
 MAKEFLAGS += --no-print-directory
 
 # Documentation generation
@@ -49,7 +49,10 @@ clean_doc:
 
 # Tests
 
-tests: tests_prim tests_qiskit tests_mbqc tests_unit tests_verif
+tests: tests_prim tests_qiskit tests_mbqc tests_unit tests_verif tests_regression_light
+
+tests_regression_light:
+	@bash test/benchmarks-light-validation.sh
 
 tests_qiskit:
 	@rm -rf $(shell pwd)/_build/qiskit
