@@ -33,10 +33,13 @@ tmp_dir="_tmp/light"
 
 timeout_s="${SQBRICKS_LIGHT_TIMEOUT:-120s}"
 memory_kb="${SQBRICKS_LIGHT_MEMORY_KB:-7340032}"
+
+# A slowdown is reported only when both the relative and absolute limits fail.
 perf_threshold="${SQBRICKS_LIGHT_PERF_THRESHOLD:-1.25}"
 min_perf_seconds="${SQBRICKS_LIGHT_MIN_PERF_SECONDS:-0.01}"
 min_slowdown_seconds="${SQBRICKS_LIGHT_MIN_SLOWDOWN_SECONDS:-0.05}"
-run_count="${SQBRICKS_LIGHT_RUNS:-5}"
+run_count="${SQBRICKS_LIGHT_RUNS:-3}"
+progress_mode="${SQBRICKS_LIGHT_PROGRESS:-auto}"
 
 suite_filter=""
 output=""
@@ -45,15 +48,35 @@ save_baseline=""
 stable_mode="false"
 check_mode="false"
 quiet_mode="false"
-status_failed=0
-perf_failed=0
 row_count=0
 status_failure_count=0
 perf_failure_count=0
+perf_data_failure_count=0
+performance_row_count=0
+verifications_per_round=0
+progress_enabled="false"
+progress_current=0
+progress_total=0
+progress_line_open="false"
+definition_schema="1"
 
+# Baseline data, indexed by "suite|case|kind|mode".
 declare -A baseline_times
+declare -A baseline_rows
+declare -A baseline_raws
+declare -A baseline_definition_hashes
+
+# Current manifest definition, built before any benchmark is executed.
+declare -A manifest_rows
+declare -A manifest_definition_hashes
+declare -A tracked_performance
+
+# Human-readable diagnostics accumulated for the final summary.
 declare -a status_failure_messages
 declare -a perf_failure_messages
+declare -a perf_data_failure_messages
+
+# Results accumulated across rounds before one final CSV row is emitted.
 declare -a row_keys
 declare -A row_seen
 declare -A row_suite
@@ -79,7 +102,8 @@ Options:
   --baseline PATH       Compare timings with a previous full light CSV result.
   --save-baseline PATH  Save the current full light CSV result for later use.
   --stable              Print only stable status columns, without timings.
-  --check               Exit non-zero on status mismatch or performance slowdown.
+  --check               Require a valid baseline and exit non-zero on regression
+                        or incomplete tracked performance data.
   --quiet               Do not print the detailed CSV result to the terminal.
   -h, --help            Show this help.
 
@@ -89,7 +113,8 @@ Environment:
   SQBRICKS_LIGHT_PERF_THRESHOLD=1.25
   SQBRICKS_LIGHT_MIN_PERF_SECONDS=0.01
   SQBRICKS_LIGHT_MIN_SLOWDOWN_SECONDS=0.05
-  SQBRICKS_LIGHT_RUNS=5
+  SQBRICKS_LIGHT_RUNS=3
+  SQBRICKS_LIGHT_PROGRESS=auto
 USAGE
 }
 
@@ -152,10 +177,28 @@ if [[ "$stable_mode" == "true" && -n "$save_baseline" ]]; then
 	exit 1
 fi
 
+if [[ "$stable_mode" == "true" && "$check_mode" == "true" ]]; then
+	echo "--check requires the full output, without --stable" >&2
+	exit 1
+fi
+
+if [[ "$check_mode" == "true" && -z "$baseline" ]]; then
+	echo "--check requires --baseline" >&2
+	exit 1
+fi
+
 if [[ ! "$run_count" =~ ^[1-9][0-9]*$ ]]; then
 	echo "SQBRICKS_LIGHT_RUNS must be a positive integer." >&2
 	exit 1
 fi
+
+case "$progress_mode" in
+auto | always | never) ;;
+*)
+	echo "SQBRICKS_LIGHT_PROGRESS must be auto, always, or never." >&2
+	exit 1
+	;;
+esac
 
 if [[ ! -f "$pairs_file" ]]; then
 	echo "Missing manifest: $pairs_file" >&2
@@ -183,11 +226,75 @@ is_number() {
 	[[ "$1" =~ ^[0-9]+([.][0-9]+)?$ ]]
 }
 
+# Timings must be strictly positive: zero usually means missing or malformed data.
+is_positive_number() {
+	is_number "$1" && awk -v value="$1" 'BEGIN { exit !(value > 0) }'
+}
+
 normalize_number() {
 	local value
 	value="$(trim "$1")"
 	value="${value/,/.}"
 	printf "%s" "$value"
+}
+
+# Hash an input file so that changing a circuit invalidates the local baseline.
+file_content_hash() {
+	local path="$1"
+	local digest
+
+	ensure_input "$path"
+	if ! digest="$(sha256sum -- "$path")"; then
+		echo "Failed to hash benchmark input: $path" >&2
+		return 1
+	fi
+	printf "%s" "${digest%% *}"
+}
+
+# Build the stable identity of one Sequence or Parallel verification.
+# The SQbricks binary is intentionally absent: its changes are what we measure.
+benchmark_definition_hash() {
+	local source_type="$1"
+	local suite="$2"
+	local case_name="$3"
+	local kind="$4"
+	local opt="$5"
+	local expected="$6"
+	local track_performance="$7"
+	local path1="$8"
+	local path2="$9"
+	local path1_hash
+	local path2_hash="-"
+	local digest
+
+	path1_hash="$(file_content_hash "$path1")" || return 1
+	if [[ -n "$path2" ]]; then
+		path2_hash="$(file_content_hash "$path2")" || return 1
+	fi
+
+	digest="$(
+		printf '%s\n' \
+			"schema=$definition_schema" \
+			"source=$source_type" \
+			"suite=$suite" \
+			"case=$case_name" \
+			"kind=$kind" \
+			"opt=$opt" \
+			"expected=$expected" \
+			"track_performance=$track_performance" \
+			"path1=$path1" \
+			"path1_sha256=$path1_hash" \
+			"path2=$path2" \
+			"path2_sha256=$path2_hash" \
+			"runs=$run_count" \
+			"timeout=$timeout_s" \
+			"memory_kb=$memory_kb" |
+			sha256sum
+	)" || {
+		echo "Failed to hash benchmark definition: $suite/$case_name $kind $opt" >&2
+		return 1
+	}
+	printf "%s" "${digest%% *}"
 }
 
 median_numbers() {
@@ -217,6 +324,58 @@ list_or_empty() {
 
 safe_name() {
 	printf "%s" "$1" | sed 's/[^A-Za-z0-9_.-]/_/g'
+}
+
+# Redraw one terminal line; CSV output remains separate and quiet.
+render_progress() {
+	local label="$1"
+	local bar_width=30
+	local percent
+	local filled
+	local pending_width
+	local complete
+	local pending
+	local bar
+	local displayed_round="$current_round"
+
+	if [[ "$progress_enabled" != "true" || "$progress_total" -eq 0 ]]; then
+		return
+	fi
+
+	if [[ "$displayed_round" -eq 0 ]]; then
+		displayed_round=1
+	fi
+
+	percent=$((progress_current * 100 / progress_total))
+	filled=$((progress_current * bar_width / progress_total))
+	pending_width=$((bar_width - filled))
+	printf -v complete "%*s" "$filled" ""
+	printf -v pending "%*s" "$pending_width" ""
+	bar="${complete// /#}${pending// /-}"
+
+	printf "\rLight regression [%s] %3d%% %d/%d round %d/%d - %.48s\033[K" \
+		"$bar" "$percent" "$progress_current" "$progress_total" \
+		"$displayed_round" "$run_count" "$label" >&2
+	progress_line_open="true"
+}
+
+# One progress step corresponds to one completed SQbricks verification.
+advance_progress() {
+	local suite="$1"
+	local case_name="$2"
+	local kind="$3"
+	local opt="$4"
+
+	progress_current=$((progress_current + 1))
+	render_progress "$suite/$case_name $kind $opt"
+}
+
+# End the carriage-return based progress line before printing diagnostics.
+finish_progress() {
+	if [[ "$progress_line_open" == "true" ]]; then
+		printf "\n" >&2
+		progress_line_open="false"
+	fi
 }
 
 combined_raw() {
@@ -274,7 +433,8 @@ normalize_success() {
 	elif [[ "$raw" == "EQ" || "$raw" == *Equivalent* ]]; then
 		printf "EQ"
 	else
-		printf "NC"
+		# A successful process with an unknown answer is not evidence of NC.
+		printf "UNEXPECTED_OUTPUT"
 	fi
 }
 
@@ -304,6 +464,7 @@ time_from_stdout() {
 	fi
 }
 
+# Read only the baseline fields needed by the preflight checks and comparison.
 load_baseline() {
 	local suite
 	local case_name
@@ -323,7 +484,12 @@ load_baseline() {
 	local cu1
 	local gates
 	local time
-	local rest
+	local previous_baseline
+	local previous_ratio
+	local previous_perf_status
+	local raw
+	local definition_hash
+	local key
 
 	if [[ -z "$baseline" ]]; then
 		return
@@ -334,18 +500,210 @@ load_baseline() {
 		exit 1
 	fi
 
-	while IFS=';' read -r suite case_name kind tool version lift opt expected actual match ch cs cz ccz ccx cu1 gates time rest || [[ -n "$suite" ]]; do
+	while IFS=';' read -r suite case_name kind tool version lift opt expected actual match ch cs cz ccz ccx cu1 gates time previous_baseline previous_ratio previous_perf_status raw definition_hash || [[ -n "$suite" ]]; do
 		if [[ "$suite" == "Suite" || -z "$(trim "$suite")" ]]; then
 			continue
 		fi
 
+		key="$suite|$case_name|$kind|$opt"
+		if [[ -n "${baseline_rows[$key]:-}" ]]; then
+			echo "Duplicate baseline verification: $(benchmark_key_label "$key")" >&2
+			exit 1
+		fi
+		baseline_rows["$key"]="true"
+		baseline_raws["$key"]="$raw"
+		baseline_definition_hashes["$key"]="$definition_hash"
 		time="$(normalize_number "$time")"
 		if is_number "$time"; then
-			baseline_times["$suite|$case_name|$kind|$opt"]="$time"
+			baseline_times["$key"]="$time"
 		fi
 	done <"$baseline"
 }
 
+# Count and validate the timing samples stored in a row's Raw field.
+sample_count_from_raw() {
+	local raw="$1"
+	local samples_text
+	local sample
+	local samples=()
+
+	if [[ "$raw" != *"times=["*"]"* ]]; then
+		printf "0"
+		return
+	fi
+
+	samples_text="${raw#*times=[}"
+	samples_text="${samples_text%%]*}"
+	if [[ -z "$samples_text" ]]; then
+		printf "0"
+		return
+	fi
+
+	IFS=',' read -r -a samples <<<"$samples_text"
+	for sample in "${samples[@]}"; do
+		sample="$(normalize_number "$sample")"
+		if ! is_positive_number "$sample"; then
+			printf "invalid"
+			return
+		fi
+	done
+
+	printf "%d" "${#samples[@]}"
+}
+
+# Read the number of rounds recorded in a row's Raw field.
+round_count_from_raw() {
+	local raw="$1"
+	local round_text
+
+	if [[ "$raw" != *"rounds="* ]]; then
+		printf "missing"
+		return
+	fi
+
+	round_text="${raw#*rounds=}"
+	round_text="${round_text%% *}"
+	if [[ "$round_text" =~ ^[1-9][0-9]*$ ]]; then
+		printf "%s" "$round_text"
+	else
+		printf "invalid"
+	fi
+}
+
+# Turn the internal associative-array key into a readable diagnostic label.
+benchmark_key_label() {
+	local key="$1"
+	local suite
+	local case_name
+	local kind
+	local opt
+
+	IFS='|' read -r suite case_name kind opt <<<"$key"
+	printf "%s/%s %s %s" "$suite" "$case_name" "$kind" "$opt"
+}
+
+# Stop before running SQbricks and print every problem found by one validation.
+fail_preflight() {
+	local summary="$1"
+	shift
+
+	finish_progress
+	echo "Light regression check FAILED: $summary" >&2
+	printf "  - %s\n" "$@" >&2
+	exit 1
+}
+
+# Reject baseline rows whose case or execution mode disappeared from a manifest.
+validate_manifest_coverage() {
+	local key
+	local suite
+	local case_name
+	local kind
+	local opt
+	local failure_messages=()
+
+	if [[ "$check_mode" != "true" ]]; then
+		return
+	fi
+
+	for key in "${!baseline_rows[@]}"; do
+		IFS='|' read -r suite case_name kind opt <<<"$key"
+		if ! suite_is_selected "$suite"; then
+			continue
+		fi
+		if [[ -z "${manifest_rows[$key]:-}" ]]; then
+			failure_messages+=("Baseline contains removed benchmark verification: $(benchmark_key_label "$key")")
+		fi
+	done
+
+	if [[ "${#failure_messages[@]}" -gt 0 ]]; then
+		fail_preflight "benchmark coverage changed." "${failure_messages[@]}"
+	fi
+}
+
+# Reject a baseline produced from different manifests, inputs, or run settings.
+validate_baseline_definitions() {
+	local key
+	local label
+	local baseline_hash
+	local current_hash
+	local failure_messages=()
+
+	if [[ "$check_mode" != "true" ]]; then
+		return
+	fi
+
+	for key in "${!manifest_rows[@]}"; do
+		if [[ -z "${baseline_rows[$key]:-}" ]]; then
+			continue
+		fi
+
+		label="$(benchmark_key_label "$key")"
+		baseline_hash="${baseline_definition_hashes[$key]:-}"
+		current_hash="${manifest_definition_hashes[$key]:-}"
+		if [[ -z "$baseline_hash" ]]; then
+			failure_messages+=("Missing benchmark definition hash for $label; regenerate the local baseline")
+		elif [[ "$baseline_hash" != "$current_hash" ]]; then
+			failure_messages+=("Benchmark definition changed for $label; regenerate the local baseline")
+		fi
+	done
+
+	if [[ "${#failure_messages[@]}" -gt 0 ]]; then
+		fail_preflight "benchmark definition changed." "${failure_messages[@]}"
+	fi
+}
+
+# Ensure every performance row has a usable timing for every configured round.
+validate_baseline_performance_data() {
+	local key
+	local label
+	local sample_count
+	local baseline_round_count
+	local failure_messages=()
+
+	if [[ "$check_mode" != "true" ]]; then
+		return
+	fi
+
+	for key in "${!tracked_performance[@]}"; do
+		label="$(benchmark_key_label "$key")"
+
+		if [[ -z "${baseline_rows[$key]:-}" ]]; then
+			failure_messages+=("Missing baseline timing for $label")
+			continue
+		fi
+
+		if ! is_positive_number "${baseline_times[$key]:-}"; then
+			failure_messages+=("Invalid baseline timing for $label")
+			continue
+		fi
+
+		sample_count="$(sample_count_from_raw "${baseline_raws[$key]:-}")"
+		if [[ "$sample_count" == "invalid" ]]; then
+			failure_messages+=("Invalid baseline timing samples for $label")
+			continue
+		fi
+		if [[ "$sample_count" -ne "$run_count" ]]; then
+			failure_messages+=("Baseline sample count mismatch for $label: expected $run_count, got $sample_count")
+			continue
+		fi
+
+		baseline_round_count="$(round_count_from_raw "${baseline_raws[$key]:-}")"
+		if [[ "$baseline_round_count" == "missing" || "$baseline_round_count" == "invalid" ]]; then
+			failure_messages+=("Invalid baseline round count for $label")
+			continue
+		fi
+		if [[ "$baseline_round_count" -ne "$run_count" ]]; then
+			failure_messages+=("Baseline round count mismatch for $label: expected $run_count, got $baseline_round_count")
+		fi
+	done
+
+	if [[ "${#failure_messages[@]}" -gt 0 ]]; then
+		fail_preflight "invalid baseline performance data." "${failure_messages[@]}"
+	fi
+}
+
+# Compare a median timing with its baseline and expose the classification fields.
 perf_info() {
 	local key="$1"
 	local actual_time="$2"
@@ -356,6 +714,7 @@ perf_info() {
 	perf_status="NA"
 
 	if is_number "$actual_time" && is_number "$baseline_seconds" && [[ "$baseline_seconds" != "0" && "$baseline_seconds" != "0.0" ]]; then
+		# Very short measurements are too noisy to support a useful ratio.
 		if awk -v actual="$actual_time" -v base="$baseline_seconds" -v min="$min_perf_seconds" \
 			'BEGIN { exit !(actual < min && base < min) }'; then
 			perf_status="TOO_FAST"
@@ -380,10 +739,11 @@ emit_header() {
 	if [[ "$stable_mode" == "true" ]]; then
 		echo "Suite;Case;Kind;Opt;ExpectedStatus;ActualStatus;StatusMatch"
 	else
-		echo "Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH;CS;CZ;CCZ;CCX;CU1;Gates;TimeSeconds;BaselineSeconds;Ratio;PerfStatus;Raw"
+		echo "Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH;CS;CZ;CCZ;CCX;CU1;Gates;TimeSeconds;BaselineSeconds;Ratio;PerfStatus;Raw;DefinitionHash"
 	fi
 }
 
+# Store one round in memory; rows are written only after all rounds are complete.
 emit_row() {
 	local suite="$1"
 	local case_name="$2"
@@ -428,8 +788,11 @@ emit_row() {
 		row_raws["$key"]+=" | "
 	fi
 	row_raws["$key"]+="round${current_round}:status=${actual},time=${time_seconds:-NA},raw=$(clean_csv "$raw")"
+
+	advance_progress "$suite" "$case_name" "$kind" "$opt"
 }
 
+# Classify one aggregated row and write its final CSV representation.
 emit_final_row() {
 	local suite="$1"
 	local case_name="$2"
@@ -441,15 +804,19 @@ emit_final_row() {
 	local gate_counts="$8"
 	local time_seconds="$9"
 	local raw="${10}"
+	local timing_complete="${11}"
 	local match="OK"
 	local key
 	local raw_clean
 
 	row_count=$((row_count + 1))
+	key="$suite|$case_name|$kind|$opt"
+	if [[ "${tracked_performance[$key]:-no}" == "yes" ]]; then
+		performance_row_count=$((performance_row_count + 1))
+	fi
 
-	if [[ "$expected" != "$actual" ]]; then
+	if [[ "$expected" != "$actual" || "$actual" == "UNEXPECTED_OUTPUT" ]]; then
 		match="FAIL"
-		status_failed=1
 		status_failure_count=$((status_failure_count + 1))
 		status_failure_messages+=("$suite/$case_name $kind $opt: expected $expected, got $actual")
 	fi
@@ -460,32 +827,46 @@ emit_final_row() {
 		return
 	fi
 
-	key="$suite|$case_name|$kind|$opt"
-	perf_info "$key" "$time_seconds"
-	if [[ "$perf_status" == "SLOWER" ]]; then
-		perf_failed=1
-		perf_failure_count=$((perf_failure_count + 1))
-		perf_failure_messages+=("$suite/$case_name $kind $opt: ${time_seconds}s vs ${baseline_seconds}s baseline, +${slowdown_seconds}s and ratio $ratio")
+	if [[ "${tracked_performance[$key]:-no}" == "yes" && "$timing_complete" == "true" ]]; then
+		perf_info "$key" "$time_seconds"
+		if [[ "$perf_status" == "SLOWER" ]]; then
+			perf_failure_count=$((perf_failure_count + 1))
+			perf_failure_messages+=("$suite/$case_name $kind $opt: ${time_seconds}s vs ${baseline_seconds}s baseline, +${slowdown_seconds}s and ratio $ratio")
+		fi
+	elif [[ "${tracked_performance[$key]:-no}" == "yes" ]]; then
+		baseline_seconds="${baseline_times[$key]:-}"
+		ratio=""
+		perf_status="INCOMPLETE"
+	else
+		baseline_seconds=""
+		ratio=""
+		perf_status="NOT_TRACKED"
 	fi
 
 	raw_clean="$(clean_csv "$raw")"
-	printf "%s;%s;%s;SQbricks;2025;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s\n" \
+	printf "%s;%s;%s;SQbricks;2025;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s\n" \
 		"$suite" "$case_name" "$kind" "$lift" "$opt" "$expected" "$actual" "$match" \
-		"$gate_counts" "$time_seconds" "$baseline_seconds" "$ratio" "$perf_status" "$raw_clean"
+		"$gate_counts" "$time_seconds" "$baseline_seconds" "$ratio" "$perf_status" "$raw_clean" \
+		"${manifest_definition_hashes[$key]}"
 }
 
+# Merge all rounds, reject incomplete timing series, and compute medians.
 emit_results() {
 	local key
 	local actual
 	local time_seconds
 	local raw
 	local status
+	local sample
+	local sample_count
+	local timing_complete
 	local statuses=()
 	local times=()
 
 	emit_header
 
 	for key in "${row_keys[@]}"; do
+		# A status is accepted only when every round returned the same answer.
 		IFS=',' read -r -a statuses <<<"${row_statuses[$key]}"
 		actual="${statuses[0]}"
 		for status in "${statuses[@]}"; do
@@ -496,8 +877,28 @@ emit_results() {
 		done
 
 		time_seconds=""
-		if [[ "$actual" != "FLAKY" && -n "${row_times[$key]}" ]]; then
+		timing_complete="true"
+		times=()
+		if [[ -n "${row_times[$key]}" ]]; then
 			IFS=',' read -r -a times <<<"${row_times[$key]}"
+		fi
+		sample_count=0
+		for sample in "${times[@]}"; do
+			if is_positive_number "$sample"; then
+				sample_count=$((sample_count + 1))
+			fi
+		done
+
+		# Performance rows need exactly one valid timing from every round.
+		if [[ "${tracked_performance[$key]:-no}" == "yes" && "$sample_count" -ne "$run_count" ]]; then
+			timing_complete="false"
+			perf_data_failure_count=$((perf_data_failure_count + 1))
+			perf_data_failure_messages+=(
+				"Incomplete timing samples for $(benchmark_key_label "$key"): expected $run_count, got $sample_count"
+			)
+		fi
+
+		if [[ "$actual" != "FLAKY" && "$sample_count" -gt 0 && "$timing_complete" == "true" ]]; then
 			time_seconds="$(median_numbers "${times[@]}")"
 		fi
 
@@ -517,7 +918,8 @@ emit_results() {
 			"$actual" \
 			"${row_gates[$key]}" \
 			"$time_seconds" \
-			"$raw"
+			"$raw" \
+			"$timing_complete"
 	done
 }
 
@@ -817,16 +1219,144 @@ suite_is_selected() {
 	[[ -z "$suite_filter" || "$suite_filter" == "$suite" ]]
 }
 
+# Validate the performance marker once per manifest row.
+validate_track_performance() {
+	local suite="$1"
+	local case_name="$2"
+	local track_performance="$3"
+
+	if [[ "$track_performance" != "yes" && "$track_performance" != "no" ]]; then
+		echo "Invalid TrackPerformance value for $suite/$case_name: $track_performance" >&2
+		exit 1
+	fi
+}
+
+# Register one execution mode and compute the definition stored in the CSV.
+register_verification() {
+	local source_type="$1"
+	local suite="$2"
+	local case_name="$3"
+	local kind="$4"
+	local opt="$5"
+	local expected="$6"
+	local track_performance="$7"
+	local path1="$8"
+	local path2="$9"
+	local key
+
+	if [[ "$expected" == "-" ]]; then
+		return
+	fi
+
+	key="$suite|$case_name|$kind|$opt"
+	if [[ -n "${manifest_rows[$key]:-}" ]]; then
+		echo "Duplicate benchmark verification: $(benchmark_key_label "$key")" >&2
+		exit 1
+	fi
+	manifest_rows["$key"]="true"
+	manifest_definition_hashes["$key"]="$(benchmark_definition_hash \
+		"$source_type" "$suite" "$case_name" "$kind" "$opt" "$expected" \
+		"$track_performance" "$path1" "$path2")" || exit 1
+
+	if [[ "$track_performance" == "yes" ]]; then
+		tracked_performance["$key"]="yes"
+	fi
+	verifications_per_round=$((verifications_per_round + 1))
+}
+
+# Load direct circuit comparisons from pairs.csv.
+load_pair_definitions() {
+	local suite
+	local case_name
+	local kind
+	local expected_seq
+	local expected_par
+	local track_performance
+	local path1
+	local path2
+
+	while IFS=';' read -r suite case_name kind expected_seq expected_par track_performance path1 path2 || [[ -n "$suite" ]]; do
+		if [[ "$suite" == "Suite" || -z "$(trim "$suite")" ]]; then
+			continue
+		fi
+		if ! suite_is_selected "$suite"; then
+			continue
+		fi
+		validate_track_performance "$suite" "$case_name" "$track_performance"
+		register_verification "pair" "$suite" "$case_name" "$kind" \
+			"Sequence" "$expected_seq" "$track_performance" "$path1" "$path2"
+		register_verification "pair" "$suite" "$case_name" "$kind" \
+			"Parallel" "$expected_par" "$track_performance" "$path1" "$path2"
+	done <"$pairs_file"
+}
+
+# Load transformation-based comparisons from transforms.csv.
+load_transform_definitions() {
+	local suite
+	local case_name
+	local kind
+	local expected_seq
+	local expected_par
+	local track_performance
+	local path
+
+	while IFS=';' read -r suite case_name kind expected_seq expected_par track_performance path || [[ -n "$suite" ]]; do
+		if [[ "$suite" == "Suite" || -z "$(trim "$suite")" ]]; then
+			continue
+		fi
+		if ! suite_is_selected "$suite"; then
+			continue
+		fi
+		validate_track_performance "$suite" "$case_name" "$track_performance"
+		register_verification "transform" "$suite" "$case_name" "$kind" \
+			"Sequence" "$expected_seq" "$track_performance" "$path" ""
+		register_verification "transform" "$suite" "$case_name" "$kind" \
+			"Parallel" "$expected_par" "$track_performance" "$path" ""
+	done <"$transforms_file"
+}
+
+# Read all selected definitions before loading or validating the baseline.
+load_benchmark_definitions() {
+	load_pair_definitions
+	load_transform_definitions
+
+	if [[ "$verifications_per_round" -eq 0 ]]; then
+		if [[ -n "$suite_filter" ]]; then
+			echo "No benchmark verification found for suite: $suite_filter" >&2
+		else
+			echo "No benchmark verification found in the light manifests." >&2
+		fi
+		exit 1
+	fi
+}
+
+# Derive the progress total from the definitions that were actually selected.
+configure_progress() {
+	progress_total=$((verifications_per_round * run_count))
+	case "$progress_mode" in
+	always) progress_enabled="true" ;;
+	auto)
+		if [[ -t 2 ]]; then
+			progress_enabled="true"
+		fi
+		;;
+	never) progress_enabled="false" ;;
+	esac
+
+	render_progress "starting"
+}
+
 run_pair_manifest() {
 	local suite
 	local case_name
 	local kind
 	local expected_seq
 	local expected_par
+	local track_performance
 	local path1
 	local path2
 
-	while IFS=';' read -r suite case_name kind expected_seq expected_par path1 path2 || [[ -n "$suite" ]]; do
+	while IFS=';' read -r suite case_name kind expected_seq expected_par track_performance path1 path2 || [[ -n "$suite" ]]; do
 		if [[ "$suite" == "Suite" || -z "$(trim "$suite")" ]]; then
 			continue
 		fi
@@ -842,9 +1372,10 @@ run_transform_manifest() {
 	local kind
 	local expected_seq
 	local expected_par
+	local track_performance
 	local path
 
-	while IFS=';' read -r suite case_name kind expected_seq expected_par path || [[ -n "$suite" ]]; do
+	while IFS=';' read -r suite case_name kind expected_seq expected_par track_performance path || [[ -n "$suite" ]]; do
 		if [[ "$suite" == "Suite" || -z "$(trim "$suite")" ]]; then
 			continue
 		fi
@@ -872,6 +1403,7 @@ run_round() {
 	run_transform_manifest
 }
 
+# Print only the concise verdict; the detailed rows already live in the CSV.
 print_check_summary() {
 	local detail_path="$output"
 
@@ -879,10 +1411,10 @@ print_check_summary() {
 		return
 	fi
 
-	if [[ "$status_failed" -eq 0 && "$perf_failed" -eq 0 ]]; then
-		echo "Light regression check OK: $row_count rows matched expected statuses; no median slowdown exceeded both thresholds across $run_count round(s)."
+	if [[ "$status_failure_count" -eq 0 && "$perf_failure_count" -eq 0 && "$perf_data_failure_count" -eq 0 ]]; then
+		echo "Light regression check OK: $row_count rows matched expected statuses; no median slowdown exceeded both thresholds in $performance_row_count tracked performance row(s) across $run_count round(s)."
 	else
-		echo "Light regression check FAILED: $status_failure_count status mismatch(es), $perf_failure_count performance regression(s) across $run_count round(s)."
+		echo "Light regression check FAILED: $status_failure_count status mismatch(es), $perf_failure_count performance regression(s), $perf_data_failure_count performance data error(s) across $run_count round(s)."
 
 		if [[ "$status_failure_count" -gt 0 ]]; then
 			echo "Status mismatches:"
@@ -893,6 +1425,11 @@ print_check_summary() {
 			echo "Performance regressions:"
 			printf "  - %s\n" "${perf_failure_messages[@]}"
 		fi
+
+		if [[ "$perf_data_failure_count" -gt 0 ]]; then
+			echo "Performance data errors:"
+			printf "  - %s\n" "${perf_data_failure_messages[@]}"
+		fi
 	fi
 
 	if [[ -n "$detail_path" ]]; then
@@ -900,25 +1437,109 @@ print_check_summary() {
 	fi
 }
 
-load_baseline
+# A baseline is publishable only when statuses and timing series are complete.
+validate_baseline_result() {
+	if [[ -z "$save_baseline" ]]; then
+		return 0
+	fi
+
+	if [[ "$status_failure_count" -eq 0 && "$perf_data_failure_count" -eq 0 ]]; then
+		return 0
+	fi
+
+	echo "Light regression baseline FAILED: $status_failure_count status mismatch(es), $perf_data_failure_count performance data error(s)." >&2
+
+	if [[ "$status_failure_count" -gt 0 ]]; then
+		echo "Status mismatches:" >&2
+		printf "  - %s\n" "${status_failure_messages[@]}" >&2
+	fi
+
+	if [[ "$perf_data_failure_count" -gt 0 ]]; then
+		echo "Performance data errors:" >&2
+		printf "  - %s\n" "${perf_data_failure_messages[@]}" >&2
+	fi
+
+	return 1
+}
+
+# Replace a result only after a complete temporary copy exists beside it.
+write_file_atomically() {
+	local source="$1"
+	local target="$2"
+	local description="$3"
+	local target_dir
+	local target_name
+	local temporary
+
+	target_dir="$(dirname "$target")"
+	target_name="$(basename "$target")"
+
+	if ! mkdir -p "$target_dir"; then
+		echo "Failed to create directory for $description: $target_dir" >&2
+		return 1
+	fi
+
+	temporary="$(mktemp "$target_dir/.${target_name}.XXXXXX")" || {
+		echo "Failed to create temporary $description file in $target_dir" >&2
+		return 1
+	}
+
+	if ! cp "$source" "$temporary"; then
+		rm -f "$temporary"
+		echo "Failed to prepare $description: $target" >&2
+		return 1
+	fi
+
+	if ! mv -f "$temporary" "$target"; then
+		rm -f "$temporary"
+		echo "Failed to write $description atomically: $target" >&2
+		return 1
+	fi
+}
 
 result_file="$(mktemp "$tmp_dir/results.XXXXXX")" || exit 1
-trap 'rm -f "$result_file"' EXIT
 
+# Always remove the temporary CSV and leave the terminal on a clean line.
+cleanup() {
+	finish_progress
+	rm -f "$result_file"
+}
+trap cleanup EXIT
+
+# Phase 1: describe the selected benchmark and validate its local baseline.
+load_benchmark_definitions
+configure_progress
+load_baseline
+validate_manifest_coverage
+validate_baseline_definitions
+validate_baseline_performance_data
+
+# Phase 2: execute every selected verification once per round.
 for ((current_round = 1; current_round <= run_count; current_round++)); do
 	run_round
 done
+finish_progress
 
-emit_results >"$result_file"
+# Phase 3: aggregate the rounds, validate the result, then publish files.
+if ! emit_results >"$result_file"; then
+	echo "Failed to generate light regression CSV." >&2
+	exit 1
+fi
+
+if ! validate_baseline_result; then
+	exit 1
+fi
 
 if [[ -n "$output" ]]; then
-	mkdir -p "$(dirname "$output")"
-	cp "$result_file" "$output"
+	if ! write_file_atomically "$result_file" "$output" "result"; then
+		exit 1
+	fi
 fi
 
 if [[ -n "$save_baseline" ]]; then
-	mkdir -p "$(dirname "$save_baseline")"
-	cp "$result_file" "$save_baseline"
+	if ! write_file_atomically "$result_file" "$save_baseline" "baseline"; then
+		exit 1
+	fi
 fi
 
 if [[ "$quiet_mode" != "true" ]]; then
@@ -927,6 +1548,9 @@ fi
 
 print_check_summary
 
-if [[ "$check_mode" == "true" && ( "$status_failed" -ne 0 || "$perf_failed" -ne 0 ) ]]; then
+if [[ "$check_mode" == "true" &&
+	( "$status_failure_count" -ne 0 ||
+		"$perf_failure_count" -ne 0 ||
+		"$perf_data_failure_count" -ne 0 ) ]]; then
 	exit 1
 fi
