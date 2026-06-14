@@ -52,7 +52,7 @@ clean_doc:
 tests: tests_prim tests_qiskit tests_mbqc tests_unit tests_verif tests_regression_light
 
 tests_regression_light:
-	@bash test/benchmarks-light-validation.sh
+	bash test/benchmarks-light-validation.sh
 
 tests_qiskit:
 	@rm -rf $(shell pwd)/_build/qiskit

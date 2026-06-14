@@ -25,10 +25,12 @@ cleanup() {
 trap cleanup EXIT
 
 # Create the smallest repository layout understood by benchmarks-light.sh.
-# The fake dune executable returns deterministic gate counts and SQV outputs.
+# The real runner calls SQbricks through `dune exec`. Putting this fake `dune`
+# first in PATH intercepts those calls without building or running OCaml code.
 new_fixture() {
 	local fixture
 
+	# Each test gets an isolated repository-like directory under work_dir.
 	fixture="$(mktemp -d "$work_dir/fixture.XXXXXX")" || exit 1
 
 	mkdir -p \
@@ -38,6 +40,7 @@ new_fixture() {
 	cp "$repo_root/scripts/benchmarks-light.sh" "$fixture/scripts/benchmarks-light.sh"
 	chmod +x "$fixture/scripts/benchmarks-light.sh"
 
+	# Configure one tracked Sequence comparison and no transformation case.
 	cat >"$fixture/scripts/paths/light/pairs.csv" <<'EOF'
 Suite;Case;Kind;ExpectedSequence;ExpectedParallel;TrackPerformance;Path1;Path2
 perf;case;unit;EQ;-;yes;benchmarks/a.qasm;benchmarks/b.qasm
@@ -47,19 +50,26 @@ EOF
 Suite;Case;Kind;ExpectedSequence;ExpectedParallel;TrackPerformance;Path
 EOF
 
+	# Empty files are enough: the fake dune never parses these circuits.
 	: >"$fixture/benchmarks/a.qasm"
 	: >"$fixture/benchmarks/b.qasm"
 
+	# This Bash script stands in for the dune executable. An executable found
+	# through PATH can be a script; it does not have to be the real dune binary.
 	cat >"$fixture/bin/dune" <<'EOF'
 #!/usr/bin/env bash
 
 set -u
 
+# Accept only the two SQbricks operations used by the light benchmark runner.
 case " $* " in
 *" -nb_gates_csv "*)
+	# Return deterministic gate counts in the format expected by the runner.
 	printf '0;0;0;0;0;0;1\n'
 	;;
 *" -sqv "*)
+	# Record every attempted SQV execution. Preflight tests assert that this
+	# file was never created, proving that validation stopped before SQV.
 	count=0
 	if [[ -f "$FAKE_COUNTER" ]]; then
 		read -r count <"$FAKE_COUNTER"
@@ -67,6 +77,9 @@ case " $* " in
 	count=$((count + 1))
 	printf '%s\n' "$count" >"$FAKE_COUNTER"
 
+	# Select the configured output for this run. Array indexes start at zero,
+	# hence count - 1. The `-EQ` part is Bash's default-value syntax: it means
+	# "use EQ if that array element is unset", not the numeric value -1.0.
 	IFS=',' read -r -a outputs <<<"${FAKE_SQV_OUTPUTS:-1.0,1.0,1.0}"
 	output="${outputs[$((count - 1))]-EQ}"
 	if [[ "$output" == "__EMPTY__" ]]; then
@@ -75,6 +88,7 @@ case " $* " in
 	printf '%s\n' "$output"
 	;;
 *)
+	# Fail if the production runner starts using an unsupported dune command.
 	printf 'Unexpected fake dune invocation: %s\n' "$*" >&2
 	exit 99
 	;;
@@ -82,6 +96,7 @@ esac
 EOF
 	chmod +x "$fixture/bin/dune"
 
+	# The caller captures this path with fixture="$(new_fixture)".
 	printf '%s' "$fixture"
 }
 
@@ -203,7 +218,7 @@ run_fixture_command() {
 	fi
 }
 
-# Invoke check mode with a synthetic baseline supplied by the test.
+# Invoke check mode; callers may add options such as --baseline after outputs.
 run_check() {
 	local fixture="$1"
 	local outputs="$2"
@@ -295,6 +310,8 @@ assert_file_content() {
 		return 1
 	fi
 }
+
+## Tests functions
 
 # Baseline preflight validation: all of these failures must happen before SQV.
 test_check_requires_baseline() {
@@ -767,31 +784,38 @@ run_test "check requires a baseline" test_check_requires_baseline
 run_test "check rejects stable output" test_check_rejects_stable_output
 run_test "tracked key must exist in baseline" test_missing_baseline_key
 run_test "unknown suite fails" test_unknown_suite_fails
+
 run_test "duplicate manifest key fails" test_duplicate_manifest_key_fails
 run_test "duplicate baseline key fails" test_duplicate_baseline_key_fails
 run_test "baseline must contain a definition hash" test_missing_definition_hash
 run_test "changed input content invalidates baseline" test_changed_input_content
 run_test "changed manifest path invalidates baseline" test_changed_manifest_path
 run_test "changed execution configuration invalidates baseline" test_changed_execution_configuration
+
 run_test "baseline timing must be numeric" test_invalid_baseline_time
 run_test "baseline timing must be positive" test_zero_baseline_time
 run_test "baseline sample count must match run count" test_baseline_round_count_must_match
 run_test "current timing samples must be complete" test_current_timing_samples_must_be_complete
+
 run_test "complete performance data succeeds" test_complete_performance_data_succeeds
 run_test "performance regression fails" test_performance_regression_fails
 run_test "relative threshold alone does not fail" test_relative_threshold_alone_does_not_fail
 run_test "absolute threshold alone does not fail" test_absolute_threshold_alone_does_not_fail
+
 run_test "unknown successful output fails check" test_unknown_success_output_fails_check
 run_test "empty successful output fails check" test_empty_success_output_fails_check
 run_test "unexpected output cannot be expected" test_unexpected_output_cannot_be_expected
+
 run_test "removed manifest case fails" test_removed_manifest_case_fails
 run_test "removed manifest mode fails" test_removed_manifest_mode_fails
+
 run_test "suite filter ignores other baseline suites" test_suite_filter_ignores_other_baseline_suites
 run_test "invalid status preserves existing baseline" test_invalid_status_does_not_replace_baseline
 run_test "flaky status preserves existing baseline" test_flaky_status_does_not_replace_baseline
 run_test "unknown successful output preserves existing baseline" test_unknown_success_output_does_not_replace_baseline
 run_test "incomplete timings preserve existing baseline" test_incomplete_timings_do_not_replace_baseline
 run_test "atomic write failure preserves existing baseline" test_atomic_write_failure_preserves_baseline
+
 run_test "valid baseline replaces existing file" test_valid_baseline_replaces_existing_file
 
 if [[ "$failure_count" -ne 0 ]]; then
