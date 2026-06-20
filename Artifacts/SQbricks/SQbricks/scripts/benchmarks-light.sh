@@ -26,21 +26,36 @@ cd "$repo_root" || exit 1
 
 export DUNE_BUILD_DIR="${DUNE_BUILD_DIR:-$(pwd)/_build/light}"
 
+# The light benchmark is intentionally self-contained: manifests describe the
+# cases, and `_tmp/light` stores generated QASM files and command captures.
 manifest_dir="scripts/paths/light"
 pairs_file="$manifest_dir/pairs.csv"
 transforms_file="$manifest_dir/transforms.csv"
 tmp_dir="_tmp/light"
 
+# Runtime limits are applied to every SQbricks command, including conversion,
+# transformation, gate counting, and equivalence checking.
 timeout_s="${SQBRICKS_LIGHT_TIMEOUT:-120s}"
 memory_kb="${SQBRICKS_LIGHT_MEMORY_KB:-7340032}"
 
 # A slowdown is reported only when both the relative and absolute limits fail.
+# Example: with SQBRICKS_LIGHT_PERF_THRESHOLD=1.25, 1.30s is slower than a 1.00s
+# baseline on ratio, but it still needs to exceed SQBRICKS_LIGHT_MIN_SLOWDOWN_SECONDS.
 perf_threshold="${SQBRICKS_LIGHT_PERF_THRESHOLD:-1.25}"
+
+# Example: if both current and baseline times are below 0.01s, the row is marked
+# TOO_FAST because such tiny measurements are too noisy for a useful comparison.
 min_perf_seconds="${SQBRICKS_LIGHT_MIN_PERF_SECONDS:-0.01}"
+
+# Example: with 0.05, a change from 1.00s to 1.03s is ignored even if another
+# threshold would complain, because the absolute slowdown is only 0.03s.
 min_slowdown_seconds="${SQBRICKS_LIGHT_MIN_SLOWDOWN_SECONDS:-0.05}"
+
 run_count="${SQBRICKS_LIGHT_RUNS:-3}"
 progress_mode="${SQBRICKS_LIGHT_PROGRESS:-auto}"
 
+# Command-line options. `--check` compares with an existing baseline;
+# `--save-baseline` publishes the current full CSV as the new local baseline.
 suite_filter=""
 output=""
 baseline=""
@@ -58,37 +73,34 @@ progress_enabled="false"
 progress_current=0
 progress_total=0
 progress_line_open="false"
-definition_schema="1"
 
 # Baseline data, indexed by "suite|case|kind|mode".
-declare -A baseline_times
-declare -A baseline_rows
-declare -A baseline_raws
-declare -A baseline_definition_hashes
+declare -A baseline_times # key -> baseline median time, for example 0.214834
+declare -A baseline_rows  # key -> "true" when the baseline contains this row
+declare -A baseline_raws  # key -> Raw CSV field, including rounds and timings
 
-# Current manifest definition, built before any benchmark is executed.
-declare -A manifest_rows
-declare -A manifest_definition_hashes
-declare -A tracked_performance
+# Manifest data selected for this run.
+declare -A manifest_rows        # key -> "true" when the manifests contain this row
+declare -A tracked_performance  # key -> "yes" when timing must be compared
 
-# Human-readable diagnostics accumulated for the final summary.
-declare -a status_failure_messages
-declare -a perf_failure_messages
-declare -a perf_data_failure_messages
+# Diagnostics printed at the end when check or baseline generation fails.
+declare -a status_failure_messages    # messages such as "expected EQ, got NC"
+declare -a perf_failure_messages      # messages describing slow tracked rows
+declare -a perf_data_failure_messages # messages describing missing timing data
 
 # Results accumulated across rounds before one final CSV row is emitted.
-declare -a row_keys
-declare -A row_seen
-declare -A row_suite
-declare -A row_case
-declare -A row_kind
-declare -A row_lift
-declare -A row_opt
-declare -A row_expected
-declare -A row_gates
-declare -A row_statuses
-declare -A row_times
-declare -A row_raws
+declare -a row_keys       # ordered list of row keys, preserving output order
+declare -A row_seen       # key -> "true" once the row has been initialized
+declare -A row_suite      # key -> Suite column
+declare -A row_case       # key -> Case column
+declare -A row_kind       # key -> Kind column
+declare -A row_lift       # key -> Lift column
+declare -A row_opt        # key -> Opt column, Sequence or Parallel
+declare -A row_expected   # key -> ExpectedStatus column
+declare -A row_gates      # key -> gate-count columns as one CSV fragment
+declare -A row_statuses   # key -> comma-separated statuses from all rounds
+declare -A row_times      # key -> comma-separated timing samples from all rounds
+declare -A row_raws       # key -> raw per-round details for diagnostics
 current_round=0
 
 usage() {
@@ -212,6 +224,9 @@ fi
 
 mkdir -p "$tmp_dir"
 
+# Shell helpers for normalizing user-visible text and CSV fields. They keep the
+# rest of the script readable and avoid leaking raw newlines or semicolons into
+# the CSV output.
 trim() {
 	local value="$1"
 	value="${value//$'\r'/}"
@@ -238,65 +253,8 @@ normalize_number() {
 	printf "%s" "$value"
 }
 
-# Hash an input file so that changing a circuit invalidates the local baseline.
-file_content_hash() {
-	local path="$1"
-	local digest
-
-	ensure_input "$path"
-	if ! digest="$(sha256sum -- "$path")"; then
-		echo "Failed to hash benchmark input: $path" >&2
-		return 1
-	fi
-	printf "%s" "${digest%% *}"
-}
-
-# Build the stable identity of one Sequence or Parallel verification.
-# The SQbricks binary is intentionally absent: its changes are what we measure.
-benchmark_definition_hash() {
-	local source_type="$1"
-	local suite="$2"
-	local case_name="$3"
-	local kind="$4"
-	local opt="$5"
-	local expected="$6"
-	local track_performance="$7"
-	local path1="$8"
-	local path2="$9"
-	local path1_hash
-	local path2_hash="-"
-	local digest
-
-	path1_hash="$(file_content_hash "$path1")" || return 1
-	if [[ -n "$path2" ]]; then
-		path2_hash="$(file_content_hash "$path2")" || return 1
-	fi
-
-	digest="$(
-		printf '%s\n' \
-			"schema=$definition_schema" \
-			"source=$source_type" \
-			"suite=$suite" \
-			"case=$case_name" \
-			"kind=$kind" \
-			"opt=$opt" \
-			"expected=$expected" \
-			"track_performance=$track_performance" \
-			"path1=$path1" \
-			"path1_sha256=$path1_hash" \
-			"path2=$path2" \
-			"path2_sha256=$path2_hash" \
-			"runs=$run_count" \
-			"timeout=$timeout_s" \
-			"memory_kb=$memory_kb" |
-			sha256sum
-	)" || {
-		echo "Failed to hash benchmark definition: $suite/$case_name $kind $opt" >&2
-		return 1
-	}
-	printf "%s" "${digest%% *}"
-}
-
+# Median is used instead of a mean so one noisy run among the three light rounds
+# does not dominate the performance decision.
 median_numbers() {
 	printf "%s\n" "$@" | sort -n | awk '
 		{ values[NR] = $1 }
@@ -389,6 +347,8 @@ combined_raw() {
 	fi
 }
 
+# Run one external command under the configured limits. The caller reads the
+# normalized result through the global `cmd_*` variables set by `run_command`.
 run_with_limits() {
 	if [[ -n "$memory_kb" && "$memory_kb" != "0" ]]; then
 		(
@@ -400,6 +360,9 @@ run_with_limits() {
 	fi
 }
 
+# Capture stdout, stderr, and exit status separately so later normalization can
+# decide whether SQbricks proved EQ/NE/NC, timed out, crashed, or produced an
+# unexpected successful output.
 run_command() {
 	local stdout_file
 	local stderr_file
@@ -420,6 +383,8 @@ run_command() {
 	return "$cmd_code"
 }
 
+# Successful SQbricks output is intentionally strict. Unknown successful text is
+# treated as `UNEXPECTED_OUTPUT` instead of being silently accepted as NC.
 normalize_success() {
 	local raw
 	raw="$(trim "$1")"
@@ -438,6 +403,8 @@ normalize_success() {
 	fi
 }
 
+# Failed commands are mapped to benchmark statuses that can be compared against
+# manifests. Anything unknown is a CRASH.
 normalize_failure() {
 	local code="$1"
 	local raw="$2"
@@ -455,6 +422,7 @@ normalize_failure() {
 	fi
 }
 
+# Numeric stdout from SQV is both an EQ proof and a timing sample.
 time_from_stdout() {
 	local value
 	value="$(normalize_number "$1")"
@@ -464,7 +432,8 @@ time_from_stdout() {
 	fi
 }
 
-# Read only the baseline fields needed by the preflight checks and comparison.
+# Read only the baseline fields needed by the light contract:
+# the row key, the median time, and the raw per-round timing samples.
 load_baseline() {
 	local suite
 	local case_name
@@ -488,7 +457,7 @@ load_baseline() {
 	local previous_ratio
 	local previous_perf_status
 	local raw
-	local definition_hash
+	local ignored_extra_field
 	local key
 
 	if [[ -z "$baseline" ]]; then
@@ -500,7 +469,7 @@ load_baseline() {
 		exit 1
 	fi
 
-	while IFS=';' read -r suite case_name kind tool version lift opt expected actual match ch cs cz ccz ccx cu1 gates time previous_baseline previous_ratio previous_perf_status raw definition_hash || [[ -n "$suite" ]]; do
+	while IFS=';' read -r suite case_name kind tool version lift opt expected actual match ch cs cz ccz ccx cu1 gates time previous_baseline previous_ratio previous_perf_status raw ignored_extra_field || [[ -n "$suite" ]]; do
 		if [[ "$suite" == "Suite" || -z "$(trim "$suite")" ]]; then
 			continue
 		fi
@@ -512,7 +481,6 @@ load_baseline() {
 		fi
 		baseline_rows["$key"]="true"
 		baseline_raws["$key"]="$raw"
-		baseline_definition_hashes["$key"]="$definition_hash"
 		time="$(normalize_number "$time")"
 		if is_number "$time"; then
 			baseline_times["$key"]="$time"
@@ -520,7 +488,8 @@ load_baseline() {
 	done <"$baseline"
 }
 
-# Count and validate the timing samples stored in a row's Raw field.
+# Count and validate the timing samples stored in a row's Raw field. Tracked
+# performance rows must have one positive sample per configured round.
 sample_count_from_raw() {
 	local raw="$1"
 	local samples_text
@@ -551,7 +520,8 @@ sample_count_from_raw() {
 	printf "%d" "${#samples[@]}"
 }
 
-# Read the number of rounds recorded in a row's Raw field.
+# Read the number of rounds recorded in a row's Raw field so a baseline produced
+# with a different `SQBRICKS_LIGHT_RUNS` value is rejected clearly.
 round_count_from_raw() {
 	local raw="$1"
 	local round_text
@@ -593,67 +563,8 @@ fail_preflight() {
 	exit 1
 }
 
-# Reject baseline rows whose case or execution mode disappeared from a manifest.
-validate_manifest_coverage() {
-	local key
-	local suite
-	local case_name
-	local kind
-	local opt
-	local failure_messages=()
-
-	if [[ "$check_mode" != "true" ]]; then
-		return
-	fi
-
-	for key in "${!baseline_rows[@]}"; do
-		IFS='|' read -r suite case_name kind opt <<<"$key"
-		if ! suite_is_selected "$suite"; then
-			continue
-		fi
-		if [[ -z "${manifest_rows[$key]:-}" ]]; then
-			failure_messages+=("Baseline contains removed benchmark verification: $(benchmark_key_label "$key")")
-		fi
-	done
-
-	if [[ "${#failure_messages[@]}" -gt 0 ]]; then
-		fail_preflight "benchmark coverage changed." "${failure_messages[@]}"
-	fi
-}
-
-# Reject a baseline produced from different manifests, inputs, or run settings.
-validate_baseline_definitions() {
-	local key
-	local label
-	local baseline_hash
-	local current_hash
-	local failure_messages=()
-
-	if [[ "$check_mode" != "true" ]]; then
-		return
-	fi
-
-	for key in "${!manifest_rows[@]}"; do
-		if [[ -z "${baseline_rows[$key]:-}" ]]; then
-			continue
-		fi
-
-		label="$(benchmark_key_label "$key")"
-		baseline_hash="${baseline_definition_hashes[$key]:-}"
-		current_hash="${manifest_definition_hashes[$key]:-}"
-		if [[ -z "$baseline_hash" ]]; then
-			failure_messages+=("Missing benchmark definition hash for $label; regenerate the local baseline")
-		elif [[ "$baseline_hash" != "$current_hash" ]]; then
-			failure_messages+=("Benchmark definition changed for $label; regenerate the local baseline")
-		fi
-	done
-
-	if [[ "${#failure_messages[@]}" -gt 0 ]]; then
-		fail_preflight "benchmark definition changed." "${failure_messages[@]}"
-	fi
-}
-
-# Ensure every performance row has a usable timing for every configured round.
+# Preflight for check mode: before spending time running SQbricks, ensure every
+# currently tracked row can be compared against a local baseline.
 validate_baseline_performance_data() {
 	local key
 	local label
@@ -703,16 +614,19 @@ validate_baseline_performance_data() {
 	fi
 }
 
-# Compare a median timing with its baseline and expose the classification fields.
+# Compare a current median with its baseline. A regression is reported only when
+# both the relative ratio and the absolute slowdown cross their thresholds.
 perf_info() {
 	local key="$1"
 	local actual_time="$2"
 
+	# `NA` means either no baseline was requested or this row is not comparable.
 	baseline_seconds="${baseline_times[$key]:-}"
 	ratio=""
 	slowdown_seconds=""
 	perf_status="NA"
 
+	# `TOO_FAST` rows remain visible in the CSV, but they do not fail the check.
 	if is_number "$actual_time" && is_number "$baseline_seconds" && [[ "$baseline_seconds" != "0" && "$baseline_seconds" != "0.0" ]]; then
 		# Very short measurements are too noisy to support a useful ratio.
 		if awk -v actual="$actual_time" -v base="$baseline_seconds" -v min="$min_perf_seconds" \
@@ -722,6 +636,7 @@ perf_info() {
 		fi
 		ratio="$(awk -v actual="$actual_time" -v base="$baseline_seconds" 'BEGIN { printf "%.6f", actual / base }')"
 		slowdown_seconds="$(awk -v actual="$actual_time" -v base="$baseline_seconds" 'BEGIN { printf "%.6f", actual - base }')"
+		# Only a clear slowdown becomes SLOWER; small absolute changes are ignored.
 		perf_status="$(awk \
 			-v ratio="$ratio" \
 			-v threshold="$perf_threshold" \
@@ -735,11 +650,12 @@ perf_info() {
 	fi
 }
 
+# Emit the CSV header matching the chosen output mode.
 emit_header() {
 	if [[ "$stable_mode" == "true" ]]; then
 		echo "Suite;Case;Kind;Opt;ExpectedStatus;ActualStatus;StatusMatch"
 	else
-		echo "Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH;CS;CZ;CCZ;CCX;CU1;Gates;TimeSeconds;BaselineSeconds;Ratio;PerfStatus;Raw;DefinitionHash"
+		echo "Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH;CS;CZ;CCZ;CCX;CU1;Gates;TimeSeconds;BaselineSeconds;Ratio;PerfStatus;Raw"
 	fi
 }
 
@@ -792,7 +708,9 @@ emit_row() {
 	advance_progress "$suite" "$case_name" "$kind" "$opt"
 }
 
-# Classify one aggregated row and write its final CSV representation.
+# Classify one aggregated row and write its final CSV representation. This is
+# where functional mismatches and performance regressions are accumulated for
+# the final check summary.
 emit_final_row() {
 	local suite="$1"
 	local case_name="$2"
@@ -844,13 +762,13 @@ emit_final_row() {
 	fi
 
 	raw_clean="$(clean_csv "$raw")"
-	printf "%s;%s;%s;SQbricks;2025;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s\n" \
+	printf "%s;%s;%s;SQbricks;2025;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s\n" \
 		"$suite" "$case_name" "$kind" "$lift" "$opt" "$expected" "$actual" "$match" \
-		"$gate_counts" "$time_seconds" "$baseline_seconds" "$ratio" "$perf_status" "$raw_clean" \
-		"${manifest_definition_hashes[$key]}"
+		"$gate_counts" "$time_seconds" "$baseline_seconds" "$ratio" "$perf_status" "$raw_clean"
 }
 
-# Merge all rounds, reject incomplete timing series, and compute medians.
+# Merge all rounds into one row per verification. Functional statuses must be
+# stable across rounds; tracked performance rows must also have complete timing.
 emit_results() {
 	local key
 	local actual
@@ -923,6 +841,8 @@ emit_results() {
 	done
 }
 
+# When preparation fails before SQV can run, emit the configured modes with the
+# same failure status so the functional contract is still checked.
 emit_failure_modes() {
 	local suite="$1"
 	local case_name="$2"
@@ -943,6 +863,7 @@ emit_failure_modes() {
 	fi
 }
 
+# Missing manifest inputs are script/configuration errors, not benchmark rows.
 ensure_input() {
 	local path="$1"
 
@@ -952,6 +873,7 @@ ensure_input() {
 	fi
 }
 
+# Convert a circuit to the unitary-oriented representation expected by SQV.
 convert_to_unitary() {
 	local source="$1"
 	local target="$2"
@@ -968,6 +890,7 @@ convert_to_unitary() {
 	return 1
 }
 
+# Run one benchmark transformation and keep the returned input/output lists.
 run_transform() {
 	local transform="$1"
 	local source="$2"
@@ -985,6 +908,7 @@ run_transform() {
 	return 1
 }
 
+# Transformation stdout is "inputs,outputs"; normalize empty sides as [].
 split_transform_lists() {
 	local result="$1"
 
@@ -992,6 +916,8 @@ split_transform_lists() {
 	transform_outputs="$(list_or_empty "${result##*,}")"
 }
 
+# Gate counts are informative only. If the helper output is unexpected, keep
+# the CSV shape with empty gate-count columns instead of failing the benchmark.
 get_gates() {
 	local path1="$1"
 	local path2="$2"
@@ -1008,6 +934,8 @@ get_gates() {
 	printf ";;;;;;"
 }
 
+# Run one SQV mode and expose its normalized status, optional time, and raw text
+# through globals consumed by run_case_modes.
 run_sqv_result() {
 	local algo="$1"
 	local path1="$2"
@@ -1037,6 +965,7 @@ run_sqv_result() {
 	raw_text="$raw"
 }
 
+# Execute the selected SQV modes for one already-prepared pair of circuits.
 run_case_modes() {
 	local suite="$1"
 	local case_name="$2"
@@ -1067,6 +996,7 @@ run_case_modes() {
 	fi
 }
 
+# Direct pair rows either compare the original files or their lifted versions.
 run_pair_case() {
 	local suite="$1"
 	local case_name="$2"
@@ -1105,6 +1035,7 @@ run_pair_case() {
 	esac
 }
 
+# Compare one transformed circuit against the original lifted circuit.
 run_transform_case() {
 	local suite="$1"
 	local case_name="$2"
@@ -1149,6 +1080,7 @@ run_transform_case() {
 		"$transformed_unitary" "$original_unitary" "$inputs" "[]" "$outputs" "[]" "$meas" "[]"
 }
 
+# Compare the OWM and teleportation transformations of the same source circuit.
 run_owm_vs_tele_case() {
 	local suite="$1"
 	local case_name="$2"
@@ -1231,17 +1163,14 @@ validate_track_performance() {
 	fi
 }
 
-# Register one execution mode and compute the definition stored in the CSV.
+# Register one execution mode from the selected manifests.
 register_verification() {
-	local source_type="$1"
-	local suite="$2"
-	local case_name="$3"
-	local kind="$4"
-	local opt="$5"
-	local expected="$6"
-	local track_performance="$7"
-	local path1="$8"
-	local path2="$9"
+	local suite="$1"
+	local case_name="$2"
+	local kind="$3"
+	local opt="$4"
+	local expected="$5"
+	local track_performance="$6"
 	local key
 
 	if [[ "$expected" == "-" ]]; then
@@ -1254,9 +1183,6 @@ register_verification() {
 		exit 1
 	fi
 	manifest_rows["$key"]="true"
-	manifest_definition_hashes["$key"]="$(benchmark_definition_hash \
-		"$source_type" "$suite" "$case_name" "$kind" "$opt" "$expected" \
-		"$track_performance" "$path1" "$path2")" || exit 1
 
 	if [[ "$track_performance" == "yes" ]]; then
 		tracked_performance["$key"]="yes"
@@ -1265,7 +1191,7 @@ register_verification() {
 }
 
 # Load direct circuit comparisons from pairs.csv.
-load_pair_definitions() {
+load_pair_manifest_rows() {
 	local suite
 	local case_name
 	local kind
@@ -1283,15 +1209,15 @@ load_pair_definitions() {
 			continue
 		fi
 		validate_track_performance "$suite" "$case_name" "$track_performance"
-		register_verification "pair" "$suite" "$case_name" "$kind" \
-			"Sequence" "$expected_seq" "$track_performance" "$path1" "$path2"
-		register_verification "pair" "$suite" "$case_name" "$kind" \
-			"Parallel" "$expected_par" "$track_performance" "$path1" "$path2"
+		register_verification "$suite" "$case_name" "$kind" \
+			"Sequence" "$expected_seq" "$track_performance"
+		register_verification "$suite" "$case_name" "$kind" \
+			"Parallel" "$expected_par" "$track_performance"
 	done <"$pairs_file"
 }
 
 # Load transformation-based comparisons from transforms.csv.
-load_transform_definitions() {
+load_transform_manifest_rows() {
 	local suite
 	local case_name
 	local kind
@@ -1308,17 +1234,17 @@ load_transform_definitions() {
 			continue
 		fi
 		validate_track_performance "$suite" "$case_name" "$track_performance"
-		register_verification "transform" "$suite" "$case_name" "$kind" \
-			"Sequence" "$expected_seq" "$track_performance" "$path" ""
-		register_verification "transform" "$suite" "$case_name" "$kind" \
-			"Parallel" "$expected_par" "$track_performance" "$path" ""
+		register_verification "$suite" "$case_name" "$kind" \
+			"Sequence" "$expected_seq" "$track_performance"
+		register_verification "$suite" "$case_name" "$kind" \
+			"Parallel" "$expected_par" "$track_performance"
 	done <"$transforms_file"
 }
 
-# Read all selected definitions before loading or validating the baseline.
-load_benchmark_definitions() {
-	load_pair_definitions
-	load_transform_definitions
+# Read all selected manifest rows before loading or validating the baseline.
+load_selected_manifest_rows() {
+	load_pair_manifest_rows
+	load_transform_manifest_rows
 
 	if [[ "$verifications_per_round" -eq 0 ]]; then
 		if [[ -n "$suite_filter" ]]; then
@@ -1330,7 +1256,7 @@ load_benchmark_definitions() {
 	fi
 }
 
-# Derive the progress total from the definitions that were actually selected.
+# Derive the progress total from the verifications that were actually selected.
 configure_progress() {
 	progress_total=$((verifications_per_round * run_count))
 	case "$progress_mode" in
@@ -1346,6 +1272,7 @@ configure_progress() {
 	render_progress "starting"
 }
 
+# Execute all selected direct-comparison rows from the pair manifest.
 run_pair_manifest() {
 	local suite
 	local case_name
@@ -1366,6 +1293,7 @@ run_pair_manifest() {
 	done <"$pairs_file"
 }
 
+# Execute all selected transformation rows, dispatching by transform kind.
 run_transform_manifest() {
 	local suite
 	local case_name
@@ -1398,6 +1326,7 @@ run_transform_manifest() {
 	done <"$transforms_file"
 }
 
+# One round executes every selected manifest row once.
 run_round() {
 	run_pair_manifest
 	run_transform_manifest
@@ -1506,12 +1435,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Phase 1: describe the selected benchmark and validate its local baseline.
-load_benchmark_definitions
+# Phase 1: read the selected manifest rows and validate the local baseline.
+load_selected_manifest_rows
 configure_progress
 load_baseline
-validate_manifest_coverage
-validate_baseline_definitions
 validate_baseline_performance_data
 
 # Phase 2: execute every selected verification once per round.

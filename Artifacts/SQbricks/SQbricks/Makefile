@@ -17,6 +17,7 @@
 # for more details (enclosed in the file licenses/LGPLv2.1).
 
 .PHONY: all benchmark sanity sanity-unit sanity-hybrid sanity-partial benchmarks \
+        benchmark-sqbricks benchmarks-sqbricks \
         regression-light regression-light-baseline regression-light-check \
         owm tele unit-vs-hybrid qiskit-hybrid owm-vs-qiskit owm-vs-tele veriqc \
         tests tests_prim tests_qiskit tests_mbqc tests_unit tests_regression_light \
@@ -30,6 +31,8 @@ LOG_FOLDER := test/logs/$(DATE)
 LIGHT_BASELINE ?= benchmarks/baseline/light.csv
 LIGHT_RESULT ?= benchmarks/result/light_$(DATE_FILE).csv
 LIGHT_RUNS ?= 3
+LONG_TYPES ?= sanity-unit sanity-hybrid sanity-partial unit-vs-hybrid veriqc qiskit-hybrid owm tele owm-vs-tele owm-vs-qiskit
+LONG_PROGRESS ?= auto
 MAKEFLAGS += --no-print-directory
 
 # Documentation generation
@@ -90,6 +93,22 @@ tests_verif:
 benchmark:
 	@mkdir -p $(RESULT_FOLDER)
 	@./scripts/benchmarks.sh $(TYPE) >> $(RESULT_FOLDER)/benchmarks_$(TYPE)_$(DATE_FILE).csv 2>/dev/null || true
+
+# Run one SQbricks-only benchmark family, for example:
+#   make benchmark-sqbricks TYPE=owm
+benchmark-sqbricks:
+	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-sqbricks TYPE=owm"; exit 1; fi
+	@mkdir -p $(RESULT_FOLDER) $(shell pwd)/_build/sqbricks-long/$(TYPE)
+	@DUNE_BUILD_DIR=$(shell pwd)/_build/sqbricks-long/$(TYPE) dune build
+	@DUNE_BUILD_DIR=$(shell pwd)/_build/sqbricks-long/$(TYPE) SQBRICKS_LONG_PROGRESS=$(LONG_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) >> $(RESULT_FOLDER)/benchmarks_sqbricks_$(TYPE)_$(DATE_FILE).csv
+	@echo "SQbricks benchmark $(TYPE) written to $(RESULT_FOLDER)/benchmarks_sqbricks_$(TYPE)_$(DATE_FILE).csv"
+
+# Run the full SQbricks-only benchmark campaign by calling benchmark-sqbricks
+# once per family listed in LONG_TYPES.
+benchmarks-sqbricks:
+	@for type in $(LONG_TYPES); do \
+		$(MAKE) TYPE=$$type benchmark-sqbricks || exit $$?; \
+	done
 
 
 sanity: sanity-unit sanity-hybrid sanity-partial

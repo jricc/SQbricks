@@ -2,361 +2,157 @@
 
 [Français](SQbricks.md) | [English](SQbricks.en.md)
 
-## Purpose of this document
+## Purpose
 
-This document complements the `README.md`.
+This document complements the `README.md`. The README provides a quick entry
+point into the project; this document progressively explains the technical
+choices we validate during the work.
 
-The README provides a quick introduction to SQbricks, its installation, and its
-main commands. This document progressively describes its architecture and
-internal operation. It should make it possible to understand:
+The current topic is the light non-regression benchmark. Its goal is
+deliberately limited:
 
-- the need addressed by each subsystem;
-- how a command flows through the different functions;
-- which data is produced and consumed;
-- which errors are detected;
-- which invariants are protected by the tests.
+- verify that manifest cases still produce the expected status;
+- verify that performance-tracked cases do not become clearly slower than
+  their local baseline;
+- remain readable;
+- run in a reasonable time, ideally less than 30 minutes.
 
-The documentation is built incrementally. A function is added or updated after
-its review and validation in quality mode.
+## SQbricks overview
 
-## Overview
+SQbricks is a research prototype for verification of hybrid quantum circuits.
+A hybrid circuit may combine quantum operations, measurements, and classical
+control.
 
-SQbricks is a verification tool for hybrid quantum circuits. A hybrid circuit
-may combine quantum operations, measurements, and classical control.
+The project contains two main capabilities:
 
-The project provides two main capabilities:
-
-- SQbricks-Lift transforms a hybrid circuit to isolate a unitary part that can
-  be used by verification tools;
+- SQbricks-Lift transforms hybrid circuits to isolate a unitary part;
 - SQbricks-Verif compares two unitary circuits and attempts to establish their
   equivalence.
 
-The light non-regression benchmark protects these capabilities along two axes:
+The light benchmark is a short guardrail before running longer campaigns.
 
-- functional non-regression: cases retain their expected status;
-- performance non-regression: tracked cases do not become significantly slower
-  than their local baseline.
+## Light benchmark commands
 
-## Light non-regression benchmark
-
-### User entry points
-
-The following targets are defined in the `Makefile`:
+The entry points are in the `Makefile`:
 
 | Command | Purpose |
 | --- | --- |
-| `make regression-light` | Run the light benchmark and write its CSV result. |
-| `make regression-light-baseline` | Run the benchmark and record a local baseline. |
-| `make regression-light-check` | Compare a new run with the local baseline. |
-| `make tests_regression_light` | Validate the runner with synthetic scenarios. |
+| `make regression-light` | Run the light benchmark and write a result CSV. |
+| `make regression-light-baseline` | Produce the local baseline for the machine. |
+| `make regression-light-check` | Compare a new run with that baseline. |
+| `make tests_regression_light` | Validate runner behavior with a fake SQbricks. |
 
-The baseline is machine-dependent and is not intended to be versioned.
+The baseline is local to the machine. It must not be versioned.
 
-### Components
+## Manifests
 
-The light benchmark notably relies on:
+The benchmark is driven by two files:
 
-| File | Responsibility |
+| File | Purpose |
 | --- | --- |
-| `scripts/benchmarks-light.sh` | Run cases, produce the CSV, and compare it with the baseline. |
-| `scripts/paths/light/pairs.csv` | Define direct comparisons between two circuits. |
-| `scripts/paths/light/transforms.csv` | Define cases requiring a transformation before comparison. |
-| `test/benchmarks-light-validation.sh` | Test runner behavior without performing real quantum verification. |
+| `scripts/paths/light/pairs.csv` | Direct comparisons between two circuits. |
+| `scripts/paths/light/transforms.csv` | Cases where the runner transforms a circuit before comparison. |
 
-## Runner validation
+Each row describes:
 
-### Why not use the real SQbricks?
+- the suite and case name;
+- the case kind (`unit`, `lift`, `owm`, `tele`, `owm_vs_tele`);
+- the expected status in `Sequence` and `Parallel`;
+- whether performance is tracked;
+- the QASM path or paths.
 
-The tests in `test/benchmarks-light-validation.sh` primarily verify the runner's
-control logic:
+The `-` value disables a mode. For example, if `ExpectedParallel` is `-`,
+`Parallel` is not executed for that case.
 
-- option validation;
-- baseline reading and validation;
-- error detection;
-- repetition management;
-- result classification.
+## Statuses
 
-They must be fast and deterministic. They therefore execute the real
-`scripts/benchmarks-light.sh`, but replace its access to SQbricks with a
-simulated command.
+The main expected statuses are:
 
-### Flow of the "check without a baseline" scenario
+| Status | Meaning |
+| --- | --- |
+| `EQ` | equivalence proved |
+| `NE` | non-equivalence detected |
+| `NC` | inconclusive |
+| `TIMEOUT` | time limit reached |
+| `OOM` | memory limit reached |
+| `CRASH` | unexpected failure |
+| `PARSE_ERROR` | parsing error |
 
-The first documented scenario verifies that `--check` refuses to start without
-a baseline:
+If SQbricks succeeds but returns an empty or unknown output, the runner reports
+`UNEXPECTED_OUTPUT`. This status always fails: it prevents an unrecognized
+output from being treated as an acceptable result.
 
-```text
-test_check_requires_baseline
-    |
-    +-- new_fixture
-    |     creates a minimal temporary repository
-    |
-    +-- run_check
-          |
-          +-- run_fixture_command
-                  runs the real benchmarks-light.sh
-                  in the temporary environment
-    |
-    +-- assert_failed_with
-    |     expects the "--check requires --baseline" diagnostic
-    |
-    +-- assert_no_sqv_run
-          verifies that SQV was not reached
-```
+## Baseline and check
 
-The expected result is a controlled runner failure. This failure is a test
-success because it proves that the missing option is rejected before
-verification begins.
+`make regression-light-baseline` runs the benchmark and writes a full CSV.
+`make regression-light-check` runs it again and compares the results with that
+CSV.
 
-## `new_fixture`
+The check verifies two things.
 
-### Purpose
+First, every executed row must keep its expected status. A different status is
+a functional regression.
 
-`new_fixture` creates a minimal temporary repository understood by
-`benchmarks-light.sh`. Each test receives its own isolated environment.
+Second, rows where `TrackPerformance` is `yes` must have:
 
-It does not reproduce the whole SQbricks repository. It creates only the files
-and directories required by the scenario:
+- a baseline row;
+- a positive baseline time;
+- exactly one timing sample per round;
+- the same round count as the current run.
 
-```text
-fixture.<random-suffix>/
-|-- benchmarks/
-|   |-- a.qasm
-|   `-- b.qasm
-|-- bin/
-|   `-- dune
-`-- scripts/
-    |-- benchmarks-light.sh
-    `-- paths/
-        `-- light/
-            |-- pairs.csv
-            `-- transforms.csv
-```
+After execution, the runner also requires one valid timing per round for those
+rows. It then computes the median and compares it with the baseline.
 
-The random suffix is generated by `mktemp` from the `XXXXXX` template. It
-prevents two tests from using the same directory.
+A slowdown fails only when two thresholds are exceeded:
 
-### Minimal benchmark case
+- the ratio is greater than `SQBRICKS_LIGHT_PERF_THRESHOLD`;
+- the absolute slowdown is greater than
+  `SQBRICKS_LIGHT_MIN_SLOWDOWN_SECONDS`.
 
-The fixture configures one direct comparison:
+This double condition avoids reporting noise too easily on very short cases.
+
+## CSV output
+
+The full CSV contains the columns useful for human reading and for check mode:
 
 ```text
-perf;case;unit;EQ;-;yes;benchmarks/a.qasm;benchmarks/b.qasm
+Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH;CS;CZ;CCZ;CCX;CU1;Gates;TimeSeconds;BaselineSeconds;Ratio;PerfStatus;Raw
 ```
 
-It means:
-
-- suite `perf`;
-- case `case`;
-- direct unitary comparison;
-- expected `EQ` status in `Sequence` mode;
-- disabled `Parallel` mode;
-- tracked performance;
-- comparison of `a.qasm` with `b.qasm`.
-
-`transforms.csv` contains only its header: no transformation case is required
-here.
-
-The two QASM files are empty. They must exist and may be used to compute a
-digest, but their contents are not interpreted by the simulated command.
-
-### Replacing Dune
-
-The real runner invokes SQbricks in a form similar to:
-
-```bash
-dune exec -- ./bin/main.exe -sqv ...
-```
-
-The fixture creates an executable `bin/dune` file. This file is a Bash script,
-which is sufficient: a command found through `PATH` may be either a compiled
-binary or an executable script.
-
-During execution, the fixture directory is placed at the beginning of `PATH`:
-
-```bash
-PATH="$fixture/bin:$PATH"
-```
-
-The shell therefore finds the fake `dune` before the Dune installed on the
-machine. Neither Dune, the OCaml program, nor real quantum verification is
-executed.
-
-The fake `dune` accepts only the two operations used by the runner:
-
-- `-nb_gates_csv` returns a deterministic gate count;
-- `-sqv` returns the results configured by the test.
-
-Any other invocation fails with exit code `99`. The test thus reports that the
-runner now uses an operation that is not yet simulated.
-
-### SQV counter
-
-For each invocation containing `-sqv`, the fake `dune` increments the file
-specified by `FAKE_COUNTER`. After three calls, this file contains `3`.
-
-The absence of this file proves that no SQV call was attempted. In the "check
-without a baseline" scenario, this is an important invariant: option validation
-must fail before any verification work.
-
-The counter concerns only `-sqv`. It cannot establish that the fake `dune`
-received no other invocation, such as `-nb_gates_csv`.
-
-### Simulated SQV results
-
-`FAKE_SQV_OUTPUTS` contains a comma-separated list:
+The `Raw` field contains round details, for example:
 
 ```text
-1.0,1.0,1.0
+rounds=3 status=EQ times=[1.000000,1.100000,0.900000] median=1.000000
 ```
 
-The fake `dune` converts this list into an array and selects one value for each
-call. The counter starts at `1`, while array indexes start at `0`. Call number
-`count` therefore uses index `count - 1`.
+The runner no longer tries to prove that the baseline exactly matches the QASM
+file contents or a full previous manifest definition. If the manifest changes
+intentionally, the baseline must be regenerated locally.
 
-In:
+## Runner validation tests
 
-```bash
-${FAKE_SQV_OUTPUTS:-1.0,1.0,1.0}
-```
+`test/benchmarks-light-validation.sh` tests the runner without starting the
+real OCaml program. It creates a minimal fixture and puts a fake `dune` at the
+front of `PATH`.
 
-`:-` is Bash's default-value operator. There is no numeric `-1.0` value in this
-expression.
+The fake `dune` simulates two calls:
 
-## `run_check`
+- `-nb_gates_csv`, to return a stable gate count;
+- `-sqv`, to return the outputs configured by the test.
 
-### Purpose
+The remaining scenarios match the light benchmark contract:
 
-`run_check` adapts a test scenario to `run_fixture_command`. It systematically
-adds:
+- `--check` requires a baseline;
+- `--check` cannot be combined with `--stable`;
+- a baseline must contain timings for tracked cases;
+- performance samples must be complete;
+- a functional regression makes the check fail;
+- an unknown SQbricks output makes the check fail;
+- a significant slowdown makes the check fail;
+- exceeding only one performance threshold is not enough;
+- an invalid baseline run does not replace the existing baseline;
+- a valid baseline run does replace the existing baseline.
 
-```text
---check --quiet
-```
-
-Its first two parameters are reserved for the test infrastructure:
-
-1. the fixture path;
-2. the successive outputs of the fake SQV.
-
-The remaining parameters are options for `benchmarks-light.sh`.
-
-### Use of `shift 2`
-
-Copying `$1` and `$2` into local variables does not remove those parameters.
-`shift 2` removes them from the positional parameter list after they have been
-read.
-
-`"$@"` then contains only the additional options. For example:
-
-```bash
-run_check "$fixture" "1.0,1.0,1.0" --baseline "$baseline"
-```
-
-is forwarded as:
-
-```text
---check --quiet --baseline <path>
-```
-
-In the scenario without a baseline, no additional option is forwarded. The
-runner receives only `--check --quiet`.
-
-## `run_fixture_command`
-
-### Purpose
-
-`run_fixture_command` centralizes controlled execution of the real
-`benchmarks-light.sh`. It:
-
-1. enters the temporary repository;
-2. prepares environment variables for the runner and fake `dune`;
-3. runs `benchmarks-light.sh` with the scenario options;
-4. captures its messages in `run_output`;
-5. captures its exit status in `run_status`.
-
-This function records what happened. It does not yet decide whether the test
-succeeded: that interpretation belongs to the assertion functions.
-
-### Temporary environment
-
-Assignments placed directly before a command apply to that command and its
-subcommands:
-
-```bash
-VARIABLE=value command
-```
-
-The backslashes in the script allow this single command to be written across
-several lines. They do not create separate commands.
-
-The configured variables are:
-
-| Variable | Consumer | Purpose |
-| --- | --- | --- |
-| `PATH` | shell | Find the fake `dune` before the real one. |
-| `FAKE_COUNTER` | fake `dune` | Specify where to count `-sqv` calls. |
-| `FAKE_SQV_OUTPUTS` | fake `dune` | Provide successive simulated outputs. |
-| `SQBRICKS_LIGHT_RUNS` | runner | Set the number of repetitions to three in the fixture. |
-| `SQBRICKS_LIGHT_TIMEOUT` | runner | Set the timeout used by the case and its definition. |
-| `SQBRICKS_LIGHT_MEMORY_KB` | runner | Set the memory limit used by the case and its definition. |
-| `SQBRICKS_LIGHT_PROGRESS` | runner | Disable the progress bar during tests. |
-
-These assignments do not permanently replace variables in the validation
-shell. In addition, the `$(...)` block runs in a subshell, so `cd "$fixture"`
-does not change the calling script's directory either.
-
-### Output and exit status
-
-The expression:
-
-```bash
-run_output="$(command 2>&1)"
-```
-
-captures standard output and, through `2>&1`, standard error from the command.
-
-After execution:
-
-- `run_output` contains the messages produced by the runner;
-- `run_status` is `0` if the runner succeeded;
-- `run_status` is non-zero if the runner failed.
-
-A non-zero `run_status` does not automatically mean that the test failed. In a
-rejection test, such as the missing baseline scenario, runner failure is the
-expected result.
-
-## `test_check_requires_baseline`
-
-### Protected behavior
-
-The `--check` mode compares a run with a reference. Without a baseline, this
-comparison is meaningless. The runner must therefore reject the command before
-any SQV verification.
-
-The test:
-
-1. creates a fixture;
-2. calls `run_check` without a `--baseline` option;
-3. expects a failure containing `--check requires --baseline`;
-4. verifies that no SQV call was attempted.
-
-The simulated outputs `1.0,1.0,1.0` are provided because the common `run_check`
-interface requires them. They are never consumed in this scenario if the
-preflight check works correctly.
-
-### Invariants
-
-This test protects two invariants:
-
-- `--check` explicitly requires a baseline;
-- this configuration error is detected before SQV execution.
-
-## Review status
-
-The `Makefile` entry point and the execution flow described above were
-documented during the review of the first scenario.
-
-The `assert_failed_with` and `assert_no_sqv_run` assertion functions still need
-to be examined function by function before this first scenario can be
-considered fully reviewed.
+The tests no longer cover detailed definition changes or cases removed from the
+manifest. This is intentional: those checks made the benchmark harder to read
+than necessary for its current goal.
