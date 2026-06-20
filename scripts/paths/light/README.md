@@ -48,35 +48,11 @@ After execution, every tracked case must again have one positive timing sample
 per round. Missing or invalid samples make the check fail with
 `PerfStatus=INCOMPLETE`; no slowdown ratio is calculated for that row.
 
-## Benchmark definitions
+## Baseline scope
 
-Every full CSV row contains a `DefinitionHash`. It binds that verification to:
-
-- its suite, case, kind, mode, expected status, and `TrackPerformance` value;
-- the paths and SHA-256 contents of its input circuit files;
-- `SQBRICKS_LIGHT_RUNS`, `SQBRICKS_LIGHT_TIMEOUT`, and
-  `SQBRICKS_LIGHT_MEMORY_KB`;
-- the benchmark-definition schema used by the runner.
-
-Check mode compares these hashes before running SQbricks. A missing hash means
-the baseline uses an older format. A different hash means an input, manifest
-entry, or execution setting changed. Both cases require an intentional local
-baseline regeneration.
-
-The SQbricks executable and performance thresholds are deliberately excluded.
-Code changes are what the benchmark measures, while thresholds only decide how
-the resulting timings are classified.
-
-## Coverage
-
-The baseline also records the previous set of benchmark verifications. Check
-mode fails before execution when a baseline verification is no longer present
-in the manifests. Removing only one mode from a case, such as `Parallel`, is
-treated as removing a verification.
-
-New manifest rows are allowed. When `--suite` is used, coverage is compared only
-for the selected suite. Regenerate the local baseline only after an intentional
-manifest removal has been reviewed.
+The baseline is local to the machine. Check mode uses it only for the
+performance rows currently selected by the manifests. If the selected manifest
+changes intentionally, regenerate the local baseline.
 
 ## Baseline writes
 
