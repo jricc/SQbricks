@@ -31,11 +31,12 @@ Le projet contient deux capacités principales :
   équivalence.
 
 Le benchmark léger sert de garde-fou court avant de lancer des campagnes plus
-longues.
+longues. Le benchmark long SQbricks-only reprend les familles historiques de
+`scripts/benchmarks.sh`, mais ne conserve que les vérifications SQbricks dans
+les CSV produits.
 
-Le second sujet actuel est le benchmark long SQbricks-only. Il reprend les
-familles historiques de `scripts/benchmarks.sh`, mais ne conserve que les
-vérifications SQbricks dans les CSV produits.
+Il n'y a pas de benchmark intermédiaire prévu pour l'instant. Il ferait surtout
+doublon avec le rôle du benchmark léger et celui du benchmark long.
 
 ## Commandes du benchmark léger
 

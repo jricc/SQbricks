@@ -524,9 +524,11 @@ The metrics can be found in the `totals` sheet:
 
 ### SQbricks-only benchmarks
 
-Two lighter entry points are available when the goal is to check SQbricks
-itself without running the external verification tools used by
-`scripts/benchmarks.sh`.
+Two SQbricks-only benchmark levels are available when the goal is to check
+SQbricks itself without running the external verification tools used by
+`scripts/benchmarks.sh`: a short non-regression benchmark and a long benchmark.
+There is no intermediate benchmark for now, because it would mostly duplicate
+one of those two roles.
 
 | Command | Description |
 |:--------|-------------|
@@ -551,4 +553,3 @@ The results are processed identically to the sanity check. Please refer to the [
 An example of the final summary table displaying all sanity check results is shown below:
 
 ![Summary table of sanity check results](doc/files/benchs-results.png)
-
