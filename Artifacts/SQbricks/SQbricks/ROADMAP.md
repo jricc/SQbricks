@@ -1,0 +1,308 @@
+# SQbricks roadmap
+
+## Goal
+
+Make SQbricks robust, measurable, and extensible for hybrid quantum circuit equivalence checking, then explore query-driven symbolic simulation and bounded dynamic circuits.
+
+## Guiding principle
+
+Work in layers:
+
+1. stabilize;
+2. measure;
+3. improve reduction;
+4. improve input support;
+5. prototype simulation;
+6. explore bounded dynamic circuits.
+
+Avoid large feature additions before the benchmark and regression setup are reliable.
+
+## Phase 1 — Minimal regression benchmark
+
+Goal: create a short benchmark that detects regressions and measures capability improvements.
+
+Expected properties:
+
+- fast enough to run often;
+- deterministic;
+- small enough to debug;
+- representative of SQbricks core features.
+
+It should cover:
+
+- basic unitary equivalence;
+- path-sum reduction;
+- hybrid lifting;
+- discard and partial equivalence;
+- parser behavior;
+- omega-specific cases;
+- case-rule-specific cases.
+
+Expected output:
+
+- `smoke` benchmark;
+- `regression` benchmark;
+- clear result format;
+- documented expected status for each case.
+
+## Phase 2 — Safe long benchmark runner
+
+Goal: make the long benchmark robust and usable.
+
+Required features:
+
+- per-case timeout;
+- per-case memory limit when possible;
+- one case per process when possible;
+- save results after each case;
+- resume mode;
+- skip rest of a size-ordered series after repeated timeout or OOM.
+
+The long benchmark must not saturate memory or waste time running all larger circuits after the first ones already timeout.
+
+Expected output:
+
+- safe benchmark runner;
+- documented configuration;
+- result file with explicit statuses.
+
+## Phase 3 — Correctness audit
+
+Goal: identify bugs and fragile assumptions before feature work.
+
+Audit targets:
+
+- parser;
+- AST;
+- deferred measurement;
+- path-sum generation;
+- reduction;
+- equivalence checking;
+- separation;
+- projection;
+- benchmark scripts.
+
+Look especially for:
+
+- unsafe exceptions;
+- index mistakes;
+- mutation of shared structures;
+- unsupported constructs accepted silently;
+- incorrect global phase handling;
+- edge cases on empty or small circuits;
+- discard/projection soundness issues.
+
+Expected output:
+
+- list of issues;
+- severity classification;
+- proposed minimal fix for each issue.
+
+## Phase 4 — Step-by-step bug fixes
+
+Goal: fix correctness and reproducibility issues.
+
+Rules:
+
+- one bug per patch when possible;
+- add regression test before or with the fix;
+- do not mix bug fixes with refactoring;
+- keep changes local.
+
+Expected output:
+
+- passing regression tests;
+- documented fixes;
+- no hidden behavior changes.
+
+## Phase 5 — Omega reduction rule
+
+Goal: integrate Amy's omega rule into SQbricks.
+
+Process:
+
+1. write targeted tests;
+2. add capability benchmark cases;
+3. prototype the matcher and transformation;
+4. validate on small examples;
+5. integrate into the reduction pipeline;
+6. compare before/after benchmark results.
+
+Expected output:
+
+- omega rule implementation;
+- tests for matches and non-matches;
+- benchmark comparison;
+- documented limitations.
+
+## Phase 6 — Case reduction rule
+
+Goal: integrate Amy's case rule into SQbricks.
+
+Process:
+
+1. write targeted tests;
+2. add capability benchmark cases;
+3. prototype independently;
+4. validate on small Clifford+T examples;
+5. integrate into the reduction pipeline;
+6. compare before/after benchmark results.
+
+Expected output:
+
+- case rule implementation;
+- tests for matches and non-matches;
+- benchmark comparison;
+- documented limitations.
+
+## Phase 7 — Benchmark comparison
+
+Goal: measure the effect of new reduction rules.
+
+Record:
+
+- result status;
+- runtime;
+- memory usage when available;
+- path variables before and after reduction;
+- phase terms before and after reduction;
+- rules applied.
+
+Expected comparison:
+
+- baseline;
+- after omega;
+- after case.
+
+Do not claim improvement without measured data.
+
+## Phase 8 — Bottleneck audit
+
+Goal: optimize only after the reduction system and benchmarks are stable.
+
+Potential bottlenecks:
+
+- polynomial simplification;
+- substitution;
+- path-sum equality;
+- separation test;
+- projection;
+- renaming of path variables;
+- parser conversion;
+- benchmark runner overhead.
+
+Process:
+
+1. profile representative cases;
+2. identify dominant costs;
+3. prototype one optimization;
+4. measure before/after;
+5. integrate only if useful.
+
+## Phase 9 — Query-driven symbolic simulation
+
+Goal: prototype simulation as a query-driven symbolic process, not as a general statevector simulator.
+
+Intended workflow:
+
+1. parse or build circuit;
+2. instantiate symbolic inputs if provided;
+3. generate path-sum;
+4. reduce aggressively;
+5. project to observable outputs when sound;
+6. enumerate only remaining useful path variables;
+7. answer a specific query.
+
+Target queries:
+
+- amplitude of one output;
+- probability of one event;
+- distribution on selected outputs;
+- counterexample for failed equivalence;
+- debugging information for reductions.
+
+Expected output:
+
+- prototype;
+- small examples;
+- comparison with known results or external simulator on tiny circuits;
+- documented limitations.
+
+## Phase 10 — OpenQASM 2 cleanup
+
+Goal: make OpenQASM 2 support clearer and safer.
+
+Tasks:
+
+- distinguish accepted syntax from supported semantics;
+- reject unsupported constructs explicitly;
+- improve tests;
+- consider separating OpenQASM AST from SQbricks core AST.
+
+Possible constructs to clarify:
+
+- custom gates;
+- opaque gates;
+- barriers;
+- resets;
+- measurements;
+- classical conditionals;
+- parameterized gates;
+- non-dyadic or unsupported angles.
+
+Expected output:
+
+- parser tests;
+- explicit unsupported-feature errors;
+- cleaner conversion path.
+
+## Phase 11 — Useful OpenQASM 3 subset
+
+Goal: prototype only the OpenQASM 3 features useful for SQbricks.
+
+Initial target:
+
+- bounded loops;
+- classical conditionals;
+- measurements;
+- reset;
+- gate calls.
+
+Non-goals at this stage:
+
+- full OpenQASM 3 support;
+- unbounded loops;
+- complete classical computation;
+- full timing/pulse support.
+
+For loops, start with unrolling when bounds are concrete.
+
+## Phase 12 — Bounded repeat-until-success
+
+Goal: explore bounded RUS examples before unbounded semantics.
+
+Steps:
+
+1. encode bounded RUS by unrolling;
+2. simulate symbolically;
+3. check partial equivalence when possible;
+4. identify missing reductions;
+5. prototype new reductions if needed.
+
+Unbounded RUS requires a separate theoretical design.
+
+Before unbounded RUS, define:
+
+- success probability;
+- output state conditioned on success;
+- failure behavior;
+- exact or approximate equivalence;
+- termination assumptions.
+
+## Non-goals for now
+
+- Full OpenQASM 3 support.
+- General-purpose statevector simulation.
+- Unbounded repeat-until-success semantics.
+- Large refactoring without tests.
+- Performance claims without benchmark data.
