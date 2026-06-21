@@ -1,0 +1,2 @@
+benchmarks/VeriQbench/combinational/pe/pe_72.qasm;benchmarks/VeriQbench/dynamic/pe/dqc_pe_72.qasm
+benchmarks/VeriQbench/combinational/qft/qft_100.qasm;benchmarks/VeriQbench/dynamic/qft/dqc_qft_100.qasm

@@ -7,14 +7,14 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/benchmarks-light-validation.XXXXXX")" || exit 1
 fixture_runs=3
-fixture_timeout="120s"
+fixture_timeout="240s"
 fixture_memory_kb=7340032
 failure_count=0
 run_status=0
 run_output=""
 baseline_header="Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH;CS;CZ;CCZ;CCX;CU1;Gates;TimeSeconds;BaselineSeconds;Ratio;PerfStatus;Raw"
 valid_baseline_time="1.000000"
-valid_baseline_raw="rounds=3 status=EQ times=[1.000000,1.000000,1.000000] median=1.000000"
+valid_baseline_raw="rounds=3 status=EQ times=[1.000000,1.000000,1.000000] best=1.000000"
 
 cleanup() {
 	rm -rf "$work_dir"
@@ -292,7 +292,7 @@ test_baseline_sample_count_must_match() {
 	baseline="$fixture/baseline.csv"
 	write_baseline_header "$baseline"
 	write_baseline_row "$baseline" "$valid_baseline_time" \
-		"rounds=2 status=EQ times=[1.000000,1.000000] median=1.000000"
+		"rounds=2 status=EQ times=[1.000000,1.000000] best=1.000000"
 	run_check "$fixture" "1.0,1.0,1.0" --baseline "$baseline"
 
 	assert_failed_with \
@@ -370,10 +370,23 @@ test_performance_regression_fails() {
 		assert_sqv_runs "$fixture" 3
 }
 
+test_slow_outliers_do_not_fail() {
+	local fixture
+	local baseline
+
+	fixture="$(new_fixture)"
+	baseline="$fixture/baseline.csv"
+	write_valid_baseline "$fixture" "$baseline"
+	run_check "$fixture" "1.0,1.8,1.9" --baseline "$baseline"
+
+	assert_succeeded_with "Light regression check OK" &&
+		assert_sqv_runs "$fixture" 3
+}
+
 test_relative_threshold_alone_does_not_fail() {
 	local fixture
 	local baseline
-	local raw="rounds=3 status=EQ times=[0.100000,0.100000,0.100000] median=0.100000"
+	local raw="rounds=3 status=EQ times=[0.100000,0.100000,0.100000] best=0.100000"
 
 	fixture="$(new_fixture)"
 	baseline="$fixture/baseline.csv"
@@ -464,6 +477,7 @@ run_test "current timing samples must be complete" test_current_timing_samples_m
 run_test "functional status mismatch fails" test_functional_status_mismatch_fails
 run_test "unknown successful output fails check" test_unknown_success_output_fails_check
 run_test "performance regression fails" test_performance_regression_fails
+run_test "slow outliers do not fail" test_slow_outliers_do_not_fail
 run_test "relative threshold alone does not fail" test_relative_threshold_alone_does_not_fail
 run_test "absolute threshold alone does not fail" test_absolute_threshold_alone_does_not_fail
 

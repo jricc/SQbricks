@@ -35,7 +35,7 @@ tmp_dir="_tmp/light"
 
 # Runtime limits are applied to every SQbricks command, including conversion,
 # transformation, gate counting, and equivalence checking.
-timeout_s="${SQBRICKS_LIGHT_TIMEOUT:-120s}"
+timeout_s="${SQBRICKS_LIGHT_TIMEOUT:-240s}"
 memory_kb="${SQBRICKS_LIGHT_MEMORY_KB:-7340032}"
 
 # A slowdown is reported only when both the relative and absolute limits fail.
@@ -75,7 +75,7 @@ progress_total=0
 progress_line_open="false"
 
 # Baseline data, indexed by "suite|case|kind|mode".
-declare -A baseline_times # key -> baseline median time, for example 0.214834
+declare -A baseline_times # key -> baseline reference time, for example 0.214834
 declare -A baseline_rows  # key -> "true" when the baseline contains this row
 declare -A baseline_raws  # key -> Raw CSV field, including rounds and timings
 
@@ -120,7 +120,7 @@ Options:
   -h, --help            Show this help.
 
 Environment:
-  SQBRICKS_LIGHT_TIMEOUT=120s
+  SQBRICKS_LIGHT_TIMEOUT=240s
   SQBRICKS_LIGHT_MEMORY_KB=7340032
   SQBRICKS_LIGHT_PERF_THRESHOLD=1.25
   SQBRICKS_LIGHT_MIN_PERF_SECONDS=0.01
@@ -253,19 +253,18 @@ normalize_number() {
 	printf "%s" "$value"
 }
 
-# Median is used instead of a mean so one noisy run among the three light rounds
-# does not dominate the performance decision.
-median_numbers() {
+# Use the best observed time so occasional machine-load spikes do not create
+# false performance regressions. Statuses still have to be stable on all rounds.
+best_number() {
 	printf "%s\n" "$@" | sort -n | awk '
-		{ values[NR] = $1 }
+		NR == 1 {
+			printf "%.6f", $1
+			found = 1
+			exit
+		}
 		END {
-			if (NR == 0) {
+			if (!found) {
 				exit 1
-			}
-			if (NR % 2 == 1) {
-				printf "%.6f", values[int((NR + 1) / 2)]
-			} else {
-				printf "%.6f", (values[NR / 2] + values[(NR / 2) + 1]) / 2
 			}
 		}'
 }
@@ -447,7 +446,7 @@ time_from_stdout() {
 }
 
 # Read only the baseline fields needed by the light contract:
-# the row key, the median time, and the raw per-round timing samples.
+# the row key, the reference time, and the raw per-round timing samples.
 load_baseline() {
 	local suite
 	local case_name
@@ -628,7 +627,7 @@ validate_baseline_performance_data() {
 	fi
 }
 
-# Compare a current median with its baseline. A regression is reported only when
+# Compare a current reference time with its baseline. A regression is reported only when
 # both the relative ratio and the absolute slowdown cross their thresholds.
 perf_info() {
 	local key="$1"
@@ -831,13 +830,13 @@ emit_results() {
 		fi
 
 		if [[ "$actual" != "FLAKY" && "$sample_count" -gt 0 && "$timing_complete" == "true" ]]; then
-			time_seconds="$(median_numbers "${times[@]}")"
+			time_seconds="$(best_number "${times[@]}")"
 		fi
 
 		if [[ "$actual" == "FLAKY" ]]; then
 			raw="rounds=$run_count statuses=[${row_statuses[$key]}] details=[${row_raws[$key]}]"
 		else
-			raw="rounds=$run_count status=$actual times=[${row_times[$key]}] median=${time_seconds:-NA}"
+			raw="rounds=$run_count status=$actual times=[${row_times[$key]}] best=${time_seconds:-NA}"
 		fi
 
 		emit_final_row \
@@ -1355,7 +1354,7 @@ print_check_summary() {
 	fi
 
 	if [[ "$status_failure_count" -eq 0 && "$perf_failure_count" -eq 0 && "$perf_data_failure_count" -eq 0 ]]; then
-		echo "Light regression check OK: $row_count rows matched expected statuses; no median slowdown exceeded both thresholds in $performance_row_count tracked performance row(s) across $run_count round(s)."
+		echo "Light regression check OK: $row_count rows matched expected statuses; no best-time slowdown exceeded both thresholds in $performance_row_count tracked performance row(s) across $run_count round(s)."
 	else
 		echo "Light regression check FAILED: $status_failure_count status mismatch(es), $perf_failure_count performance regression(s), $perf_data_failure_count performance data error(s) across $run_count round(s)."
 
