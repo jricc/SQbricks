@@ -522,6 +522,27 @@ The metrics can be found in the `totals` sheet:
 | `make veriqc`          | Runs all hybrid equivalence checks from the dynamic version of VeriQC.                      | No discard                   |
 | `make benchmarks`          | Runs all benchmarks.                         |                   |
 
+### SQbricks-only benchmarks
+
+Two lighter entry points are available when the goal is to check SQbricks
+itself without running the external verification tools used by
+`scripts/benchmarks.sh`.
+
+| Command | Description |
+|:--------|-------------|
+| `make regression-light-baseline` | Builds the local baseline for the short non-regression benchmark. |
+| `make regression-light-check` | Runs the short non-regression check against the local baseline. |
+| `make benchmark-sqbricks TYPE=owm` | Runs one long SQbricks-only benchmark family. |
+| `make benchmarks-sqbricks` | Runs all long SQbricks-only families listed in `LONG_TYPES`. |
+
+The long SQbricks-only benchmark reuses the historical path files, including
+`qiskit-hybrid` and `owm-vs-qiskit`. Those two families still use
+`scripts/qiskit-tr.py` to generate transformed circuits, but Qiskit is not
+reported as a verification tool in the generated CSV.
+
+Progress bars are printed on `stderr` and CSV data is written on `stdout`, so
+redirected result files stay clean.
+
 
 ### Output
 
@@ -530,5 +551,4 @@ The results are processed identically to the sanity check. Please refer to the [
 An example of the final summary table displaying all sanity check results is shown below:
 
 ![Summary table of sanity check results](doc/files/benchs-results.png)
-
 
