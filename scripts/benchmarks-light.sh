@@ -311,9 +311,23 @@ render_progress() {
 	printf -v pending "%*s" "$pending_width" ""
 	bar="${complete// /#}${pending// /-}"
 
-	printf "\rLight regression [%s] %3d%% %d/%d round %d/%d - %.48s\033[K" \
+	local cols
+	local line
+	local max_width
+
+	cols="${COLUMNS:-$(tput cols 2>/dev/null || printf 80)}"
+	if ! [[ "$cols" =~ ^[0-9]+$ ]] || (( cols < 20 )); then
+		cols=80
+	fi
+
+	printf -v line 'Light regression [%s] %3d%% %d/%d round %d/%d - %.48s' \
 		"$bar" "$percent" "$progress_current" "$progress_total" \
-		"$displayed_round" "$run_count" "$label" >&2
+		"$displayed_round" "$run_count" "$label"
+
+	max_width=$((cols - 1))
+	line="${line:0:max_width}"
+
+	printf '\r\033[2K%s' "$line" >&2
 	progress_line_open="true"
 }
 

@@ -70,6 +70,10 @@ The runner displays progress on standard error when it is attached to an
 interactive terminal. The total includes all selected Sequence and Parallel
 checks across every round.
 
+The progress bar rewrites one terminal line. The line is truncated to the
+terminal width before printing, so long case names do not force automatic line
+wrapping.
+
 Set `SQBRICKS_LIGHT_PROGRESS` to control the display:
 
 - `auto` enables it only in an interactive terminal. This is the default.
