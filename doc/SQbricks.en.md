@@ -29,11 +29,13 @@ The project contains two main capabilities:
 - SQbricks-Verif compares two unitary circuits and attempts to establish their
   equivalence.
 
-The light benchmark is a short guardrail before running longer campaigns.
+The light benchmark is a short guardrail before running longer campaigns. The
+long SQbricks-only benchmark reuses the historical families from
+`scripts/benchmarks.sh`, but keeps only SQbricks verification rows in the
+generated CSV files.
 
-The second current topic is the long SQbricks-only benchmark. It reuses the
-historical families from `scripts/benchmarks.sh`, but keeps only SQbricks
-verification rows in the generated CSV files.
+There is no intermediate benchmark planned for now. It would mostly duplicate
+the role of the light benchmark and the long benchmark.
 
 ## Light benchmark commands
 
