@@ -16,7 +16,7 @@
   English.
 - [x] Require both documentation versions to be updated after each function
   validated in quality mode.
-- [ ] Review the simplified light benchmark at workflow level.
+- [x] Review the simplified light benchmark at workflow level.
 - [ ] Regenerate the local light baseline with the new three-round performance
   cases.
 - [ ] Run the light non-regression check successfully.
@@ -39,3 +39,6 @@
 - The long SQbricks-only benchmark reuses the historical path files, including
   `qiskit-hybrid` and `owm-vs-qiskit`; it does not run external verification
   tools.
+- The global benchmark audit compared the long SQbricks-only runner with
+  `scripts/benchmarks.sh`, checked manifests, CSV shapes, Makefile entry
+  points, and light runner validation tests.

@@ -100,7 +100,7 @@ benchmark-sqbricks:
 	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-sqbricks TYPE=owm"; exit 1; fi
 	@mkdir -p $(RESULT_FOLDER) $(shell pwd)/_build/sqbricks-long/$(TYPE)
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/sqbricks-long/$(TYPE) dune build
-	@DUNE_BUILD_DIR=$(shell pwd)/_build/sqbricks-long/$(TYPE) SQBRICKS_LONG_PROGRESS=$(LONG_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) >> $(RESULT_FOLDER)/benchmarks_sqbricks_$(TYPE)_$(DATE_FILE).csv
+	@DUNE_BUILD_DIR=$(shell pwd)/_build/sqbricks-long/$(TYPE) SQBRICKS_LONG_PROGRESS=$(LONG_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(RESULT_FOLDER)/benchmarks_sqbricks_$(TYPE)_$(DATE_FILE).csv
 	@echo "SQbricks benchmark $(TYPE) written to $(RESULT_FOLDER)/benchmarks_sqbricks_$(TYPE)_$(DATE_FILE).csv"
 
 # Run the full SQbricks-only benchmark campaign by calling benchmark-sqbricks

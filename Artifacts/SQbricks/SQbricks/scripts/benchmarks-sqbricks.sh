@@ -22,7 +22,8 @@ set -u
 
 debug="${SQBRICKS_LONG_DEBUG:-false}"
 version="${1:-}"
-timeout_s="${SQBRICKS_LONG_TIMEOUT:-600s}"
+timeout_seconds="${SQBRICKS_LONG_TIMEOUT:-600}"
+timeout_seconds="${timeout_seconds%s}"
 memory_kb="${SQBRICKS_LONG_MEMORY_KB:-7340032}"
 progress_mode="${SQBRICKS_LONG_PROGRESS:-auto}"
 
@@ -43,13 +44,29 @@ export DUNE_BUILD_DIR="${DUNE_BUILD_DIR:-$(pwd)/_build/sqbricks-long/$version}"
 
 tmp_dir="_tmp/sqbricks-long/$version"
 path_file="scripts/paths/paths_${version}.txt"
+
+# Current input row number, used only for progress reporting.
 case_index=0
+
+# Whether the progress bar is printed for this run.
 progress_enabled="false"
+
+# Number of completed cases displayed by the progress bar.
 progress_current=0
+
+# Total number of non-empty path rows selected for this family.
 progress_total=0
+
+# True after a carriage-return progress line has been printed.
 progress_line_open="false"
+
+# Last wrapped command stdout, captured so callers can parse it.
 cmd_stdout=""
+
+# Last wrapped command stderr, captured so callers can classify failures.
 cmd_stderr=""
+
+# Last wrapped command exit status.
 cmd_status=0
 
 if [[ ! -f "$path_file" ]]; then
@@ -67,21 +84,28 @@ esac
 
 mkdir -p "$tmp_dir"
 
+# Apply the same limits to every command launched by this script.
+ulimit -v "$memory_kb" || exit 1
+ulimit -t "$timeout_seconds" || exit 1
+
+# Remove surrounding whitespace and CR characters from command outputs.
 trim() {
 	local value="$1"
 	value="${value//$'\r'/}"
 	printf "%s" "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
+# Convert a decimal point to a decimal comma for the historical CSV format.
 csv_time() {
 	printf "%s" "$1" | sed 's/\./,/'
 }
 
+# Map a failed command status and stderr to the compact CSV status.
 status_from_failure() {
 	local status="$1"
 	local stderr="$2"
 
-	if [[ "$status" -eq 124 ]]; then
+	if [[ "$status" -eq 124 || "$status" -eq 152 ]]; then
 		printf "TO"
 	elif [[ "$status" -eq 137 || "$stderr" == *"allocation failure during minor GC"* || "$stderr" == *"Out_of_memory"* ]]; then
 		printf "OutOfMemory"
@@ -90,66 +114,51 @@ status_from_failure() {
 	fi
 }
 
-run_sqbricks_command() {
+# Run one command and capture stdout, stderr, and exit status in cmd_stdout,
+# cmd_stderr, and cmd_status.
+run_command() {
 	local stdout_file
 	local stderr_file
 
 	stdout_file="$(mktemp "$tmp_dir/stdout.XXXXXX")" || exit 1
 	stderr_file="$(mktemp "$tmp_dir/stderr.XXXXXX")" || exit 1
 
-	if [[ "$debug" == "true" ]]; then
-		echo "dune exec -- ./bin/main.exe $*" >&2
-	fi
+	{ "$@"; } >"$stdout_file" 2>"$stderr_file"
 
-	if command -v timeout >/dev/null 2>&1; then
-		timeout "$timeout_s" bash -c 'ulimit -v "$1"; shift; exec "$@"' \
-			_ "$memory_kb" dune exec -- ./bin/main.exe "$@" \
-			>"$stdout_file" 2>"$stderr_file"
-	else
-		bash -c 'ulimit -v "$1"; shift; exec "$@"' \
-			_ "$memory_kb" dune exec -- ./bin/main.exe "$@" \
-			>"$stdout_file" 2>"$stderr_file"
-	fi
-
+	# Keep the command result in globals so callers can parse stdout or inspect
+	# stderr without mixing diagnostics into the CSV output.
 	cmd_status=$?
 	cmd_stdout="$(cat "$stdout_file")"
 	cmd_stderr="$(cat "$stderr_file")"
+
+	# Temporary files are only needed to capture both streams cleanly.
 	rm -f "$stdout_file" "$stderr_file"
 
 	return "$cmd_status"
 }
 
+# Run SQbricks through dune with the common command wrapper.
+run_sqbricks_command() {
+	if [[ "$debug" == "true" ]]; then
+		echo "dune exec -- ./bin/main.exe $*" >&2
+	fi
+
+	run_command dune exec -- ./bin/main.exe "$@"
+}
+
+# Run the Qiskit transformation used to generate optimized comparison circuits.
 run_qiskit_transform() {
 	local input="$1"
 	local output="$2"
-	local stdout_file
-	local stderr_file
-
-	stdout_file="$(mktemp "$tmp_dir/stdout.XXXXXX")" || exit 1
-	stderr_file="$(mktemp "$tmp_dir/stderr.XXXXXX")" || exit 1
 
 	if [[ "$debug" == "true" ]]; then
 		echo "python3 scripts/qiskit-tr.py $input $output" >&2
 	fi
 
-	if command -v timeout >/dev/null 2>&1; then
-		timeout "$timeout_s" bash -c 'ulimit -v "$1"; shift; exec "$@"' \
-			_ "$memory_kb" python3 scripts/qiskit-tr.py "$input" "$output" \
-			>"$stdout_file" 2>"$stderr_file"
-	else
-		bash -c 'ulimit -v "$1"; shift; exec "$@"' \
-			_ "$memory_kb" python3 scripts/qiskit-tr.py "$input" "$output" \
-			>"$stdout_file" 2>"$stderr_file"
-	fi
-
-	cmd_status=$?
-	cmd_stdout="$(cat "$stdout_file")"
-	cmd_stderr="$(cat "$stderr_file")"
-	rm -f "$stdout_file" "$stderr_file"
-
-	return "$cmd_status"
+	run_command python3 scripts/qiskit-tr.py "$input" "$output"
 }
 
+# Return the SQbricks gate-count CSV fragment, or empty gate fields on failure.
 gate_count() {
 	local path1="$1"
 	local path2="$2"
@@ -161,6 +170,7 @@ gate_count() {
 	fi
 }
 
+# Convert a QASM file through SQbricks -sql with the requested mode.
 run_sql() {
 	local mode="$1"
 	local input="$2"
@@ -169,6 +179,7 @@ run_sql() {
 	run_sqbricks_command -sql "$mode" "$input" "$output"
 }
 
+# Build an OWM or teleportation transformed circuit.
 run_transform() {
 	local kind="$1"
 	local input="$2"
@@ -177,19 +188,21 @@ run_transform() {
 	run_sqbricks_command "-qasm_to_${kind}" "$input" "$output" "false"
 }
 
+# Split a transformation result of the form "inputs,outputs".
 split_transform_output() {
 	local value="$1"
 	local __inputs="$2"
 	local __outputs="$3"
-	local inputs
-	local outputs
+	local extracted_inputs
+	local extracted_outputs
 
-	inputs="${value%%,*}"
-	outputs="${value##*,}"
-	printf -v "$__inputs" "%s" "$(trim "$inputs")"
-	printf -v "$__outputs" "%s" "$(trim "$outputs")"
+	extracted_inputs="${value%%,*}"
+	extracted_outputs="${value##*,}"
+	printf -v "$__inputs" "%s" "$(trim "$extracted_inputs")"
+	printf -v "$__outputs" "%s" "$(trim "$extracted_outputs")"
 }
 
+# Emit one CSV row when an intermediate conversion step failed.
 emit_conversion_error() {
 	local name="$1"
 	local lift="$2"
@@ -197,6 +210,7 @@ emit_conversion_error() {
 	echo "$name;SQbricks;2025;$lift;Conversion;;;;;;;;ErrConv"
 }
 
+# Run SQbricks equivalence checks and emit Sequence/Parallel CSV rows.
 run_equiv_sqbricks() {
 	local nb_gate="$1"
 	local name="$2"
@@ -233,6 +247,7 @@ run_equiv_sqbricks() {
 	run_equiv_mode par "Parallel"
 }
 
+# Check two plain QASM circuits without lifting.
 test_unit() {
 	local path1="$1"
 	local path2="$2"
@@ -243,6 +258,7 @@ test_unit() {
 	run_equiv_sqbricks "$nb_gate" "$name" "$path1" "$path2" "standalone"
 }
 
+# Convert both circuits to unitary form, then compare the converted files.
 test_lifted_pair() {
 	local path1="$1"
 	local path2="$2"
@@ -251,15 +267,21 @@ test_lifted_pair() {
 	local name="$5"
 	local nb_gate
 
-	if run_sql u "$path1" "$path1_unitary" &&
-		run_sql u "$path2" "$path2_unitary"; then
-		nb_gate="$(gate_count "$path1_unitary" "$path2_unitary")"
-		run_equiv_sqbricks "$nb_gate" "$name" "$path1_unitary" "$path2_unitary" "lifting"
-	else
+	if ! run_sql u "$path1" "$path1_unitary"; then
 		emit_conversion_error "$name" "lifting"
+		return
 	fi
+	if ! run_sql u "$path2" "$path2_unitary"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+
+	nb_gate="$(gate_count "$path1_unitary" "$path2_unitary")"
+	run_equiv_sqbricks "$nb_gate" "$name" "$path1_unitary" "$path2_unitary" "lifting"
 }
 
+# Generate a Qiskit-optimized circuit, then compare original and optimized
+# circuits after SQbricks lifting.
 test_qiskit_hybrid() {
 	local path_original="$1"
 	local path_optimized="$2"
@@ -267,14 +289,17 @@ test_qiskit_hybrid() {
 	local path_optimized_unitary="$4"
 	local name="$5"
 
-	if run_qiskit_transform "$path_original" "$path_optimized"; then
-		test_lifted_pair "$path_original" "$path_optimized" \
-			"$path_original_unitary" "$path_optimized_unitary" "$name"
-	else
+	if ! run_qiskit_transform "$path_original" "$path_optimized"; then
 		emit_conversion_error "$name" "lifting"
+		return
 	fi
+
+	test_lifted_pair "$path_original" "$path_optimized" \
+		"$path_original_unitary" "$path_optimized_unitary" "$name"
 }
 
+# Compare an OWM or teleportation transformation against the original unitary
+# circuit, using the partial-equivalence metadata returned by the transform.
 test_transformed_against_unitary() {
 	local kind="$1"
 	local path_original="$2"
@@ -288,24 +313,40 @@ test_transformed_against_unitary() {
 	local meas1
 	local nb_gate
 
-	if run_sql u "$path_original" "$path_original_unitary" &&
-		run_transform "$kind" "$path_original_unitary" "$path_transformed"; then
-		transform_output="$(trim "$cmd_stdout")"
-		if run_sql u "$path_transformed" "$path_transformed_ium"; then
-			meas1="$(trim "$cmd_stdout")"
-			split_transform_output "$transform_output" inputs outputs
-			nb_gate="$(gate_count "$path_transformed_ium" "$path_original_unitary")"
-			run_equiv_sqbricks "$nb_gate" "$name" \
-				"$path_transformed_ium" "$path_original_unitary" "lifting" \
-				"$inputs" "[]" "$outputs" "[]" "$meas1" "[]"
-		else
-			emit_conversion_error "$name" "lifting"
-		fi
-	else
+	# First lift the original circuit to a unitary form.
+	if ! run_sql u "$path_original" "$path_original_unitary"; then
 		emit_conversion_error "$name" "lifting"
+		return
 	fi
+
+	# Build the transformed circuit from that unitary form. SQbricks prints the
+	# input/output qubit lists needed later for partial equivalence.
+	if ! run_transform "$kind" "$path_original_unitary" "$path_transformed"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+	transform_output="$(trim "$cmd_stdout")"
+
+	# Lift the transformed circuit too; SQbricks prints the measurement list.
+	if ! run_sql u "$path_transformed" "$path_transformed_ium"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+
+	meas1="$(trim "$cmd_stdout")"
+
+	# The equivalence check compares transformed IUM vs original unitary, using
+	# the transform metadata for the first circuit and empty metadata for the
+	# original circuit.
+	split_transform_output "$transform_output" inputs outputs
+	nb_gate="$(gate_count "$path_transformed_ium" "$path_original_unitary")"
+	run_equiv_sqbricks "$nb_gate" "$name" \
+		"$path_transformed_ium" "$path_original_unitary" "lifting" \
+		"$inputs" "[]" "$outputs" "[]" "$meas1" "[]"
 }
 
+# Generate both OWM and teleportation circuits from the same original circuit,
+# then compare their lifted IUM forms.
 test_owm_vs_tele() {
 	local path_original="$1"
 	local path_original_unitary="$2"
@@ -324,35 +365,41 @@ test_owm_vs_tele() {
 	local meas2
 	local nb_gate
 
-	if run_sql u "$path_original" "$path_original_unitary" &&
-		run_transform owm "$path_original_unitary" "$path_owm"; then
-		output_owm="$(trim "$cmd_stdout")"
-		if run_transform tele "$path_original_unitary" "$path_tele"; then
-			output_tele="$(trim "$cmd_stdout")"
-			if run_sql u "$path_owm" "$path_owm_ium"; then
-				meas1="$(trim "$cmd_stdout")"
-				if run_sql u "$path_tele" "$path_tele_ium"; then
-					meas2="$(trim "$cmd_stdout")"
-					split_transform_output "$output_owm" inputs1 outputs1
-					split_transform_output "$output_tele" inputs2 outputs2
-					nb_gate="$(gate_count "$path_owm_ium" "$path_tele_ium")"
-					run_equiv_sqbricks "$nb_gate" "$name" \
-						"$path_owm_ium" "$path_tele_ium" "lifting" \
-						"$inputs1" "$inputs2" "$outputs1" "$outputs2" "$meas1" "$meas2"
-				else
-					emit_conversion_error "$name" "lifting"
-				fi
-			else
-				emit_conversion_error "$name" "lifting"
-			fi
-		else
-			emit_conversion_error "$name" "lifting"
-		fi
-	else
+	if ! run_sql u "$path_original" "$path_original_unitary"; then
 		emit_conversion_error "$name" "lifting"
+		return
 	fi
+	if ! run_transform owm "$path_original_unitary" "$path_owm"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+	output_owm="$(trim "$cmd_stdout")"
+	if ! run_transform tele "$path_original_unitary" "$path_tele"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+	output_tele="$(trim "$cmd_stdout")"
+	if ! run_sql u "$path_owm" "$path_owm_ium"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+	meas1="$(trim "$cmd_stdout")"
+	if ! run_sql u "$path_tele" "$path_tele_ium"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+
+	meas2="$(trim "$cmd_stdout")"
+	split_transform_output "$output_owm" inputs1 outputs1
+	split_transform_output "$output_tele" inputs2 outputs2
+	nb_gate="$(gate_count "$path_owm_ium" "$path_tele_ium")"
+	run_equiv_sqbricks "$nb_gate" "$name" \
+		"$path_owm_ium" "$path_tele_ium" "lifting" \
+		"$inputs1" "$inputs2" "$outputs1" "$outputs2" "$meas1" "$meas2"
 }
 
+# Generate a Qiskit-optimized circuit and an OWM circuit from the original,
+# then compare their lifted IUM forms.
 test_owm_vs_qiskit() {
 	local path_original="$1"
 	local path_original_unitary="$2"
@@ -367,26 +414,37 @@ test_owm_vs_qiskit() {
 	local meas1
 	local nb_gate
 
-	if run_qiskit_transform "$path_original" "$path_optimized" &&
-		run_sql u "$path_original" "$path_original_unitary" &&
-		run_transform owm "$path_original_unitary" "$path_owm"; then
-		output_owm="$(trim "$cmd_stdout")"
-		if run_sql u "$path_optimized" "$path_optimized_ium" &&
-			run_sql u "$path_owm" "$path_owm_ium"; then
-			meas1="$(trim "$cmd_stdout")"
-			split_transform_output "$output_owm" inputs1 outputs1
-			nb_gate="$(gate_count "$path_owm_ium" "$path_optimized_ium")"
-			run_equiv_sqbricks "$nb_gate" "$name" \
-				"$path_owm_ium" "$path_optimized_ium" "lifting" \
-				"$inputs1" "" "$outputs1" "" "$meas1" ""
-		else
-			emit_conversion_error "$name" "lifting"
-		fi
-	else
+	if ! run_qiskit_transform "$path_original" "$path_optimized"; then
 		emit_conversion_error "$name" "lifting"
+		return
 	fi
+	if ! run_sql u "$path_original" "$path_original_unitary"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+	if ! run_transform owm "$path_original_unitary" "$path_owm"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+	output_owm="$(trim "$cmd_stdout")"
+	if ! run_sql u "$path_optimized" "$path_optimized_ium"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+	if ! run_sql u "$path_owm" "$path_owm_ium"; then
+		emit_conversion_error "$name" "lifting"
+		return
+	fi
+
+	meas1="$(trim "$cmd_stdout")"
+	split_transform_output "$output_owm" inputs1 outputs1
+	nb_gate="$(gate_count "$path_owm_ium" "$path_optimized_ium")"
+	run_equiv_sqbricks "$nb_gate" "$name" \
+		"$path_owm_ium" "$path_optimized_ium" "lifting" \
+		"$inputs1" "" "$outputs1" "" "$meas1" ""
 }
 
+# Derive all temporary file paths needed by the current benchmark family.
 prepare_paths() {
 	local path_original="$1"
 
@@ -430,6 +488,7 @@ prepare_paths() {
 	esac
 }
 
+# Draw or refresh the single-line progress bar.
 render_progress() {
 	local label="$1"
 	local bar_width=30
@@ -439,6 +498,9 @@ render_progress() {
 	local complete
 	local pending
 	local bar
+	local cols
+	local line
+	local max_width
 
 	if [[ "$progress_enabled" != "true" || "$progress_total" -eq 0 ]]; then
 		return
@@ -451,11 +513,22 @@ render_progress() {
 	printf -v pending "%*s" "$pending_width" ""
 	bar="${complete// /#}${pending// /-}"
 
-	printf "\rSQbricks long %-14s [%s] %3d%% %d/%d - %.48s\033[K" \
-		"$version" "$bar" "$percent" "$progress_current" "$progress_total" "$label" >&2
+	cols="${COLUMNS:-$(tput cols 2>/dev/null || printf 80)}"
+	if ! [[ "$cols" =~ ^[0-9]+$ ]] || (( cols < 20 )); then
+		cols=80
+	fi
+
+	printf -v line 'SQbricks long %-14s [%s] %3d%% %d/%d - %.48s' \
+		"$version" "$bar" "$percent" "$progress_current" "$progress_total" "$label"
+
+	max_width=$((cols - 1))
+	line="${line:0:max_width}"
+
+	printf '\r\033[2K%s' "$line" >&2
 	progress_line_open="true"
 }
 
+# Show the current case before it starts running.
 begin_progress_case() {
 	local name="$1"
 
@@ -463,6 +536,7 @@ begin_progress_case() {
 	render_progress "$name"
 }
 
+# Mark the current case as completed in the progress bar.
 finish_progress_case() {
 	local name="$1"
 
@@ -470,6 +544,7 @@ finish_progress_case() {
 	render_progress "$name"
 }
 
+# Close the progress line before printing normal messages.
 finish_progress() {
 	if [[ "$progress_line_open" == "true" ]]; then
 		printf "\n" >&2
@@ -477,6 +552,7 @@ finish_progress() {
 	fi
 }
 
+# Enable or disable progress according to SQBRICKS_LONG_PROGRESS.
 configure_progress() {
 	progress_total="$total_cases"
 	case "$progress_mode" in
@@ -492,6 +568,7 @@ configure_progress() {
 	render_progress "starting"
 }
 
+# Print the CSV header matching the current family shape.
 case "$version" in
 qiskit-hybrid | owm | tele | owm-vs-tele | owm-vs-qiskit)
 	echo "Program;Tool;Version;Lift;Opt;CH;CS;CZ;CCZ;CCX;CU1;Gates;Time"
@@ -501,10 +578,13 @@ qiskit-hybrid | owm | tele | owm-vs-tele | owm-vs-qiskit)
 	;;
 esac
 
+# Load the selected path manifest, ignoring blank separator lines.
 mapfile -t path_originals < <(grep -v '^[[:space:]]*$' "$path_file")
 total_cases="${#path_originals[@]}"
 configure_progress
 
+# Main loop: prepare paths, run the family-specific benchmark, and separate
+# each input case by an empty CSV line, as the historical script does.
 for path_original in "${path_originals[@]}"; do
 	case_index=$((case_index + 1))
 	prepare_paths "$path_original"

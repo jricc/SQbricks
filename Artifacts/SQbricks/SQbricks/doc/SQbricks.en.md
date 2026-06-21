@@ -8,7 +8,7 @@ This document complements the `README.md`. The README provides a quick entry
 point into the project; this document progressively explains the technical
 choices we validate during the work.
 
-The current topic is the light non-regression benchmark. Its goal is
+The first current topic is the light non-regression benchmark. Its goal is
 deliberately limited:
 
 - verify that manifest cases still produce the expected status;
@@ -31,6 +31,10 @@ The project contains two main capabilities:
 
 The light benchmark is a short guardrail before running longer campaigns.
 
+The second current topic is the long SQbricks-only benchmark. It reuses the
+historical families from `scripts/benchmarks.sh`, but keeps only SQbricks
+verification rows in the generated CSV files.
+
 ## Light benchmark commands
 
 The entry points are in the `Makefile`:
@@ -43,6 +47,11 @@ The entry points are in the `Makefile`:
 | `make tests_regression_light` | Validate runner behavior with a fake SQbricks. |
 
 The baseline is local to the machine. It must not be versioned.
+
+Progress is printed to `stderr` when it is attached to an interactive terminal.
+The bar rewrites a single line and truncates the label if the terminal is too
+narrow, to avoid automatic line wrapping. `SQBRICKS_LIGHT_PROGRESS=never`
+disables this display.
 
 ## Manifests
 
@@ -156,3 +165,43 @@ The remaining scenarios match the light benchmark contract:
 The tests no longer cover detailed definition changes or cases removed from the
 manifest. This is intentional: those checks made the benchmark harder to read
 than necessary for its current goal.
+
+## Long SQbricks-only benchmark
+
+The long benchmark lives in `scripts/benchmarks-sqbricks.sh`. It is close to the
+historical `scripts/benchmarks.sh` benchmark, but it does not call external
+verification tools such as QCEC, Feynman, PyZX, or AutoQ. The generated CSV
+therefore contains SQbricks rows.
+
+The entry points are:
+
+| Command | Purpose |
+| --- | --- |
+| `make benchmark-sqbricks TYPE=owm` | Run one family. |
+| `make benchmarks-sqbricks` | Run every family listed in `LONG_TYPES`. |
+
+The default families are:
+
+```text
+sanity-unit sanity-hybrid sanity-partial unit-vs-hybrid veriqc qiskit-hybrid owm tele owm-vs-tele owm-vs-qiskit
+```
+
+The `qiskit-hybrid` and `owm-vs-qiskit` families still use
+`scripts/qiskit-tr.py` to generate the transformed circuit, as in the
+historical benchmark. Qiskit is used here as a case generator, not as an
+external verification result in the final CSV.
+
+Each family writes a separate file:
+
+```text
+benchmarks/result/<month>/benchmarks_sqbricks_<TYPE>_<date>.csv
+```
+
+Resource limits are applied at the beginning of the script with `ulimit`:
+
+- `SQBRICKS_LONG_TIMEOUT`, defaulting to `600` CPU seconds per process;
+- `SQBRICKS_LONG_MEMORY_KB`, defaulting to `7340032`.
+
+Progress is controlled by `SQBRICKS_LONG_PROGRESS=auto|always|never`. Like the
+light progress bar, it is printed to `stderr`, rewrites a single line, and does
+not pollute the CSV written to `stdout`.
