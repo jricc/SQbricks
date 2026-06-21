@@ -37,10 +37,12 @@ open Parser_get.GetProg
 let ( -- ) p1 p2 : Program.t = Program.Sequence (p1, p2)
 
 let test_prog_equiv ?(debug = true) ?(not_equiv = false)
-    ?(algo = Equiv.Sequence) ?(equivalence = Equiv.SubCircuit) (p1 : Program.t)
-    (p2 : Program.t) () =
+    ?(algo = Equiv.Sequence) ?(equivalence = Equiv.SubCircuit) ?(inputs1 = [])
+    ?(inputs2 = []) ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = [])
+    ?(meas2 = []) (p1 : Program.t) (p2 : Program.t) () =
   let greeting =
-    Equiv.sqv_simple_result ~debug ~not_equiv ~algo ~equivalence p1 p2
+    Equiv.sqv_simple_result ~debug ~not_equiv ~algo ~equivalence ~inputs1
+      ~inputs2 ~outputs1 ~outputs2 ~meas1 ~meas2 p1 p2
   in
   let expected = true in
   check bool
@@ -349,6 +351,21 @@ let unitary =
       `Quick,
       test_prog_equiv (h 1 -- cx 0 1 -- h 1) (cu1 1 0 1) );
     ("h <> x -- h", `Quick, test_prog_equiv ~not_equiv:true (h 0) (x 0 -- h 0));
+    ( "seq diff inputs",
+      `Quick,
+      test_prog_equiv ~not_equiv:true ~inputs1:[ 0 ] ~inputs2:[ 0; 1 ] (h 0)
+        (h 0) );
+    ( "seq diff outputs",
+      `Quick,
+      test_prog_equiv ~not_equiv:true ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ]
+        (h 0) (h 0) );
+    ( "seq diff inputs outputs",
+      `Quick,
+      test_prog_equiv ~not_equiv:true ~inputs1:[ 0; 1 ] ~inputs2:[ 0; 1 ]
+        ~outputs1:[ 0 ] ~outputs2:[ 0 ] (h 0) (h 0) );
+    ( "seq unit vs hybrid",
+      `Quick,
+      test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );
     ("x = gp 2 -- rx 1", `Quick, test_prog_equiv (gp 2 -- rx 1 0) (x 0));
     ("h = h", `Quick, test_prog_equiv (h 0) (h 0));
     ("z = hxh", `Quick, test_prog_equiv (h 0 -- x 0 -- h 0) (zz 0));
@@ -577,6 +594,21 @@ let parallel =
     ( "h <> x -- h",
       `Quick,
       test_prog_equiv ~algo:Parallel ~not_equiv:true (h 0) (x 0 -- h 0) );
+    ( "parallel diff inputs",
+      `Quick,
+      test_prog_equiv ~algo:Parallel ~not_equiv:true ~inputs1:[ 0 ]
+        ~inputs2:[ 0; 1 ] (h 0) (h 0) );
+    ( "parallel diff outputs",
+      `Quick,
+      test_prog_equiv ~algo:Parallel ~not_equiv:true ~outputs1:[ 0 ]
+        ~outputs2:[ 0; 1 ] (h 0) (h 0) );
+    ( "parallel diff inputs outputs",
+      `Quick,
+      test_prog_equiv ~algo:Parallel ~not_equiv:true ~inputs1:[ 0; 1 ]
+        ~inputs2:[ 0; 1 ] ~outputs1:[ 0 ] ~outputs2:[ 0 ] (h 0) (h 0) );
+    ( "parallel unit vs hybrid",
+      `Quick,
+      test_prog_equiv ~algo:Parallel ~not_equiv:true (m 0 0) (h 0) );
     ("z <> id", `Quick, test_prog_equiv ~algo:Parallel ~not_equiv:true (zz 0) E);
     ("t <> id", `Quick, test_prog_equiv ~algo:Parallel ~not_equiv:true (tt 0) E);
     ( "x = gp 2 -- rx 1",

@@ -2,6 +2,18 @@
 
 ## Next
 
+- [ ] Regenerate the local light baseline after the switch from median timing
+  to best-observed timing.
+- [ ] Run `make regression-light-check` and validate the new result.
+- [ ] Finish the large regression workflow: review the selected paths, add
+  baseline/check behavior, then run baseline and check.
+- [ ] Create or switch to a dedicated branch before continuing the Equiv
+  corrections.
+- [ ] Continue the targeted reduction-to-equivalence audit, one issue at a
+  time.
+
+## Done
+
 - [x] Reject missing baselines and incomplete performance samples in light
   check mode.
 - [x] Refuse to write an invalid light baseline and replace valid baselines
@@ -22,12 +34,19 @@
 - [x] Run the light non-regression check successfully in a complete SQbricks
   development environment.
 - [x] Add long SQbricks-only benchmarks without external verification tools.
+- [x] Make the light performance check less sensitive to local load spikes by
+  using the best observed timing across three rounds.
+- [x] Start the large regression path selection separately from the light
+  runner.
+- [x] Start the Equiv audit by replacing some uncontrolled parameter mismatch
+  failures with explicit equivalence results.
 
 ## Notes
 
 - The light baseline is stored in `benchmarks/baseline/light.csv`.
 - The manifest remains the functional oracle.
-- The light check uses three complete rounds and median timings.
+- The light check uses three complete rounds and best-observed timings.
+- The light runner default timeout is `240s`.
 - The technical documentation is maintained in `doc/SQbricks.md` and
   `doc/SQbricks.en.md`.
 - The light baseline no longer stores a benchmark definition hash. If the
@@ -43,3 +62,6 @@
 - The global benchmark audit compared the long SQbricks-only runner with
   `scripts/benchmarks.sh`, checked manifests, CSV shapes, Makefile entry
   points, and light runner validation tests.
+- The large regression selection is in `scripts/paths/regression-large/`.
+  It is prepared for run-only CSV generation; baseline/check behavior is still
+  pending.

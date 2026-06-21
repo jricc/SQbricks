@@ -19,6 +19,7 @@
 .PHONY: all benchmark sanity sanity-unit sanity-hybrid sanity-partial benchmarks \
         benchmark-sqbricks benchmarks-sqbricks \
         regression-light regression-light-baseline regression-light-check \
+        benchmark-regression-large regression-large \
         owm tele unit-vs-hybrid qiskit-hybrid owm-vs-qiskit owm-vs-tele veriqc \
         tests tests_prim tests_qiskit tests_mbqc tests_unit tests_regression_light \
         build container start fig6 fig7 examples \
@@ -33,6 +34,9 @@ LIGHT_RESULT ?= benchmarks/result/light_$(DATE_FILE).csv
 LIGHT_RUNS ?= 3
 LONG_TYPES ?= sanity-unit sanity-hybrid sanity-partial unit-vs-hybrid veriqc qiskit-hybrid owm tele owm-vs-tele owm-vs-qiskit
 LONG_PROGRESS ?= auto
+LARGE_TYPES ?= sanity-unit sanity-hybrid sanity-partial unit-vs-hybrid veriqc qiskit-hybrid owm tele owm-vs-tele owm-vs-qiskit
+LARGE_PATH_DIR ?= scripts/paths/regression-large
+LARGE_PROGRESS ?= auto
 MAKEFLAGS += --no-print-directory
 
 # Documentation generation
@@ -146,7 +150,22 @@ regression-light-baseline:
 regression-light-check:
 	@SQBRICKS_LIGHT_RUNS=$(LIGHT_RUNS) ./scripts/benchmarks-light.sh --baseline $(LIGHT_BASELINE) --check --output $(LIGHT_RESULT) --quiet
 
-owm: 
+# Run one selected large-regression benchmark family without using the light
+# runner. The selected paths live in LARGE_PATH_DIR/paths_$(TYPE).txt.
+benchmark-regression-large:
+	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-regression-large TYPE=owm"; exit 1; fi
+	@if [ ! -f "$(LARGE_PATH_DIR)/paths_$(TYPE).txt" ]; then echo "Missing large regression path file: $(LARGE_PATH_DIR)/paths_$(TYPE).txt"; exit 1; fi
+	@mkdir -p $(RESULT_FOLDER) $(shell pwd)/_build/regression-large/$(TYPE)
+	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) dune build
+	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) SQBRICKS_LONG_PATH_FILE=$(LARGE_PATH_DIR)/paths_$(TYPE).txt SQBRICKS_LONG_PROGRESS=$(LARGE_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv
+	@echo "Large regression benchmark $(TYPE) written to $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv"
+
+regression-large:
+	@for type in $(LARGE_TYPES); do \
+		$(MAKE) TYPE=$$type benchmark-regression-large || exit $$?; \
+	done
+
+owm:
 	@echo "owm"
 	@rm -rf $(shell pwd)/_build/owm 2>/dev/null || true
 	@mkdir -p $(shell pwd)/_build

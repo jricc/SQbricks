@@ -208,44 +208,40 @@ let parameters_preparation ?(debug = false) inputs1 inputs2 outputs1 outputs2
 
   let length_inputs1 = List.length inputs1 in
   let length_inputs2 = List.length inputs2 in
-  if length_inputs1 <> length_inputs2 then
-    failwith "Equiv.parameters_preparation, length_inputs1 <> length_inputs2";
+  if length_inputs1 <> length_inputs2 then Error NotEquivDiffInputs
+  else
+    let length_outputs1 = List.length outputs1 in
+    let length_outputs2 = List.length outputs2 in
+    if length_outputs1 <> length_outputs2 then Error NotEquivDiffOutputs
+    else if length_outputs1 <> length_inputs1 then Error NotEquivDiffInputsOutputs
+    else (
+      if debug then
+        printf "Equiv.parameters_preparation, unitary_1 =\n%s\n\n"
+          (ProgS.pretty unitary1);
+      if debug then
+        printf "Equiv.parameters_preparation, unitary_2 =\n%s\n\n"
+          (ProgS.pretty unitary2);
 
-  let length_outputs1 = List.length outputs1 in
-  let length_outputs2 = List.length outputs2 in
-  if length_outputs1 <> length_outputs2 then
-    failwith "Equiv.parameters_preparation, length_outputs1 <> length_outputs2";
-
-  if length_outputs1 <> length_inputs1 then
-    failwith "Equiv.parameters_preparation, length_outputs <> length_inputs";
-
-  if debug then
-    printf "Equiv.parameters_preparation, unitary_1 =\n%s\n\n"
-      (ProgS.pretty unitary1);
-  if debug then
-    printf "Equiv.parameters_preparation, unitary_2 =\n%s\n\n"
-      (ProgS.pretty unitary2);
-
-  if 0 < wc1 || 0 < wc2 then
-    failwith "Equiv.parameters_preparation, circuits must be unitary";
-
-  let inits1 =
-    if List.is_empty inputs1 || no_inits1 then []
-    else ListBis.missing_in_range inputs1 wq1
-  in
-  let inits2 =
-    if List.is_empty inputs2 || no_inits2 then []
-    else ListBis.missing_in_range inputs2 wq2
-  in
-  ( wq1,
-    wq2,
-    inits1,
-    inits2,
-    inputs1,
-    inputs2,
-    outputs1,
-    outputs2,
-    length_inputs1 )
+      if 0 < wc1 || 0 < wc2 then Error ErrorCircuitNotUnitary
+      else
+        let inits1 =
+          if List.is_empty inputs1 || no_inits1 then []
+          else ListBis.missing_in_range inputs1 wq1
+        in
+        let inits2 =
+          if List.is_empty inputs2 || no_inits2 then []
+          else ListBis.missing_in_range inputs2 wq2
+        in
+        Ok
+          ( wq1,
+            wq2,
+            inits1,
+            inits2,
+            inputs1,
+            inputs2,
+            outputs1,
+            outputs2,
+            length_inputs1 ))
 
 let check_observable_measurement outputs1 outputs2 meas1 meas2 =
   let intersection1 = ListBis.intersect outputs1 meas1 in
@@ -265,7 +261,13 @@ let phase_equality_to_string = function
 let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
     ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
     unitary1 unitary2 =
-  let ( wq1,
+  match
+    parameters_preparation ~debug inputs1 inputs2 outputs1 outputs2 unitary1
+      unitary2
+  with
+  | Error result -> result
+  | Ok
+      ( wq1,
         wq2,
         inits1,
         inits2,
@@ -273,204 +275,206 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
         inputs2,
         outputs1,
         outputs2,
-        length_inputs1 ) =
-    parameters_preparation ~debug inputs1 inputs2 outputs1 outputs2 unitary1
-      unitary2
-  in
-  (* Check if the lists of measured qubits are equal in the two circuits for the observable part *)
-  if not (check_observable_measurement outputs1 outputs2 meas1 meas2) then (
-    if debug then printf "Equiv.seq, list of measurements differents\n\n";
-    NotEquivDiffMeasurements)
-  else
-    let unitary1, wq1, unitary2, wq2 =
-      if not (List.is_empty inits1) then
-        if not (List.is_empty inits2) then
-          failwith "Equiv.seq, one of the two circuits mustn't have init"
-        else (Program.format unitary1, wq1, Program.format unitary2, wq2)
-      else (Program.format unitary2, wq2, Program.format unitary1, wq1)
-    in
-    if debug then
-      printf "Equiv.seq, unitary_1 =\n%s\n\n" (ProgS.pretty unitary1);
-    if debug then
-      printf "Equiv.seq, unitary_2 =\n%s\n\n" (ProgS.pretty unitary2);
+        length_inputs1 ) ->
+      (* Check if the lists of measured qubits are equal in the two circuits for the observable part *)
+      if not (check_observable_measurement outputs1 outputs2 meas1 meas2) then (
+        if debug then printf "Equiv.seq, list of measurements differents\n\n";
+        NotEquivDiffMeasurements)
+      else
+        let unitary1, wq1, unitary2, wq2 =
+          if not (List.is_empty inits1) then
+            if not (List.is_empty inits2) then
+              failwith "Equiv.seq, one of the two circuits mustn't have init"
+            else (Program.format unitary1, wq1, Program.format unitary2, wq2)
+          else (Program.format unitary2, wq2, Program.format unitary1, wq1)
+        in
+        if debug then
+          printf "Equiv.seq, unitary_1 =\n%s\n\n" (ProgS.pretty unitary1);
+        if debug then
+          printf "Equiv.seq, unitary_2 =\n%s\n\n" (ProgS.pretty unitary2);
 
-    let width = Int.max wq1 wq2 in
-    if debug then printf "Equiv.seq, width = %d\n\n%!" width;
+        let width = Int.max wq1 wq2 in
+        if debug then printf "Equiv.seq, width = %d\n\n%!" width;
 
-    let input_state = Path_sum.ofSize_init width inits1 in
+        let input_state = Path_sum.ofSize_init width inits1 in
 
-    if debug then
-      printf "Equiv.seq, input_state =\n%s\n\n%!" (PSS.pretty input_state);
+        if debug then
+          printf "Equiv.seq, input_state =\n%s\n\n%!" (PSS.pretty input_state);
 
-    let unitary1_swap = apply_swap unitary1 outputs1 outputs2 in
+        let unitary1_swap = apply_swap unitary1 outputs1 outputs2 in
 
-    if debug then
-      printf "Equiv.seq, good order unitary1_swap =\n%s\n\n"
-        (ProgS.pretty unitary1_swap);
+        if debug then
+          printf "Equiv.seq, good order unitary1_swap =\n%s\n\n"
+            (ProgS.pretty unitary1_swap);
 
-    (* Check Separability just after 1st circuit *)
-    let state1 = Program.execution ~input_state unitary1_swap in
+        (* Check Separability just after 1st circuit *)
+        let state1 = Program.execution ~input_state unitary1_swap in
 
-    if debug then printf "Equiv.seq, state1 =\n%s\n\n%!" (PSS.pretty state1);
+        if debug then printf "Equiv.seq, state1 =\n%s\n\n%!" (PSS.pretty state1);
 
-    let state1_reduced = reduction state1 ~debug in
-    if debug then
-      printf "Equiv.seq, state1_reduced =\n%s\n\n"
-        (PSS.pretty (Rename.rename state1_reduced));
+        let state1_reduced = reduction state1 ~debug in
+        if debug then
+          printf "Equiv.seq, state1_reduced =\n%s\n\n"
+            (PSS.pretty (Rename.rename state1_reduced));
 
-    (* `outputs2` instead `outputs2` because of swap *)
-    let separability =
-      separability_states ~debug state1_reduced outputs2 width
-    in
+        (* `outputs2` instead `outputs2` because of swap *)
+        let separability =
+          separability_states ~debug state1_reduced outputs2 width
+        in
 
-    if debug then printf "Equiv.seq, separability = %b\n\n%!" separability;
+        if debug then printf "Equiv.seq, separability = %b\n\n%!" separability;
 
-    if separability then (
-      let unitary2_inv = Program.inverse unitary2 in
-      if debug then
-        printf "Equiv.seq, good order unitary2_inv =\n%s\n\n"
-          (ProgS.pretty unitary2_inv);
-      let unitary2_swap = apply_swap unitary2_inv inputs1 inputs2 in
-      if debug then
-        printf "Equiv.seq, good order unitary2_swap =\n%s\n\n"
-          (ProgS.pretty unitary2_swap);
+        if separability then (
+          let unitary2_inv = Program.inverse unitary2 in
+          if debug then
+            printf "Equiv.seq, good order unitary2_inv =\n%s\n\n"
+              (ProgS.pretty unitary2_inv);
+          let unitary2_swap = apply_swap unitary2_inv inputs1 inputs2 in
+          if debug then
+            printf "Equiv.seq, good order unitary2_swap =\n%s\n\n"
+              (ProgS.pretty unitary2_swap);
 
-      (* `[|unit1--unit2^(-1)|] : |x>|0>_init1 -> |output_state>` *)
-      let output_state =
-        if length_inputs1 = 0 then
-          Program.execution ~input_state:state1 unitary2_inv
-        else Program.execution ~input_state:state1 unitary2_swap
-      in
+          (* `[|unit1--unit2^(-1)|] : |x>|0>_init1 -> |output_state>` *)
+          let output_state =
+            if length_inputs1 = 0 then
+              Program.execution ~input_state:state1 unitary2_inv
+            else Program.execution ~input_state:state1 unitary2_swap
+          in
 
-      if debug then
-        printf "Equiv.seq, output_state =\n%s\n\n%!" (PSS.pretty output_state);
+          if debug then
+            printf "Equiv.seq, output_state =\n%s\n\n%!" (PSS.pretty output_state);
 
-      let output_state_reduced = reduction output_state ~debug in
-      if debug then
-        printf "Equiv.seq, output_state_reduced =\n%s\n\n"
-          (PSS.pretty output_state_reduced);
+          let output_state_reduced = reduction output_state ~debug in
+          if debug then
+            printf "Equiv.seq, output_state_reduced =\n%s\n\n"
+              (PSS.pretty output_state_reduced);
 
-      let identity_state = Path_sum.ofSize_init width inits1 in
-      let var_inputs = Ket.extract_var output_state_reduced.ket inputs1 in
-      if debug then
-        printf "Equiv.seq, var_inputs =\n%s\n\n%!"
-          (ListBis.string_int var_inputs);
+          let identity_state = Path_sum.ofSize_init width inits1 in
+          let var_inputs = Ket.extract_var output_state_reduced.ket inputs1 in
+          if debug then
+            printf "Equiv.seq, var_inputs =\n%s\n\n%!"
+              (ListBis.string_int var_inputs);
 
-      (* Determine the type of phase equality for the reduced output state *)
-      let condition_zero_phase =
-        match output_state_reduced.phase with
-        | phase when Poly.is_constant phase ->
-            (* Phase is constant *)
-            if Poly.equal phase Poly.zero then
-              (* Phase = 0 *)
-              SubCircuitEquality
-            else
-              (* Phase ≠ 0 *)
-              GlobalPhaseEquality
-        | phase when not (Poly.member_list var_inputs phase) ->
-            (* Phase depends only on path variables *)
-            SubCircuitEquality
-        | _ -> ConditionalEquality
-      in
+          (* Determine the type of phase equality for the reduced output state *)
+          let condition_zero_phase =
+            match output_state_reduced.phase with
+            | phase when Poly.is_constant phase ->
+                (* Phase is constant *)
+                if Poly.equal phase Poly.zero then
+                  (* Phase = 0 *)
+                  SubCircuitEquality
+                else
+                  (* Phase ≠ 0 *)
+                  GlobalPhaseEquality
+            | phase when not (Poly.member_list var_inputs phase) ->
+                (* Phase depends only on path variables *)
+                SubCircuitEquality
+            | _ -> ConditionalEquality
+          in
 
-      (* Debug display *)
-      if debug then (
-        printf "Equiv.seq, output_state_reduced.phase = %s\n\n%!"
-          (PS.exact output_state_reduced.phase);
+          (* Debug display *)
+          if debug then (
+            printf "Equiv.seq, output_state_reduced.phase = %s\n\n%!"
+              (PS.exact output_state_reduced.phase);
 
-        printf "Equiv.seq, condition_zero_phase = %s\n\n%!"
-          (phase_equality_to_string condition_zero_phase));
+            printf "Equiv.seq, condition_zero_phase = %s\n\n%!"
+              (phase_equality_to_string condition_zero_phase));
 
-      (* Evaluate result according to the phase condition *)
-      match condition_zero_phase with
-      | SubCircuitEquality ->
-          if compute_result ~debug inputs1 output_state_reduced identity_state
-          then SubCircuitEquivalent
-          else SubCircuitInconclusive
-      | GlobalPhaseEquality ->
-          if compute_result ~debug inputs1 output_state_reduced identity_state
-          then GlobalPhaseEquivalent
-          else SubCircuitInconclusive
-      | ConditionalEquality -> (
-          match equivalence with
-          | SubCircuit -> SubCircuitInconclusive
-          | GlobalPhase -> GlobalPhaseInconclusive
-          | FullCircuit -> failwith "Full-circuit equivalence not implemented."))
-    else Entanglement1
+          (* Evaluate result according to the phase condition *)
+          match condition_zero_phase with
+          | SubCircuitEquality ->
+              if compute_result ~debug inputs1 output_state_reduced identity_state
+              then SubCircuitEquivalent
+              else SubCircuitInconclusive
+          | GlobalPhaseEquality ->
+              if compute_result ~debug inputs1 output_state_reduced identity_state
+              then GlobalPhaseEquivalent
+              else SubCircuitInconclusive
+          | ConditionalEquality -> (
+              match equivalence with
+              | SubCircuit -> SubCircuitInconclusive
+              | GlobalPhase -> GlobalPhaseInconclusive
+              | FullCircuit -> failwith "Full-circuit equivalence not implemented."))
+        else Entanglement1
 
 let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
     ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
     unitary1 unitary2 =
-  let wq1, wq2, inits1, inits2, inputs1, inputs2, outputs1, outputs2, _ =
-    parameters_preparation inputs1 inputs2 outputs1 outputs2 unitary1 unitary2
-  in
-  if List.length inputs1 <> List.length inputs2 then NotEquivDiffInputs
-  else if List.length outputs1 <> List.length outputs2 then NotEquivDiffOutputs
-  else if List.length inputs1 <> List.length outputs1 then
-    NotEquivDiffInputsOutputs
-  else if
-    (* observable check *)
-    equivalence <> FullCircuit
-    && not (check_observable_measurement outputs1 outputs2 meas1 meas2)
-  then NotEquivDiffMeasurements
-  else
-    let input_state1 = Path_sum.ofSize_init (Int.max 1 wq1) inits1 in
-    let input_state2 = Path_sum.ofSize_init (Int.max 1 wq2) inits2 in
+  match parameters_preparation inputs1 inputs2 outputs1 outputs2 unitary1 unitary2 with
+  | Error result -> result
+  | Ok
+      ( wq1,
+        wq2,
+        inits1,
+        inits2,
+        _inputs1,
+        _inputs2,
+        outputs1,
+        outputs2,
+        _ ) ->
+      if
+        (* observable check *)
+        equivalence <> FullCircuit
+        && not (check_observable_measurement outputs1 outputs2 meas1 meas2)
+      then NotEquivDiffMeasurements
+      else
+        let input_state1 = Path_sum.ofSize_init (Int.max 1 wq1) inits1 in
+        let input_state2 = Path_sum.ofSize_init (Int.max 1 wq2) inits2 in
 
-    let output_state1 = Program.execution ~input_state:input_state1 unitary1 in
-    let output_state2 = Program.execution ~input_state:input_state2 unitary2 in
+        let output_state1 = Program.execution ~input_state:input_state1 unitary1 in
+        let output_state2 = Program.execution ~input_state:input_state2 unitary2 in
 
-    let output_state_reduced1 = reduction output_state1 in
-    let output_state_reduced2 = reduction output_state2 in
+        let output_state_reduced1 = reduction output_state1 in
+        let output_state_reduced2 = reduction output_state2 in
 
-    let output_path_var_norm1 =
-      Rules.Variable_replacement.poly_normalized output_state_reduced1
-    in
-    let output_path_var_norm2 =
-      Rules.Variable_replacement.poly_normalized output_state_reduced2
-    in
+        let output_path_var_norm1 =
+          Rules.Variable_replacement.poly_normalized output_state_reduced1
+        in
+        let output_path_var_norm2 =
+          Rules.Variable_replacement.poly_normalized output_state_reduced2
+        in
 
-    if debug then
-      printf "Equiv.parallel,\noutput_path_var_norm1 =\n%s\n\n"
-        (PSS.pretty output_path_var_norm1);
-    if debug then
-      printf "Equiv.parallel,\noutput_path_var_norm2 =\n%s\n\n"
-        (PSS.pretty output_path_var_norm2);
+        if debug then
+          printf "Equiv.parallel,\noutput_path_var_norm1 =\n%s\n\n"
+            (PSS.pretty output_path_var_norm1);
+        if debug then
+          printf "Equiv.parallel,\noutput_path_var_norm2 =\n%s\n\n"
+            (PSS.pretty output_path_var_norm2);
 
-    let check_separability () =
-      let s1 = separability_states output_path_var_norm1 outputs1 wq1
-      and s2 = separability_states output_path_var_norm2 outputs2 wq2 in
-      match (s1, s2) with
-      | false, _ -> Some Entanglement1
-      | _, false -> Some Entanglement2
-      | _ -> None
-    in
+        let check_separability () =
+          let s1 = separability_states output_path_var_norm1 outputs1 wq1
+          and s2 = separability_states output_path_var_norm2 outputs2 wq2 in
+          match (s1, s2) with
+          | false, _ -> Some Entanglement1
+          | _, false -> Some Entanglement2
+          | _ -> None
+        in
 
-    match equivalence with
-    | SubCircuit -> (
-        match check_separability () with
-        | Some res ->
-            (* Entanglement of out and disc*)
-            res
-        | None ->
-            (* Entanglement of out and disc*)
-            if
-              Path_sum.equal ~outputs1 ~outputs2 output_path_var_norm1
-                output_path_var_norm2
-            then SubCircuitEquivalent
-            else SubCircuitInconclusive)
-    | GlobalPhase -> (
-        match check_separability () with
-        | Some res ->
-            (* Entanglement of out and disc*)
-            res
-        | None ->
-            if
-              Path_sum.equal ~outputs1 ~outputs2 ~global_phase:true
-                output_path_var_norm1 output_path_var_norm2
-            then GlobalPhaseEquivalent
-            else GlobalPhaseInconclusive)
-    | FullCircuit -> failwith "Full-circuit equivalence not implemented."
+        match equivalence with
+        | SubCircuit -> (
+            match check_separability () with
+            | Some res ->
+                (* Entanglement of out and disc*)
+                res
+            | None ->
+                (* Entanglement of out and disc*)
+                if
+                  Path_sum.equal ~outputs1 ~outputs2 output_path_var_norm1
+                    output_path_var_norm2
+                then SubCircuitEquivalent
+                else SubCircuitInconclusive)
+        | GlobalPhase -> (
+            match check_separability () with
+            | Some res ->
+                (* Entanglement of out and disc*)
+                res
+            | None ->
+                if
+                  Path_sum.equal ~outputs1 ~outputs2 ~global_phase:true
+                    output_path_var_norm1 output_path_var_norm2
+                then GlobalPhaseEquivalent
+                else GlobalPhaseInconclusive)
+        | FullCircuit -> failwith "Full-circuit equivalence not implemented."
 
 (* Defines the type 'algo' representing the algorithm type to use. *)
 type algo = Parallel | Sequence

@@ -43,7 +43,7 @@ esac
 export DUNE_BUILD_DIR="${DUNE_BUILD_DIR:-$(pwd)/_build/sqbricks-long/$version}"
 
 tmp_dir="_tmp/sqbricks-long/$version"
-path_file="scripts/paths/paths_${version}.txt"
+path_file="${SQBRICKS_LONG_PATH_FILE:-scripts/paths/paths_${version}.txt}"
 
 # Current input row number, used only for progress reporting.
 case_index=0

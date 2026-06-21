@@ -1,0 +1,8 @@
+benchmarks/VeriQbench/dynamic/pe/dqc_pe_24.qasm
+benchmarks/VeriQbench/dynamic/qft/dqc_qft_27.qasm
+benchmarks/VeriQbench/dynamic/dqc_bitflip_code_corrected.qasm
+benchmarks/VeriQbench/dynamic/dqc_phaseflip_code_corrected.qasm
+benchmarks/VeriQbench/dynamic/dqc_state_injection_S.qasm
+benchmarks/VeriQbench/dynamic/dqc_state_injection_T.qasm
+benchmarks/VeriQbench/dynamic/dqc_teleportation.qasm
+benchmarks/QASMBench/small/shor_n5/shor_n5_ancillas.qasm

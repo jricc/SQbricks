@@ -48,6 +48,11 @@ After execution, every tracked case must again have one positive timing sample
 per round. Missing or invalid samples make the check fail with
 `PerfStatus=INCOMPLETE`; no slowdown ratio is calculated for that row.
 
+`TimeSeconds` is the best positive timing sample observed across the rounds.
+This keeps the functional part strict while avoiding false performance
+regressions caused by short local load spikes. The default timeout is `240s`
+per SQbricks command.
+
 ## Baseline scope
 
 The baseline is local to the machine. Check mode uses it only for the

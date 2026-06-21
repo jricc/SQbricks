@@ -17,6 +17,21 @@ Work in layers:
 
 Avoid large feature additions before the benchmark and regression setup are reliable.
 
+## Current checkpoint
+
+As of 2026-06-21:
+
+- the light non-regression benchmark exists and checks both functional status
+  and tracked performance;
+- light performance comparison uses three rounds and the best observed timing
+  to reduce false positives from local machine load;
+- the local light baseline must be regenerated after timing policy changes;
+- the SQbricks-only long benchmark runner exists;
+- the large regression path selection exists, but its baseline/check workflow
+  is still pending;
+- the targeted reduction-to-equivalence audit has started with Equiv parameter
+  validation.
+
 ## Phase 1 — Minimal regression benchmark
 
 Goal: create a short benchmark that detects regressions and measures capability improvements.

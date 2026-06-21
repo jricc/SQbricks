@@ -113,7 +113,9 @@ Deuxièmement, les lignes dont `TrackPerformance` vaut `yes` doivent avoir :
 - exactement le même nombre de rounds que l'exécution courante.
 
 Après exécution, le runner demande aussi un temps valide par round pour ces
-lignes. Il calcule ensuite la médiane et la compare à la baseline.
+lignes. Il garde ensuite le meilleur temps observé et le compare à la baseline.
+Cela évite qu'un pic de charge local fasse échouer le check alors qu'un round
+représentatif est resté proche de la baseline.
 
 Un ralentissement échoue seulement si deux seuils sont dépassés :
 
@@ -135,7 +137,7 @@ Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH
 Le champ `Raw` contient le détail des rounds, par exemple :
 
 ```text
-rounds=3 status=EQ times=[1.000000,1.100000,0.900000] median=1.000000
+rounds=3 status=EQ times=[1.000000,1.100000,0.900000] best=0.900000
 ```
 
 Le runner ne cherche plus à prouver que la baseline correspond exactement au
@@ -210,3 +212,44 @@ Les limites de ressources sont posées au début du script avec `ulimit` :
 La progression est contrôlée par `SQBRICKS_LONG_PROGRESS=auto|always|never`.
 Comme pour le light, elle s'affiche sur `stderr`, se réécrit sur une seule
 ligne et ne pollue pas le CSV écrit sur `stdout`.
+
+## Régression large sélectionnée
+
+La régression large sélectionnée est une étape intermédiaire entre le benchmark
+léger et le benchmark long complet. Elle ne réutilise pas le runner light :
+elle réutilise le runner long SQbricks-only avec des fichiers de chemins plus
+courts placés dans `scripts/paths/regression-large/`.
+
+Les points d'entrée actuels sont :
+
+| Commande | Rôle |
+| --- | --- |
+| `make benchmark-regression-large TYPE=owm` | Lance une seule famille sélectionnée. |
+| `make regression-large` | Lance toutes les familles sélectionnées dans `LARGE_TYPES`. |
+
+État actuel :
+
+- la sélection de chemins existe pour chaque famille du benchmark long ;
+- le runner écrit des CSV de résultat ;
+- le mode baseline/check n'est pas encore implémenté ;
+- la prochaine étape est de valider la sélection, puis d'ajouter une baseline et
+  un check séparés du benchmark léger.
+
+## Audit Equiv
+
+L'audit ciblé du pipeline réduction vers équivalence a commencé par la
+préparation des paramètres dans `lib/equiv.ml`.
+
+Le premier changement validé évite certaines exceptions non maîtrisées lorsque
+les listes d'entrées ou de sorties ne sont pas compatibles. Ces cas renvoient
+maintenant un résultat d'équivalence explicite :
+
+- entrées de tailles différentes : `NotEquivDiffInputs` ;
+- sorties de tailles différentes : `NotEquivDiffOutputs` ;
+- nombre d'entrées et de sorties incompatible : `NotEquivDiffInputsOutputs` ;
+- circuit non unitaire dans cette étape : `ErrorCircuitNotUnitary`.
+
+Les tests unitaires correspondants ont été ajoutés dans `test/unitary.ml` pour
+les modes `Sequence` et `Parallel`. Les corrections Equiv restantes doivent
+continuer sur une branche dédiée après validation des benchmarks de
+non-régression.

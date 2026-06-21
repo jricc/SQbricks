@@ -532,15 +532,25 @@ one of those two roles.
 
 | Command | Description |
 |:--------|-------------|
+| `make regression-light` | Runs the short non-regression benchmark and writes a CSV result. |
 | `make regression-light-baseline` | Builds the local baseline for the short non-regression benchmark. |
 | `make regression-light-check` | Runs the short non-regression check against the local baseline. |
 | `make benchmark-sqbricks TYPE=owm` | Runs one long SQbricks-only benchmark family. |
 | `make benchmarks-sqbricks` | Runs all long SQbricks-only families listed in `LONG_TYPES`. |
+| `make benchmark-regression-large TYPE=owm` | Runs one selected large-regression family. |
+| `make regression-large` | Runs all selected large-regression families listed in `LARGE_TYPES`. |
+
+The light baseline is local to the machine. Regenerate it after changing the
+light benchmark selection or timing policy.
 
 The long SQbricks-only benchmark reuses the historical path files, including
 `qiskit-hybrid` and `owm-vs-qiskit`. Those two families still use
 `scripts/qiskit-tr.py` to generate transformed circuits, but Qiskit is not
 reported as a verification tool in the generated CSV.
+
+The selected large regression currently reuses the SQbricks-only long runner
+with shorter path files in `scripts/paths/regression-large/`. It writes CSV
+results; baseline/check behavior is planned separately.
 
 Progress bars are printed on `stderr` and CSV data is written on `stdout`, so
 redirected result files stay clean.

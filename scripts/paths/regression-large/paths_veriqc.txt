@@ -1,0 +1,7 @@
+benchmarks/VeriQC/DQC_qft_16_1.qasm;benchmarks/VeriQC/DQC_qft_16.qasm;
+benchmarks/VeriQC/DQC_PE_9_1.qasm;benchmarks/VeriQC/DQC_PE_9.qasm;
+benchmarks/VeriQC/DQC_teleportation_1.qasm;benchmarks/VeriQC/DQC_teleportation.qasm;
+benchmarks/VeriQC/DQC_bitflip_code_1.qasm;benchmarks/VeriQC/DQC_bitflip_code.qasm;
+benchmarks/VeriQC/DQC_phaseflip_code_1.qasm;benchmarks/VeriQC/DQC_phaseflip_code.qasm;
+benchmarks/VeriQC/DQC_state_injection_S_1.qasm;benchmarks/VeriQC/DQC_state_injection_S.qasm;
+benchmarks/VeriQC/DQC_state_injection_T_1.qasm;benchmarks/VeriQC/DQC_state_injection_T.qasm;

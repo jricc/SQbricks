@@ -112,7 +112,9 @@ Second, rows where `TrackPerformance` is `yes` must have:
 - the same round count as the current run.
 
 After execution, the runner also requires one valid timing per round for those
-rows. It then computes the median and compares it with the baseline.
+rows. It then keeps the best observed time and compares it with the baseline.
+This avoids failing the check because of a local machine-load spike when one
+representative round stayed close to the baseline.
 
 A slowdown fails only when two thresholds are exceeded:
 
@@ -133,7 +135,7 @@ Suite;Case;Kind;Tool;Version;Lift;Opt;ExpectedStatus;ActualStatus;StatusMatch;CH
 The `Raw` field contains round details, for example:
 
 ```text
-rounds=3 status=EQ times=[1.000000,1.100000,0.900000] median=1.000000
+rounds=3 status=EQ times=[1.000000,1.100000,0.900000] best=0.900000
 ```
 
 The runner no longer tries to prove that the baseline exactly matches the QASM
@@ -207,3 +209,43 @@ Resource limits are applied at the beginning of the script with `ulimit`:
 Progress is controlled by `SQBRICKS_LONG_PROGRESS=auto|always|never`. Like the
 light progress bar, it is printed to `stderr`, rewrites a single line, and does
 not pollute the CSV written to `stdout`.
+
+## Selected large regression
+
+The selected large regression is an intermediate step between the light
+benchmark and the complete long benchmark. It does not reuse the light runner:
+it reuses the long SQbricks-only runner with shorter path files stored in
+`scripts/paths/regression-large/`.
+
+The current entry points are:
+
+| Command | Purpose |
+| --- | --- |
+| `make benchmark-regression-large TYPE=owm` | Run one selected family. |
+| `make regression-large` | Run every selected family listed in `LARGE_TYPES`. |
+
+Current status:
+
+- path selections exist for every long benchmark family;
+- the runner writes result CSV files;
+- baseline/check mode is not implemented yet;
+- the next step is to validate the selection, then add a baseline and check
+  workflow separate from the light benchmark.
+
+## Equiv audit
+
+The targeted audit of the reduction-to-equivalence pipeline started with
+parameter preparation in `lib/equiv.ml`.
+
+The first validated change avoids some uncontrolled exceptions when input or
+output lists are incompatible. These cases now return an explicit equivalence
+result:
+
+- input lists with different sizes: `NotEquivDiffInputs`;
+- output lists with different sizes: `NotEquivDiffOutputs`;
+- incompatible input/output counts: `NotEquivDiffInputsOutputs`;
+- non-unitary circuit at this stage: `ErrorCircuitNotUnitary`.
+
+The corresponding unit tests were added to `test/unitary.ml` for both
+`Sequence` and `Parallel`. The remaining Equiv corrections should continue on a
+dedicated branch after the non-regression benchmarks have been validated.
