@@ -552,6 +552,10 @@ The selected large regression currently reuses the SQbricks-only long runner
 with shorter path files in `scripts/paths/regression-large/`. It writes CSV
 results; baseline/check behavior is planned separately.
 
+For ordered-size series, the long runner stops trying larger cases in the same
+series after a timeout or memory limit and writes `SKIP_AFTER_RESOURCE_FAILURE`
+rows instead. Other series continue to run.
+
 Progress bars are printed on `stderr` and CSV data is written on `stdout`, so
 redirected result files stay clean.
 

@@ -26,6 +26,10 @@ Current status:
 - `make regression-large` runs all selected families;
 - baseline/check behavior is not implemented yet.
 
+The selected large regression uses the same ordered-series cutoff as the long
+SQbricks-only benchmark: after `TO` or `OutOfMemory`, larger cases in that same
+series are emitted as `SKIP_AFTER_RESOURCE_FAILURE`.
+
 Before turning this into a non-regression check, validate the selected paths
 against fresh long benchmark results and decide which rows should be tracked for
 performance.
