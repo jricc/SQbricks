@@ -206,6 +206,12 @@ Resource limits are applied at the beginning of the script with `ulimit`:
 - `SQBRICKS_LONG_TIMEOUT`, defaulting to `600` CPU seconds per process;
 - `SQBRICKS_LONG_MEMORY_KB`, defaulting to `7340032`.
 
+If a case from an ordered series reaches `TO` or `OutOfMemory`, larger cases in
+the same series are no longer executed. The runner writes a CSV row with
+`SKIP_AFTER_RESOURCE_FAILURE` and continues with other series. For example, a
+failure on `grover_7` skips `grover_9`, `grover_11`, and so on, without stopping
+the whole `owm` family.
+
 Progress is controlled by `SQBRICKS_LONG_PROGRESS=auto|always|never`. Like the
 light progress bar, it is printed to `stderr`, rewrites a single line, and does
 not pollute the CSV written to `stdout`.

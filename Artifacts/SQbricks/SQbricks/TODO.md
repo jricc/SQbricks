@@ -7,6 +7,8 @@
 - [ ] Run `make regression-light-check` and validate the new result.
 - [ ] Finish the large regression workflow: review the selected paths, add
   baseline/check behavior, then run baseline and check.
+- [ ] Rerun the long SQbricks-only benchmark with ordered-series cutoff and
+  inspect the skipped rows.
 - [ ] Create or switch to a dedicated branch before continuing the Equiv
   corrections.
 - [ ] Continue the targeted reduction-to-equivalence audit, one issue at a
@@ -40,6 +42,8 @@
   runner.
 - [x] Start the Equiv audit by replacing some uncontrolled parameter mismatch
   failures with explicit equivalence results.
+- [x] Stop ordered long benchmark series after timeout or memory failure while
+  keeping other series running.
 
 ## Notes
 
@@ -57,6 +61,8 @@
 - The long SQbricks-only benchmark reuses the historical path files, including
   `qiskit-hybrid` and `owm-vs-qiskit`; it does not run external verification
   tools.
+- The long runner writes `SKIP_AFTER_RESOURCE_FAILURE` for larger cases in an
+  ordered series after `TO` or `OutOfMemory`.
 - No intermediate benchmark is planned: it would mostly duplicate the light and
   long benchmark roles.
 - The global benchmark audit compared the long SQbricks-only runner with

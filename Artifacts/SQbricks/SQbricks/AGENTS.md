@@ -16,6 +16,8 @@
 - Do not modify files unless I explicitly ask for a modification.
 - Do not use apply_patch unless I explicitly approve the exact change.
 - Do not run tests or build commands. The user runs tests manually.
+- Do not run Git staging or commit commands. The user runs Git commands manually;
+  provide only the suggested commit message when useful.
 - Read-only inspection commands are allowed when needed.
 
 ## Answer style
@@ -67,6 +69,8 @@ If a more generic design is possible, mention it only as an alternative, but do 
 - Make minimal, localized changes.
 - Do not rewrite unrelated code.
 - Do not rename, move, delete, reformat, commit, push, reset, or rebase without explicit approval.
+- Do not run `git add`, `git commit`, or equivalent staging/commit commands.
+  The user handles Git operations manually.
 - Document important choices, limitations, and edge cases.
 - Avoid comments that merely repeat the code.
 

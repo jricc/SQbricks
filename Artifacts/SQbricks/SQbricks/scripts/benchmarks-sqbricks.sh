@@ -69,6 +69,12 @@ cmd_stderr=""
 # Last wrapped command exit status.
 cmd_status=0
 
+# True when the current input case hit a timeout or memory limit.
+case_resource_failed="false"
+
+# Series already stopped after a timeout or memory limit.
+declare -A stopped_series
+
 if [[ ! -f "$path_file" ]]; then
 	echo "Missing path file: $path_file" >&2
 	exit 1
@@ -111,6 +117,43 @@ status_from_failure() {
 		printf "OutOfMemory"
 	else
 		printf "Err%s" "$status"
+	fi
+}
+
+is_resource_failure() {
+	[[ "$1" == "TO" || "$1" == "OutOfMemory" ]]
+}
+
+# Return the ordered-size series for cases where a larger case is expected to be
+# harder than a smaller one. Empty means that the case is treated as isolated.
+case_series_key() {
+	local name="$1"
+	local base="${name%%;*}"
+
+	if [[ "$base" =~ ^DQC_PE_[0-9]+($|_) || "$base" =~ ^dqc_pe_[0-9]+($|_) ]]; then
+		printf "%s|dqc_pe" "$version"
+	elif [[ "$base" =~ ^DQC_qft_[0-9]+($|_) || "$base" =~ ^dqc_qft_[0-9]+($|_) ]]; then
+		printf "%s|dqc_qft" "$version"
+	elif [[ "$base" =~ ^pe_[0-9]+($|_) ]]; then
+		printf "%s|pe" "$version"
+	elif [[ "$base" =~ ^qft_[0-9]+($|_) ]]; then
+		printf "%s|qft" "$version"
+	elif [[ "$base" =~ ^adder_n[0-9]+($|_) ]]; then
+		printf "%s|adder" "$version"
+	elif [[ "$base" =~ ^bv_[0-9]+($|_) ]]; then
+		printf "%s|bv" "$version"
+	elif [[ "$base" =~ ^grover_[0-9]+($|_) ]]; then
+		printf "%s|grover" "$version"
+	elif [[ "$base" =~ ^gf2\^[0-9]+_?mult($|_) ]]; then
+		printf "%s|gf2_mult" "$version"
+	elif [[ "$base" =~ ^hwb[0-9]+($|_) ]]; then
+		printf "%s|hwb" "$version"
+	elif [[ "$base" =~ ^barenco_tof_[0-9]+($|_) ]]; then
+		printf "%s|barenco_tof" "$version"
+	elif [[ "$base" =~ ^tof_[0-9]+($|_) ]]; then
+		printf "%s|tof" "$version"
+	elif [[ "$base" =~ ^mod_adder_[0-9]+($|_) ]]; then
+		printf "%s|mod_adder" "$version"
 	fi
 }
 
@@ -206,8 +249,24 @@ split_transform_output() {
 emit_conversion_error() {
 	local name="$1"
 	local lift="$2"
+	local result="ErrConv"
+	local failure_status
 
-	echo "$name;SQbricks;2025;$lift;Conversion;;;;;;;;ErrConv"
+	failure_status="$(status_from_failure "$cmd_status" "$cmd_stderr")"
+	if is_resource_failure "$failure_status"; then
+		result="$failure_status"
+		case_resource_failed="true"
+	fi
+
+	echo "$name;SQbricks;2025;$lift;Conversion;;;;;;;;$result"
+}
+
+# Emit one CSV row for a case skipped because a smaller case in the same ordered
+# series already hit the timeout or memory limit.
+emit_skipped_case() {
+	local name="$1"
+
+	echo "$name;SQbricks;2025;skipped;Skip;;;;;;;;SKIP_AFTER_RESOURCE_FAILURE"
 }
 
 # Run SQbricks equivalence checks and emit Sequence/Parallel CSV rows.
@@ -236,6 +295,9 @@ run_equiv_sqbricks() {
 			result="$(csv_time "$(trim "$cmd_stdout")")"
 		else
 			result="$(status_from_failure "$cmd_status" "$cmd_stderr")"
+			if is_resource_failure "$result"; then
+				case_resource_failed="true"
+			fi
 		fi
 
 		echo "$name;SQbricks;2025;$lift;$label;$nb_gate;$result"
@@ -588,44 +650,63 @@ configure_progress
 for path_original in "${path_originals[@]}"; do
 	case_index=$((case_index + 1))
 	prepare_paths "$path_original"
+	case_resource_failed="false"
 
 	case "$version" in
 	sanity-unit)
 		name="$filename1_no_ext;$filename2_no_ext"
-		begin_progress_case "$name"
-		test_unit "$path1" "$path2" "$name"
 		;;
 	sanity-hybrid | sanity-partial | unit-vs-hybrid | veriqc)
 		name="$filename1_no_ext;$filename2_no_ext"
-		begin_progress_case "$name"
-		test_lifted_pair "$path1" "$path2" "$path1_unitary" "$path2_unitary" "$name"
 		;;
 	qiskit-hybrid)
 		name="$filename_no_ext"
-		begin_progress_case "$name"
-		test_qiskit_hybrid "$path_original" "$path_optimized" \
-			"$path_original_unitary" "$path_optimized_unitary" "$name"
 		;;
 	owm | tele)
 		name="$filename_no_ext"
-		begin_progress_case "$name"
-		test_transformed_against_unitary "$version" "$path_original" \
-			"$path_original_unitary" "$path_by_meas" "$path_by_meas_ium" "$name"
 		;;
 	owm-vs-tele)
 		name="$filename_no_ext"
-		begin_progress_case "$name"
-		test_owm_vs_tele "$path_original" "$path_original_unitary" \
-			"$path_owm" "$path_owm_ium" "$path_tele" "$path_tele_ium" "$name"
 		;;
 	owm-vs-qiskit)
 		name="$filename_no_ext"
-		begin_progress_case "$name"
-		test_owm_vs_qiskit "$path_original" "$path_original_unitary" \
-			"$path_optimized" "$path_optimized_ium" "$path_owm" "$path_owm_ium" "$name"
 		;;
 	esac
 
+	series_key="$(case_series_key "$name")"
+	begin_progress_case "$name"
+	if [[ -n "$series_key" && -n "${stopped_series[$series_key]:-}" ]]; then
+		emit_skipped_case "$name"
+	else
+		case "$version" in
+		sanity-unit)
+			test_unit "$path1" "$path2" "$name"
+			;;
+		sanity-hybrid | sanity-partial | unit-vs-hybrid | veriqc)
+			test_lifted_pair "$path1" "$path2" "$path1_unitary" "$path2_unitary" "$name"
+			;;
+		qiskit-hybrid)
+			test_qiskit_hybrid "$path_original" "$path_optimized" \
+				"$path_original_unitary" "$path_optimized_unitary" "$name"
+			;;
+		owm | tele)
+			test_transformed_against_unitary "$version" "$path_original" \
+				"$path_original_unitary" "$path_by_meas" "$path_by_meas_ium" "$name"
+			;;
+		owm-vs-tele)
+			test_owm_vs_tele "$path_original" "$path_original_unitary" \
+				"$path_owm" "$path_owm_ium" "$path_tele" "$path_tele_ium" "$name"
+			;;
+		owm-vs-qiskit)
+			test_owm_vs_qiskit "$path_original" "$path_original_unitary" \
+				"$path_optimized" "$path_optimized_ium" "$path_owm" "$path_owm_ium" "$name"
+			;;
+		esac
+
+		if [[ "$case_resource_failed" == "true" && -n "$series_key" ]]; then
+			stopped_series["$series_key"]="true"
+		fi
+	fi
 	finish_progress_case "$name"
 	echo ""
 done

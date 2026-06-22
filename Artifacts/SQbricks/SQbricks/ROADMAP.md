@@ -27,6 +27,8 @@ As of 2026-06-21:
   to reduce false positives from local machine load;
 - the local light baseline must be regenerated after timing policy changes;
 - the SQbricks-only long benchmark runner exists;
+- the long runner stops ordered-size series after timeout or memory failure,
+  while continuing other series;
 - the large regression path selection exists, but its baseline/check workflow
   is still pending;
 - the targeted reduction-to-equivalence audit has started with Equiv parameter
