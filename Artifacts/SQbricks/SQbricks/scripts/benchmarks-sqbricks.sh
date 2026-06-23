@@ -128,32 +128,42 @@ is_resource_failure() {
 # harder than a smaller one. Empty means that the case is treated as isolated.
 case_series_key() {
 	local name="$1"
+	local path_row="$2"
 	local base="${name%%;*}"
+	local source_path="${path_row%%;*}"
+	local source_dir
+	local family=""
+
+	source_dir="$(dirname -- "$source_path")"
 
 	if [[ "$base" =~ ^DQC_PE_[0-9]+($|_) || "$base" =~ ^dqc_pe_[0-9]+($|_) ]]; then
-		printf "%s|dqc_pe" "$version"
+		family="dqc_pe"
 	elif [[ "$base" =~ ^DQC_qft_[0-9]+($|_) || "$base" =~ ^dqc_qft_[0-9]+($|_) ]]; then
-		printf "%s|dqc_qft" "$version"
+		family="dqc_qft"
 	elif [[ "$base" =~ ^pe_[0-9]+($|_) ]]; then
-		printf "%s|pe" "$version"
+		family="pe"
 	elif [[ "$base" =~ ^qft_[0-9]+($|_) ]]; then
-		printf "%s|qft" "$version"
+		family="qft"
 	elif [[ "$base" =~ ^adder_n[0-9]+($|_) ]]; then
-		printf "%s|adder" "$version"
+		family="adder"
 	elif [[ "$base" =~ ^bv_[0-9]+($|_) ]]; then
-		printf "%s|bv" "$version"
+		family="bv"
 	elif [[ "$base" =~ ^grover_[0-9]+($|_) ]]; then
-		printf "%s|grover" "$version"
+		family="grover"
 	elif [[ "$base" =~ ^gf2\^[0-9]+_?mult($|_) ]]; then
-		printf "%s|gf2_mult" "$version"
+		family="gf2_mult"
 	elif [[ "$base" =~ ^hwb[0-9]+($|_) ]]; then
-		printf "%s|hwb" "$version"
+		family="hwb"
 	elif [[ "$base" =~ ^barenco_tof_[0-9]+($|_) ]]; then
-		printf "%s|barenco_tof" "$version"
+		family="barenco_tof"
 	elif [[ "$base" =~ ^tof_[0-9]+($|_) ]]; then
-		printf "%s|tof" "$version"
+		family="tof"
 	elif [[ "$base" =~ ^mod_adder_[0-9]+($|_) ]]; then
-		printf "%s|mod_adder" "$version"
+		family="mod_adder"
+	fi
+
+	if [[ -n "$family" ]]; then
+		printf "%s|%s|%s" "$version" "$source_dir" "$family"
 	fi
 }
 
@@ -673,7 +683,7 @@ for path_original in "${path_originals[@]}"; do
 		;;
 	esac
 
-	series_key="$(case_series_key "$name")"
+	series_key="$(case_series_key "$name" "$path_original")"
 	begin_progress_case "$name"
 	if [[ -n "$series_key" && -n "${stopped_series[$series_key]:-}" ]]; then
 		emit_skipped_case "$name"

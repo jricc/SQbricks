@@ -28,7 +28,8 @@ Current status:
 
 The selected large regression uses the same ordered-series cutoff as the long
 SQbricks-only benchmark: after `TO` or `OutOfMemory`, larger cases in that same
-series are emitted as `SKIP_AFTER_RESOURCE_FAILURE`.
+series are emitted as `SKIP_AFTER_RESOURCE_FAILURE`. Series are scoped by source
+directory as well as by name family.
 
 Before turning this into a non-regression check, validate the selected paths
 against fresh long benchmark results and decide which rows should be tracked for

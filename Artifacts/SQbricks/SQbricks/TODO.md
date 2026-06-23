@@ -62,7 +62,7 @@
   `qiskit-hybrid` and `owm-vs-qiskit`; it does not run external verification
   tools.
 - The long runner writes `SKIP_AFTER_RESOURCE_FAILURE` for larger cases in an
-  ordered series after `TO` or `OutOfMemory`.
+  ordered source-scoped series after `TO` or `OutOfMemory`.
 - No intermediate benchmark is planned: it would mostly duplicate the light and
   long benchmark roles.
 - The global benchmark audit compared the long SQbricks-only runner with

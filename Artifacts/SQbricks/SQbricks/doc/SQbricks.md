@@ -210,10 +210,11 @@ Les limites de ressources sont posées au début du script avec `ulimit` :
 - `SQBRICKS_LONG_MEMORY_KB`, par défaut `7340032`.
 
 Si un cas d'une série ordonnée atteint `TO` ou `OutOfMemory`, les cas plus
-grands de la même série ne sont plus exécutés. Le runner écrit alors une ligne
-CSV avec `SKIP_AFTER_RESOURCE_FAILURE` et continue les autres séries. Par
-exemple, un échec sur `grover_7` permet de sauter `grover_9`, `grover_11`, etc.,
-sans arrêter toute la famille `owm`.
+grands de la même série ne sont plus exécutés. Une série est identifiée par le
+type de benchmark, le dossier source et la famille de nom. Le runner écrit alors
+une ligne CSV avec `SKIP_AFTER_RESOURCE_FAILURE` et continue les autres séries.
+Par exemple, un échec sur `benchmarks/Feynman/grover_5.qasm` ne saute pas les
+cas `benchmarks/VeriQbench/combinational/grover/grover_*.qasm`.
 
 La progression est contrôlée par `SQBRICKS_LONG_PROGRESS=auto|always|never`.
 Comme pour le light, elle s'affiche sur `stderr`, se réécrit sur une seule
