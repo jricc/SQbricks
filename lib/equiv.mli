@@ -41,6 +41,11 @@ type result =
   | FullCircuitInconclusiveAmp
   | FullCircuitInconclusiveKet
   | ErrorCircuitNotUnitary  (** Error: circuit is not unitary *)
+  | ErrorInvalidQubitIndex  (** Error: input, output, or measurement index is invalid *)
+  | ErrorFullCircuitNotImplemented
+      (** Error: full-circuit equivalence is not implemented *)
+  | ErrorBothCircuitsHaveInits
+      (** Error: sequential equivalence cannot handle initializations on both circuits *)
 
 val result_to_string : result -> string
 (** Converts an equivalence result to a string representation.
