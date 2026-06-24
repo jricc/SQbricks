@@ -50,6 +50,20 @@ let test_prog_equiv ?(debug = true) ?(not_equiv = false)
        (ProgS.pretty p2))
     expected greeting
 
+let test_sqv_result ?(debug = true) ?(algo = Equiv.Sequence)
+    ?(equivalence = Equiv.SubCircuit) ?(inputs1 = []) ?(inputs2 = [])
+    ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = []) ?(meas2 = [])
+    (expected : Equiv.result) (p1 : Program.t) (p2 : Program.t) () =
+  let greeting =
+    Equiv.sqv ~debug ~algo ~equivalence ~inputs1 ~inputs2 ~outputs1 ~outputs2
+      ~meas1 ~meas2 p1 p2
+  in
+  check string
+    (sprintf "Test.test_sqv_result\np1 =\n%s\np2 =\n%s\n"
+       (ProgS.pretty p1) (ProgS.pretty p2))
+    (Equiv.result_to_string expected)
+    (Equiv.result_to_string greeting)
+
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
     (p2' : string) () =
@@ -353,16 +367,35 @@ let unitary =
     ("h <> x -- h", `Quick, test_prog_equiv ~not_equiv:true (h 0) (x 0 -- h 0));
     ( "seq diff inputs",
       `Quick,
-      test_prog_equiv ~not_equiv:true ~inputs1:[ 0 ] ~inputs2:[ 0; 1 ] (h 0)
-        (h 0) );
+      test_sqv_result ~inputs1:[ 0 ] ~inputs2:[ 0; 1 ] ~outputs1:[ 0 ]
+        ~outputs2:[ 0 ] Equiv.NotEquivDiffInputs (h 0) (h 0) );
     ( "seq diff outputs",
       `Quick,
-      test_prog_equiv ~not_equiv:true ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ]
-        (h 0) (h 0) );
+      test_sqv_result ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ] ~inputs1:[ 0 ]
+        ~inputs2:[ 0 ] Equiv.NotEquivDiffOutputs (h 0) (h 0) );
     ( "seq diff inputs outputs",
       `Quick,
-      test_prog_equiv ~not_equiv:true ~inputs1:[ 0; 1 ] ~inputs2:[ 0; 1 ]
-        ~outputs1:[ 0 ] ~outputs2:[ 0 ] (h 0) (h 0) );
+      test_sqv_result ~inputs1:[ 0; 1 ] ~inputs2:[ 0; 1 ] ~outputs1:[ 0 ]
+        ~outputs2:[ 0 ] Equiv.NotEquivDiffInputsOutputs (h 0) (h 0) );
+    ( "seq invalid input index",
+      `Quick,
+      test_sqv_result ~inputs1:[ -1 ] Equiv.ErrorInvalidQubitIndex (h 0) (h 0)
+    );
+    ( "seq invalid output index",
+      `Quick,
+      test_sqv_result ~outputs1:[ 1 ] Equiv.ErrorInvalidQubitIndex (h 0) (h 0)
+    );
+    ( "seq invalid measurement index",
+      `Quick,
+      test_sqv_result ~meas1:[ 1 ] Equiv.ErrorInvalidQubitIndex (h 0) (h 0) );
+    ( "seq full circuit not implemented",
+      `Quick,
+      test_sqv_result ~equivalence:Equiv.FullCircuit
+        Equiv.ErrorFullCircuitNotImplemented (h 0) (h 0) );
+    ( "seq both circuits have inits",
+      `Quick,
+      test_sqv_result ~inputs1:[ 0 ] ~inputs2:[ 0 ] ~outputs1:[ 0 ]
+        ~outputs2:[ 0 ] Equiv.ErrorBothCircuitsHaveInits (h 1) (h 1) );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );
@@ -596,16 +629,34 @@ let parallel =
       test_prog_equiv ~algo:Parallel ~not_equiv:true (h 0) (x 0 -- h 0) );
     ( "parallel diff inputs",
       `Quick,
-      test_prog_equiv ~algo:Parallel ~not_equiv:true ~inputs1:[ 0 ]
-        ~inputs2:[ 0; 1 ] (h 0) (h 0) );
+      test_sqv_result ~algo:Parallel ~inputs1:[ 0 ] ~inputs2:[ 0; 1 ]
+        ~outputs1:[ 0 ] ~outputs2:[ 0 ] Equiv.NotEquivDiffInputs (h 0)
+        (h 0) );
     ( "parallel diff outputs",
       `Quick,
-      test_prog_equiv ~algo:Parallel ~not_equiv:true ~outputs1:[ 0 ]
-        ~outputs2:[ 0; 1 ] (h 0) (h 0) );
+      test_sqv_result ~algo:Parallel ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ]
+        ~inputs1:[ 0 ] ~inputs2:[ 0 ] Equiv.NotEquivDiffOutputs (h 0) (h 0) );
     ( "parallel diff inputs outputs",
       `Quick,
-      test_prog_equiv ~algo:Parallel ~not_equiv:true ~inputs1:[ 0; 1 ]
-        ~inputs2:[ 0; 1 ] ~outputs1:[ 0 ] ~outputs2:[ 0 ] (h 0) (h 0) );
+      test_sqv_result ~algo:Parallel ~inputs1:[ 0; 1 ] ~inputs2:[ 0; 1 ]
+        ~outputs1:[ 0 ] ~outputs2:[ 0 ] Equiv.NotEquivDiffInputsOutputs
+        (h 0) (h 0) );
+    ( "parallel invalid input index",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~inputs1:[ -1 ]
+        Equiv.ErrorInvalidQubitIndex (h 0) (h 0) );
+    ( "parallel invalid output index",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~outputs1:[ 1 ]
+        Equiv.ErrorInvalidQubitIndex (h 0) (h 0) );
+    ( "parallel invalid measurement index",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~meas1:[ 1 ] Equiv.ErrorInvalidQubitIndex
+        (h 0) (h 0) );
+    ( "parallel full circuit not implemented",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~equivalence:Equiv.FullCircuit
+        Equiv.ErrorFullCircuitNotImplemented (h 0) (h 0) );
     ( "parallel unit vs hybrid",
       `Quick,
       test_prog_equiv ~algo:Parallel ~not_equiv:true (m 0 0) (h 0) );

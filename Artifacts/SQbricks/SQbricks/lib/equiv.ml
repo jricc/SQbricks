@@ -46,6 +46,9 @@ type result =
   | FullCircuitInconclusiveAmp
   | FullCircuitInconclusiveKet
   | ErrorCircuitNotUnitary
+  | ErrorInvalidQubitIndex
+  | ErrorFullCircuitNotImplemented
+  | ErrorBothCircuitsHaveInits
 
 let result_to_string = function
   | SubCircuitEquivalent -> "SubCircuitEquivalent"
@@ -63,6 +66,9 @@ let result_to_string = function
   | FullCircuitInconclusiveAmp -> "FullCircuitInconclusiveAmp"
   | FullCircuitInconclusiveKet -> "FullCircuitInconclusiveKet"
   | ErrorCircuitNotUnitary -> "ErrorCircuitNotUnitary"
+  | ErrorInvalidQubitIndex -> "ErrorInvalidQubitIndex"
+  | ErrorFullCircuitNotImplemented -> "ErrorFullCircuitNotImplemented"
+  | ErrorBothCircuitsHaveInits -> "ErrorBothCircuitsHaveInits"
 
 type equivalence = SubCircuit | FullCircuit | GlobalPhase
 
@@ -208,13 +214,20 @@ let parameters_preparation ?(debug = false) inputs1 inputs2 outputs1 outputs2
 
   let length_inputs1 = List.length inputs1 in
   let length_inputs2 = List.length inputs2 in
+  let length_outputs1 = List.length outputs1 in
+  let length_outputs2 = List.length outputs2 in
+  (* Shape mismatches are reported before invalid indices to keep parameter
+     errors classified by the user-visible mismatch. *)
   if length_inputs1 <> length_inputs2 then Error NotEquivDiffInputs
-  else
-    let length_outputs1 = List.length outputs1 in
-    let length_outputs2 = List.length outputs2 in
-    if length_outputs1 <> length_outputs2 then Error NotEquivDiffOutputs
-    else if length_outputs1 <> length_inputs1 then Error NotEquivDiffInputsOutputs
-    else (
+  else if length_outputs1 <> length_outputs2 then Error NotEquivDiffOutputs
+  else if length_outputs1 <> length_inputs1 then Error NotEquivDiffInputsOutputs
+  else if
+    not
+      (ListBis.valid_indices wq1 inputs1 && ListBis.valid_indices wq2 inputs2
+     && ListBis.valid_indices wq1 outputs1
+     && ListBis.valid_indices wq2 outputs2)
+  then Error ErrorInvalidQubitIndex
+  else (
       if debug then
         printf "Equiv.parameters_preparation, unitary_1 =\n%s\n\n"
           (ProgS.pretty unitary1);
@@ -261,10 +274,12 @@ let phase_equality_to_string = function
 let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
     ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
     unitary1 unitary2 =
-  match
-    parameters_preparation ~debug inputs1 inputs2 outputs1 outputs2 unitary1
-      unitary2
-  with
+  if equivalence = FullCircuit then ErrorFullCircuitNotImplemented
+  else
+    match
+      parameters_preparation ~debug inputs1 inputs2 outputs1 outputs2 unitary1
+        unitary2
+    with
   | Error result -> result
   | Ok
       ( wq1,
@@ -277,15 +292,20 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
         outputs2,
         length_inputs1 ) ->
       (* Check if the lists of measured qubits are equal in the two circuits for the observable part *)
-      if not (check_observable_measurement outputs1 outputs2 meas1 meas2) then (
+      if
+        not (ListBis.valid_indices wq1 meas1 && ListBis.valid_indices wq2 meas2)
+      then
+        ErrorInvalidQubitIndex
+      else if not (check_observable_measurement outputs1 outputs2 meas1 meas2)
+      then (
         if debug then printf "Equiv.seq, list of measurements differents\n\n";
         NotEquivDiffMeasurements)
+      else if (not (List.is_empty inits1)) && not (List.is_empty inits2) then
+        ErrorBothCircuitsHaveInits
       else
         let unitary1, wq1, unitary2, wq2 =
           if not (List.is_empty inits1) then
-            if not (List.is_empty inits2) then
-              failwith "Equiv.seq, one of the two circuits mustn't have init"
-            else (Program.format unitary1, wq1, Program.format unitary2, wq2)
+            (Program.format unitary1, wq1, Program.format unitary2, wq2)
           else (Program.format unitary2, wq2, Program.format unitary1, wq1)
         in
         if debug then
@@ -394,13 +414,17 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
               match equivalence with
               | SubCircuit -> SubCircuitInconclusive
               | GlobalPhase -> GlobalPhaseInconclusive
-              | FullCircuit -> failwith "Full-circuit equivalence not implemented."))
+              | FullCircuit -> ErrorFullCircuitNotImplemented))
         else Entanglement1
 
 let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
     ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
     unitary1 unitary2 =
-  match parameters_preparation inputs1 inputs2 outputs1 outputs2 unitary1 unitary2 with
+  if equivalence = FullCircuit then ErrorFullCircuitNotImplemented
+  else
+    match
+      parameters_preparation inputs1 inputs2 outputs1 outputs2 unitary1 unitary2
+    with
   | Error result -> result
   | Ok
       ( wq1,
@@ -413,9 +437,12 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
         outputs2,
         _ ) ->
       if
+        not (ListBis.valid_indices wq1 meas1 && ListBis.valid_indices wq2 meas2)
+      then
+        ErrorInvalidQubitIndex
+      else if
         (* observable check *)
-        equivalence <> FullCircuit
-        && not (check_observable_measurement outputs1 outputs2 meas1 meas2)
+        not (check_observable_measurement outputs1 outputs2 meas1 meas2)
       then NotEquivDiffMeasurements
       else
         let input_state1 = Path_sum.ofSize_init (Int.max 1 wq1) inits1 in
@@ -474,7 +501,7 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                     output_path_var_norm1 output_path_var_norm2
                 then GlobalPhaseEquivalent
                 else GlobalPhaseInconclusive)
-        | FullCircuit -> failwith "Full-circuit equivalence not implemented."
+        | FullCircuit -> ErrorFullCircuitNotImplemented
 
 (* Defines the type 'algo' representing the algorithm type to use. *)
 type algo = Parallel | Sequence
@@ -486,12 +513,10 @@ let sqv ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
   (* Determines the equivalence result based on the algorithm and the requested equivalence type *)
   let result =
     match (algo, equivalence) with
+    | _, FullCircuit -> ErrorFullCircuitNotImplemented
     | Parallel, _ ->
         parallel p1 p2 ~debug ~equivalence ~inputs1 ~inputs2 ~outputs1 ~outputs2
           ~meas1 ~meas2
-    | Sequence, FullCircuit ->
-        (* Raises an exception as full circuit equivalence in sequence is not possible *)
-        failwith "Full-circuit equivalence not implemented."
     | Sequence, _ ->
         seq p1 p2 ~debug ~equivalence ~inputs1 ~inputs2 ~outputs1 ~outputs2
           ~meas1 ~meas2
@@ -506,10 +531,10 @@ let sqv_simple_result ?(debug = false) ?(inputs1 = []) ?(inputs2 = [])
       sqv ~debug ~inputs1 ~inputs2 ~outputs1 ~outputs2 ~meas1 ~meas2 ~algo
         ~equivalence p1 p2
     in
-    match equivalence with
-    | SubCircuit -> result = SubCircuitEquivalent
-    | GlobalPhase ->
-        result = SubCircuitEquivalent || result = GlobalPhaseEquivalent
-    | FullCircuit -> failwith "Full-circuit equivalence not implemented."
+    match (equivalence, result) with
+    | SubCircuit, SubCircuitEquivalent -> true
+    | GlobalPhase, (SubCircuitEquivalent | GlobalPhaseEquivalent) -> true
+    | FullCircuit, FullCircuitEquivalent -> true
+    | _ -> false
   in
   if not_equiv then not is_equivalent else is_equivalent

@@ -41,6 +41,10 @@
 * Prefer direct, readable code over generic code.
 * A small duplicated expression is acceptable if abstraction would make the code harder to understand.
 * Add a helper function only when it removes real duplication or clarifies the logic.
+* Before adding a helper, look for an existing function that already expresses
+  the same idea.
+* Put broadly reusable helper functions in `Common` instead of keeping local
+  copies in feature modules.
 * If a task can be solved with a simple function, use a simple function.
 * Do not build a class or framework for a simple operation.
 * Do not add extra features.
@@ -294,6 +298,8 @@ Use the full quality process for non-trivial changes.
 ## Testing rules
 
 - Prefer small, deterministic tests.
+- Keep tests minimal: use the smallest circuit and input data that isolate the
+  behavior being checked.
 - Avoid brittle tests.
 - Avoid over-mocking.
 - Tests should document the intended behavior.

@@ -134,6 +134,14 @@ module ListBis : sig
       - [check_bounds 1 4 [1; 2; 3]] returns [true]
       - [check_bounds 1 4 [1; 2; 4]] returns [false] *)
 
+  val valid_indices : int -> int list -> bool
+  (** [valid_indices width l] checks that all indices in [l] are valid qubit
+      indices in the interval [[0, width-1]].
+
+      Examples:
+      - [valid_indices 3 [0; 2]] returns [true]
+      - [valid_indices 3 [0; 3]] returns [false] *)
+
   val generate_int_list_from_a_to_b_with_step : int -> int -> int -> int list
   (** [generate_int_list_from_a_to_b_with_step lower upper step] generates a
       list of integers starting from [lower], incrementing by [step], until

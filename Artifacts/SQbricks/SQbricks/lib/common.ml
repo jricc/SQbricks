@@ -111,6 +111,9 @@ module ListBis = struct
   (* forall i in lst -> i in [a,b] *)
   let check_bounds a b lst = not (List.for_all (fun x -> a <= x && x < b) lst)
 
+  let valid_indices width lst =
+    List.for_all (fun indice -> 0 <= indice && indice < width) lst
+
   let generate_int_list_from_a_to_b_with_step a b step =
     let rec aux i acc = if i < b then aux (i + step) (i :: acc) else acc in
     List.rev (aux a [])
