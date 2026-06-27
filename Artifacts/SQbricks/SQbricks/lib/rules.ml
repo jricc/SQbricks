@@ -598,7 +598,6 @@ module Variable_replacement = struct
            %!"
           (PSS.pretty acc_state));
 
-      let ket = Ket.copy acc_state.ket in
       let poly = acc_state.phase in
 
       if Poly.size p < 2 then
@@ -641,7 +640,9 @@ module Variable_replacement = struct
                 (PS.pretty new_poly width));
 
             let poly_subst = Poly.substitute_poly poly v2 new_poly in
-            let ket_subst = substitute_qubit_in_ket ket new_qubit (Var v2) in
+            let ket_subst =
+              substitute_qubit_in_ket acc_state.ket new_qubit (Var v2)
+            in
 
             if debug then (
               printf
@@ -679,7 +680,9 @@ module Variable_replacement = struct
                  %!"
                 (PSS.pretty out_state_simplified);
 
-            let number_of_sum_input = Ket.number_of_sum ket + Poly.size poly in
+            let number_of_sum_input =
+              Ket.number_of_sum acc_state.ket + Poly.size poly
+            in
             let number_of_sum_out_state_simplified =
               Ket.number_of_sum out_state_simplified.ket
               + Poly.size out_state_simplified.phase

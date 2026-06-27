@@ -84,13 +84,17 @@ module Apply_gates = struct
           (Poly.simplify_monomes (of_qubit_2_pi (Prod (Var y0, ps.ket.(ta)))))
         @@ ps.phase
       in
-      ps.ket.(ta) <- Var y0;
-      { phase = p; ket = ps.ket; path_var = int_sort (y0 :: ps.path_var) }
+      let output_ket = Ket.copy ps.ket in
+      output_ket.(ta) <- Var y0;
+      { phase = p; ket = output_ket; path_var = int_sort (y0 :: ps.path_var) }
     in
-    let apply_hadamard_ket (ket : Ket.t) ta y0 control : Ket.t =
-      ket.(ta) <-
-        Prod (control, Var y0) +++ (ket.(ta) +++ Prod (control, ket.(ta)));
-      ket
+    let apply_hadamard_ket (input_ket : Ket.t) ta y0 control : Ket.t =
+      let output_ket = Ket.copy input_ket in
+      let target_qubit = input_ket.(ta) in
+      output_ket.(ta) <-
+        Prod (control, Var y0)
+        +++ (target_qubit +++ Prod (control, target_qubit));
+      output_ket
     in
     let y0 =
       if List.equal Int.equal ps.path_var [] then Array.length ps.ket
@@ -116,9 +120,10 @@ module Apply_gates = struct
       | [] -> One +++ ps.ket.(ta)
       | _ -> apply_control ps.ket co +++ ps.ket.(ta)
     in
-    ps.ket.(ta) <- q;
+    let output_ket = Ket.copy ps.ket in
+    output_ket.(ta) <- q;
     let ps_output =
-      { phase = ps.phase; ket = ps.ket; path_var = ps.path_var }
+      { phase = ps.phase; ket = output_ket; path_var = ps.path_var }
     in
     Rules.Simplification.simplify ps_output
 
@@ -186,10 +191,11 @@ module Apply_gates = struct
     Rules.Simplification.simplify ps_output
 
   let apply_classical_not ps ta =
-    (match ps.ket.(ta) with
-    | Zero -> ps.ket.(ta) <- One
-    | One -> ps.ket.(ta) <- Zero
+    let output_ket = Ket.copy ps.ket in
+    (match output_ket.(ta) with
+    | Zero -> output_ket.(ta) <- One
+    | One -> output_ket.(ta) <- Zero
     | _ ->
         failwith (sprintf "Path_sum.Not, ta = %d, ps = %s" ta (PSS.pretty ps)));
-    { phase = ps.phase; ket = ps.ket; path_var = ps.path_var }
+    { phase = ps.phase; ket = output_ket; path_var = ps.path_var }
 end
