@@ -474,58 +474,68 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
             match reduction_for_equiv ~debug output_state2 with
             | Error result -> result
             | Ok output_state_reduced2 ->
-                let output_path_var_norm1 =
-                  Rules.Variable_replacement.poly_normalized
-                    output_state_reduced1
-                in
-                let output_path_var_norm2 =
-                  Rules.Variable_replacement.poly_normalized
-                    output_state_reduced2
-                in
+                match
+                  Rules.Variable_replacement.poly_normalized_result
+                    ~debug output_state_reduced1
+                with
+                | Error (Rules.MalformedPathSum _) -> ErrorMalformedPathSum
+                | Ok output_path_var_norm1 -> (
+                    match
+                      Rules.Variable_replacement.poly_normalized_result
+                        ~debug output_state_reduced2
+                    with
+                    | Error (Rules.MalformedPathSum _) -> ErrorMalformedPathSum
+                    | Ok output_path_var_norm2 ->
 
-                if debug then
-                  printf "Equiv.parallel,\noutput_path_var_norm1 =\n%s\n\n"
-                    (PSS.pretty output_path_var_norm1);
-                if debug then
-                  printf "Equiv.parallel,\noutput_path_var_norm2 =\n%s\n\n"
-                    (PSS.pretty output_path_var_norm2);
+                        if debug then
+                          printf
+                            "Equiv.parallel,\noutput_path_var_norm1 =\n%s\n\n"
+                            (PSS.pretty output_path_var_norm1);
+                        if debug then
+                          printf
+                            "Equiv.parallel,\noutput_path_var_norm2 =\n%s\n\n"
+                            (PSS.pretty output_path_var_norm2);
 
-                let check_separability () =
-                  let s1 = separability_states output_path_var_norm1 outputs1 wq1
-                  and s2 =
-                    separability_states output_path_var_norm2 outputs2 wq2
-                  in
-                  match (s1, s2) with
-                  | false, _ -> Some Entanglement1
-                  | _, false -> Some Entanglement2
-                  | _ -> None
-                in
+                        let check_separability () =
+                          let s1 =
+                            separability_states output_path_var_norm1 outputs1
+                              wq1
+                          and s2 =
+                            separability_states output_path_var_norm2 outputs2
+                              wq2
+                          in
+                          match (s1, s2) with
+                          | false, _ -> Some Entanglement1
+                          | _, false -> Some Entanglement2
+                          | _ -> None
+                        in
 
-                match equivalence with
-                | SubCircuit -> (
-                    match check_separability () with
-                    | Some res ->
-                        (* Entanglement of out and disc*)
-                        res
-                    | None ->
-                        (* Entanglement of out and disc*)
-                        if
-                          Path_sum.equal ~outputs1 ~outputs2
-                            output_path_var_norm1 output_path_var_norm2
-                        then SubCircuitEquivalent
-                        else SubCircuitInconclusive)
-                | GlobalPhase -> (
-                    match check_separability () with
-                    | Some res ->
-                        (* Entanglement of out and disc*)
-                        res
-                    | None ->
-                        if
-                          Path_sum.equal ~outputs1 ~outputs2 ~global_phase:true
-                            output_path_var_norm1 output_path_var_norm2
-                        then GlobalPhaseEquivalent
-                        else GlobalPhaseInconclusive)
-                | FullCircuit -> ErrorFullCircuitNotImplemented)
+                        match equivalence with
+                        | SubCircuit -> (
+                            match check_separability () with
+                            | Some res ->
+                                (* Entanglement of out and disc*)
+                                res
+                            | None ->
+                                (* Entanglement of out and disc*)
+                                if
+                                  Path_sum.equal ~outputs1 ~outputs2
+                                    output_path_var_norm1 output_path_var_norm2
+                                then SubCircuitEquivalent
+                                else SubCircuitInconclusive)
+                        | GlobalPhase -> (
+                            match check_separability () with
+                            | Some res ->
+                                (* Entanglement of out and disc*)
+                                res
+                            | None ->
+                                if
+                                  Path_sum.equal ~outputs1 ~outputs2
+                                    ~global_phase:true output_path_var_norm1
+                                    output_path_var_norm2
+                                then GlobalPhaseEquivalent
+                                else GlobalPhaseInconclusive)
+                        | FullCircuit -> ErrorFullCircuitNotImplemented))
 
 (* Defines the type 'algo' representing the algorithm type to use. *)
 type algo = Parallel | Sequence

@@ -307,6 +307,8 @@ Use the full quality process for non-trivial changes.
 - Prefer small, deterministic tests.
 - Keep tests minimal: use the smallest circuit and input data that isolate the
   behavior being checked.
+- For typed returns such as `result`, `option`, or a custom variant, add minimal
+  tests for each observable return possibility.
 - Avoid brittle tests.
 - Avoid over-mocking.
 - Tests should document the intended behavior.

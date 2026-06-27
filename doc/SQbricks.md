@@ -268,7 +268,13 @@ donc un résultat typé pour la réduction, par exemple `Ok path_sum` ou
 `Error (MalformedPathSum message)`, puis le propage jusqu'au résultat public
 d'Equiv avec `ErrorMalformedPathSum`.
 
-La règle `HH` est le premier cas traité. Pendant la migration, l'ancien point
-d'entrée non typé `Rules.HH.hh` reste temporairement pour compatibilité. Une fois
-la version typée validée et utilisée par le pipeline principal, cet ancien point
-d'entrée doit être supprimé avant merge.
+La règle `HH` est le premier cas traité. `Variable_replacement` utilise le même
+modèle pour son remplacement principal avec
+`Rules.Variable_replacement.variable_replacement_result` et pour la
+normalisation avec `Rules.Variable_replacement.poly_normalized_result`. Pendant
+la migration, les anciens points d'entrée non typés `Rules.HH.hh`,
+`Rules.Variable_replacement.variable_replacement` et
+`Rules.Variable_replacement.poly_normalized` restent temporairement pour
+compatibilité. Une fois les versions typées validées et utilisées par le
+pipeline principal, ces anciens points d'entrée doivent être supprimés avant
+merge.

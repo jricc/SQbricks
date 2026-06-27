@@ -219,8 +219,25 @@ let test_poly_normalize ?(debug = true) (input : Path_sum.t)
   let expect = true in
   check bool (sprintf "Primitives.test_normalise_path_var") expect greet
 
+let test_poly_normalized_result_reports_malformed_path_sum () =
+  let malformed_path_sum : Path_sum.t =
+    {
+      phase = to_poly (Qubit (Qubit.Var 2));
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  match
+    Rules.Variable_replacement.poly_normalized_result malformed_path_sum
+  with
+  | Error (Rules.MalformedPathSum _) -> check bool "malformed path sum" true true
+  | Ok _ -> check bool "malformed path sum expected" true false
+
 let poly_normalize =
   [
+    ( "poly_normalized_result reports malformed path sum",
+      `Quick,
+      test_poly_normalized_result_reports_malformed_path_sum );
     ( "0, x0 -> 0, x0",
       `Quick,
       test_poly_normalize
@@ -899,6 +916,39 @@ let test_variable_replacement ?(debug = true) (input : Path_sum.t)
   let expected = true in
   check bool (sprintf "test_variable_replacement") expected greeting
 
+let test_variable_replacement_result_returns_typed_replacement () =
+  let input : Path_sum.t =
+    { phase = Poly.zero; ket = [| one ++ Var 1 |]; path_var = [ 1 ] }
+  in
+  let expected_output : Path_sum.t =
+    { phase = Poly.zero; ket = [| Var 1 |]; path_var = [ 1 ] }
+  in
+  match Rules.Variable_replacement.variable_replacement_result input with
+  | Ok (Some output) ->
+      check string "replacement result" (PSS.exact expected_output)
+        (PSS.exact output)
+  | Ok None -> check bool "replacement expected" true false
+  | Error (Rules.MalformedPathSum _) -> check bool "valid path sum" true false
+
+let test_variable_replacement_result_returns_none () =
+  let input : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  match Rules.Variable_replacement.variable_replacement_result input with
+  | Ok None -> check bool "no replacement" true true
+  | Ok (Some _) -> check bool "no replacement expected" true false
+  | Error (Rules.MalformedPathSum _) -> check bool "valid path sum" true false
+
+let test_variable_replacement_result_reports_malformed_path_sum () =
+  let malformed_path_sum : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [ 0 ] }
+  in
+  match
+    Rules.Variable_replacement.variable_replacement_result malformed_path_sum
+  with
+  | Error (Rules.MalformedPathSum _) -> check bool "malformed path sum" true true
+  | Ok _ -> check bool "malformed path sum expected" true false
+
 let test_replace_not_path_var_by_var_does_not_mutate_input () =
   let input : Path_sum.t =
     {
@@ -922,6 +972,15 @@ let mdiv s = Monome.Scal s
 
 let variable_replacement =
   [
+    ( "variable_replacement_result returns typed replacement",
+      `Quick,
+      test_variable_replacement_result_returns_typed_replacement );
+    ( "variable_replacement_result returns none",
+      `Quick,
+      test_variable_replacement_result_returns_none );
+    ( "variable_replacement_result reports malformed path sum",
+      `Quick,
+      test_variable_replacement_result_reports_malformed_path_sum );
     ( "replace_not_path_var_by_var does not mutate input",
       `Quick,
       test_replace_not_path_var_by_var_does_not_mutate_input );
@@ -1240,8 +1299,52 @@ let test_qubit q1 q2 () =
   let expected = QS.exact q2 in
   check string "same string" expected greeting
 
+let test_qubit_equal_result_returns_true () =
+  match Qubit.equal_result ~wq1:1 ~wq2:1 (Var 0) (Var 0) with
+  | Ok true -> check bool "equal qubits" true true
+  | Ok false -> check bool "equal qubits expected" true false
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_qubit_equal_result_returns_false () =
+  match Qubit.equal_result Zero One with
+  | Ok false -> check bool "different qubits" false false
+  | Ok true -> check bool "different qubits expected" false true
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_qubit_equal_result_reports_incompatible_widths () =
+  match Qubit.equal_result ~wq1:0 ~wq2:1 Zero Zero with
+  | Error Qubit.IncompatibleWidths -> check bool "incompatible widths" true true
+  | Error Qubit.IncompletePathVariableMap ->
+      check bool "incompatible widths expected" true false
+  | Ok _ -> check bool "incompatible widths expected" true false
+
+let test_qubit_equal_result_reports_incomplete_path_var_map () =
+  let map_path_var1 = IntMap.singleton 1 0 in
+  let map_path_var2 = IntMap.empty in
+  match
+    Qubit.equal_result ~wq1:1 ~wq2:1 ~map_path_var1 ~map_path_var2 (Var 1)
+      (Var 1)
+  with
+  | Error Qubit.IncompletePathVariableMap ->
+      check bool "incomplete path variable map" true true
+  | Error Qubit.IncompatibleWidths ->
+      check bool "incomplete path variable map expected" true false
+  | Ok _ -> check bool "incomplete path variable map expected" true false
+
 let qubit =
   [
+    ( "equal_result returns true",
+      `Quick,
+      test_qubit_equal_result_returns_true );
+    ( "equal_result returns false",
+      `Quick,
+      test_qubit_equal_result_returns_false );
+    ( "equal_result reports incompatible widths",
+      `Quick,
+      test_qubit_equal_result_reports_incompatible_widths );
+    ( "equal_result reports incomplete path variable map",
+      `Quick,
+      test_qubit_equal_result_reports_incomplete_path_var_map );
     ( "simplify: x0.(1 ++ x0) -> Zero",
       `Quick,
       test_qubit (Qubit.simplify (Prod (Var 0, One ++ Var 0))) Zero );

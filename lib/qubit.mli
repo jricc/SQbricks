@@ -41,6 +41,29 @@ type t =
 
 (** {1 Comparison and Equality} *)
 
+type equality_error = IncompatibleWidths | IncompletePathVariableMap
+(** Errors that can prevent a qubit comparison from being interpreted as a
+    plain equality result.
+
+    - [IncompatibleWidths] means the two width parameters describe incompatible
+      free-variable spaces.
+    - [IncompletePathVariableMap] means that path-variable maps were provided,
+      but at least one compared path variable was missing from one of them. *)
+
+val equal_result :
+  ?debug:bool ->
+  ?wq1:int ->
+  ?wq2:int ->
+  ?map_path_var1:int IntMap.t ->
+  ?map_path_var2:int IntMap.t ->
+  t ->
+  t ->
+  (bool, equality_error) result
+(** [equal_result ?debug ?wq1 ?wq2 ?map_path_var1 ?map_path_var2 q1 q2] is the
+    typed version of {!equal}. It returns [Ok true] or [Ok false] when the
+    comparison is well formed, and [Error _] when the comparison parameters are
+    malformed. *)
+
 val equal :
   ?debug:bool ->
   ?wq1:int ->
@@ -62,9 +85,12 @@ val equal :
     - [map_path_var1] and [map_path_var2] are mappings between path variables
       encountered so far in [q1] and [q2]. They are used to ensure that two
       qubits are equivalent up to a consistent renaming of their path variables.
+      Incomplete or inconsistent mappings make the comparison return [false].
 
     - Returns [true] if [q1] and [q2] are structurally equivalent modulo
-      renaming of path variables, [false] otherwise.
+      renaming of path variables, [false] otherwise. Use {!equal_result} when
+      the caller needs to distinguish inequality from malformed comparison
+      parameters.
 
     For example:
     {[

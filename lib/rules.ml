@@ -454,13 +454,13 @@ module Variable_replacement = struct
   (** [condition_to_substitute ?debug q except ps] takes as input a qubit [q], a
       path sum [ps], and an integer [except]. Returns [Some v] if the path
       variables of [q] appear exactly once in [ps] (excluding the qubit at index
-      [except] in the ket), and [None] otherwise. Raises an exception in case of
-      an unexpected error. *)
+      [except] in the ket), and [None] otherwise. *)
 
   let condition_to_substitute ?(debug = false) (q : Qubit.t) except
-      (ps : Path_sum.t) =
+      (ps : Path_sum.t) : (int option, reduction_error) result =
     let width = Array.length ps.ket in
-    let rec number_of_path_var_of_q_outside_q (q : Qubit.t) : int * int =
+    let rec number_of_path_var_of_q_outside_q (q : Qubit.t) :
+        (int * int, reduction_error) result =
       match q with
       | Var v ->
           let condition_ket = lazy (Path_sum.Ket.member ~except v ps.ket) in
@@ -468,40 +468,62 @@ module Variable_replacement = struct
           if debug then
             printf "Reduction_rules.condition_to_substitute, ps.phase = %s\n\n"
               (PS.pretty ps.phase width);
-          if v < width then (0, -1)
-          else if Lazy.force condition_ket then (0, -1)
-          else if Lazy.force condition_phase then (0, -1)
-          else (1, v)
-      | Qubit.One | Qubit.Zero -> (0, -1)
+          if v < width then Ok (0, -1)
+          else if Lazy.force condition_ket then Ok (0, -1)
+          else if Lazy.force condition_phase then Ok (0, -1)
+          else Ok (1, v)
+      | Qubit.One | Qubit.Zero -> Ok (0, -1)
       | SumMod2 (Qubit.One, q1) ->
           if debug then
             printf
               "Reduction_rules.condition_to_substitute.SumMod2(1+q1), q1 = %s\n\n"
               (QS.pretty q1 width);
-          let nb, v = number_of_path_var_of_q_outside_q q1 in
-          if debug then
-            printf
-              "Reduction_rules.condition_to_substitute.SumMod2(1+q1), nb = %d\n\n"
-              nb;
-          (nb, v)
+          let path_var_count = number_of_path_var_of_q_outside_q q1 in
+          (match path_var_count with
+          | Error reduction_error -> Error reduction_error
+          | Ok (nb, v) ->
+              if debug then
+                printf
+                  "Reduction_rules.condition_to_substitute.SumMod2(1+q1), nb \
+                   = %d\n\n"
+                  nb;
+              if nb < 0 then
+                Error
+                  (MalformedPathSum
+                     "Rule_variable_replacement.number_of_path_var_of_q_outside_q: negative path-variable count")
+              else Ok (nb, v))
       | SumMod2 (q1, q2) | Prod (q1, q2) ->
-          let nb1, v1 = number_of_path_var_of_q_outside_q q1 in
-          if 1 < nb1 then (nb1, -1)
-          else
-            let nb2, v2 = number_of_path_var_of_q_outside_q q2 in
-            let nb = nb1 + nb2 in
-            if 1 < nb then (nb, -1)
-            else if 1 < nb2 then (nb2, -1)
-            else if nb1 = 1 then (nb1, v1)
-            else if nb2 = 1 then (nb2, v2)
-            else if nb1 = 0 then (0, -1)
-            else if nb2 = 0 then (0, -1)
-            else
-              failwith
-                "Rule_variable_replacement.number_of_path_var_of_q_outside_q.SumMod2"
+          let path_var_count1 = number_of_path_var_of_q_outside_q q1 in
+          (match path_var_count1 with
+          | Error reduction_error -> Error reduction_error
+          | Ok (nb1, v1) ->
+              if 1 < nb1 then Ok (nb1, -1)
+              else
+                let path_var_count2 = number_of_path_var_of_q_outside_q q2 in
+                match path_var_count2 with
+                | Error reduction_error -> Error reduction_error
+                | Ok (nb2, v2) ->
+                    let nb = nb1 + nb2 in
+                    (* Counts are matcher invariants: 0 means no candidate, 1
+                       means one candidate, and >1 means too many candidates. *)
+                    if nb1 < 0 || nb2 < 0 then
+                      Error
+                        (MalformedPathSum
+                           "Rule_variable_replacement.number_of_path_var_of_q_outside_q: negative path-variable count")
+                    else if 1 < nb then Ok (nb, -1)
+                    else if 1 < nb2 then Ok (nb2, -1)
+                    else if nb1 = 1 then Ok (nb1, v1)
+                    else if nb2 = 1 then Ok (nb2, v2)
+                    else if nb1 = 0 then Ok (0, -1)
+                    else if nb2 = 0 then Ok (0, -1)
+                    else
+                      Error
+                        (MalformedPathSum
+                           "Rule_variable_replacement.number_of_path_var_of_q_outside_q: unexpected path-variable count combination"))
     in
-    let nb, v = number_of_path_var_of_q_outside_q q in
-    if nb = 1 then Some v else None
+    match number_of_path_var_of_q_outside_q q with
+    | Error reduction_error -> Error reduction_error
+    | Ok (nb, v) -> Ok (if nb = 1 then Some v else None)
 
   (* original_qubit[qubit_to_replace <- replacement_qubit] *)
   let substitute_qubit_in_qubit original_qubit replacement_qubit qubit_to_replace
@@ -548,7 +570,8 @@ module Variable_replacement = struct
     in
     substitute_in_ket None 0
 
-  let variable_replacement ?(debug = false) (input : Path_sum.t) =
+  let variable_replacement_result ?(debug = false) (input : Path_sum.t) :
+      (Path_sum.t option, reduction_error) result =
     let width = Array.length input.ket in
 
     if debug then
@@ -561,27 +584,36 @@ module Variable_replacement = struct
       printf "Reduction_rules.variable_replacement, ps.phase = %s\n\n"
         (PS.pretty ps.phase width);
 
-    if List.equal Int.equal ps.path_var [] then None
+    if List.exists (fun path_var -> path_var < width) ps.path_var then
+      Error
+        (MalformedPathSum
+           "Rules.Variable_replacement.variable_replacement_result: path variable index below ket width")
+    else if List.equal Int.equal ps.path_var [] then Ok None
     else
       let new_y = ListBis.max_int ps.path_var + 1 in
 
       let rec iterate_over_qubits indice =
-        if Int.equal indice width then None
+        if Int.equal indice width then Ok None
         else
           let process_qubit (qubit_i : Qubit.t) =
             match qubit_i with
             | SumMod2 _ -> (
                 match condition_to_substitute ~debug qubit_i indice ps with
-                | Some v ->
-                    Some (substitute_qubit_in_ket ps.ket (Var new_y) qubit_i, v)
-                | None -> iterate_over_qubits (indice + 1))
+                | Error reduction_error -> Error reduction_error
+                | Ok (Some v) ->
+                    Ok
+                      (Some
+                         ( substitute_qubit_in_ket ps.ket (Var new_y) qubit_i,
+                           v ))
+                | Ok None -> iterate_over_qubits (indice + 1))
             | _ -> iterate_over_qubits (indice + 1)
           in
           process_qubit ps.ket.(indice)
       in
 
       match iterate_over_qubits 0 with
-      | Some (k, v) ->
+      | Error reduction_error -> Error reduction_error
+      | Ok (Some (k, v)) ->
           let output : Path_sum.t =
             {
               phase = ps.phase;
@@ -591,8 +623,13 @@ module Variable_replacement = struct
                   (new_y :: ListBis.remove v ps.path_var);
             }
           in
-          Some (Rename.rename output)
-      | None -> None
+          Ok (Some (Rename.rename output))
+      | Ok None -> Ok None
+
+  let variable_replacement ?(debug = false) (input : Path_sum.t) =
+    match variable_replacement_result ~debug input with
+    | Ok output -> output
+    | Error (MalformedPathSum message) -> failwith message
 
   (* Factorization by variable replacement.
    Example: phase = x0y0 + x0y1, ket = |y0 + y1>
@@ -795,7 +832,8 @@ module Variable_replacement = struct
     (1/2 * [x0] * [y1] + 1/2 * [y1] + 1/2 * [y2] * [y3])
     ->
     (1/2 * [x0] * [y0] + 1/2 * [y0] + 1/2 * [y1] * [y2]) *)
-  let poly_normalized ?(debug = false) (ps : Path_sum.t) =
+  let poly_normalized_result ?(debug = false) (ps : Path_sum.t) :
+      (Path_sum.t, reduction_error) result =
     if debug then
       printf "Rules.poly_normalised, input ps =\n%s\n%!" (PSS.pretty ps);
 
@@ -834,6 +872,21 @@ module Variable_replacement = struct
       printf "Rules.poly_normalised, path_var_poly = %s\n\n%!"
         (ListBis.string_int path_var_poly);
 
+    let invalid_path_var =
+      List.find_opt
+        (fun path_var -> path_var < wq || wq + nb_pvs <= path_var)
+        (path_var_poly @ path_var_ket)
+    in
+    match invalid_path_var with
+    | Some path_var ->
+        Error
+          (MalformedPathSum
+             (sprintf
+                "Rules.Variable_replacement.poly_normalized_result: path \
+                 variable %d is outside [%d,%d)"
+                path_var wq (wq + nb_pvs)))
+    | None ->
+
     let tmp_construct path_var =
       let rec aux i l =
         if debug then
@@ -843,10 +896,6 @@ module Variable_replacement = struct
         if wq <= i && i < wq + nb_pvs then
           match l with
           | hd :: tl ->
-              if hd < wq || wq + nb_pvs < wq then
-                failwith
-                  "Rules Variable_replacement.polynormalized hd out of bounds";
-
               if tmp.(hd - wq) = -1 then (
                 tmp.(hd - wq) <- i;
                 aux (i + 1) tl)
@@ -947,5 +996,10 @@ module Variable_replacement = struct
     let output : Path_sum.t =
       { phase = !poly; ket = !ket; path_var = ps.path_var }
     in
-    output
+    Ok output
+
+  let poly_normalized ?(debug = false) (ps : Path_sum.t) =
+    match poly_normalized_result ~debug ps with
+    | Ok output -> output
+    | Error (MalformedPathSum message) -> failwith message
 end

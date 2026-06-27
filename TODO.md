@@ -13,8 +13,10 @@
   corrections.
 - [ ] Continue the targeted reduction-to-equivalence audit, one issue at a
   time.
-- [ ] Remove the old untyped `Rules.HH.hh` entry point once the typed HH
-  reduction result is validated, before merging.
+- [ ] Remove the old untyped `Rules.HH.hh`,
+  `Rules.Variable_replacement.variable_replacement`, and
+  `Rules.Variable_replacement.poly_normalized` entry points once the typed
+  reduction results are validated, before merging.
 
 ## Done
 
@@ -75,4 +77,6 @@
   pending.
 - The current Equiv cleanup introduces typed reduction failures so malformed
   path sums are not confused with rules that simply do not apply. The old
-  untyped `Rules.HH.hh` entry point still has to be removed after validation.
+  untyped `Rules.HH.hh`, `Rules.Variable_replacement.variable_replacement`,
+  and `Rules.Variable_replacement.poly_normalized` entry points still have to be
+  removed after validation.
