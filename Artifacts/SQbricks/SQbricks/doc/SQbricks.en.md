@@ -264,7 +264,12 @@ a typed reduction result, for example `Ok path_sum` or
 `Error (MalformedPathSum message)`, then propagates it up to the public Equiv
 result as `ErrorMalformedPathSum`.
 
-The `HH` rule is the first case handled. During the migration, the old untyped
-`Rules.HH.hh` entry point remains temporarily for compatibility. Once the typed
-version is validated and used by the main pipeline, this old entry point must be
-removed before merging.
+The `HH` rule is the first case handled. `Variable_replacement` follows the
+same model for its main replacement step with
+`Rules.Variable_replacement.variable_replacement_result` and for normalization
+with `Rules.Variable_replacement.poly_normalized_result`. During the migration,
+the old untyped `Rules.HH.hh`,
+`Rules.Variable_replacement.variable_replacement`, and
+`Rules.Variable_replacement.poly_normalized` entry points remain temporarily for
+compatibility. Once the typed versions are validated and used by the main
+pipeline, these old entry points must be removed before merging.

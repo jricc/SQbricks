@@ -231,11 +231,28 @@ module Variable_replacement : sig
       Additionally, [poly_normalized] normalizes path variables to achieve a
       canonical form. *)
 
+  val variable_replacement_result :
+    ?debug:bool ->
+    Path_sum.t ->
+    (Path_sum.t option, reduction_error) result
+  (** [variable_replacement_result ?debug ps] is the typed version of
+      {!variable_replacement}. It returns [Ok (Some ps')] when one replacement
+      is applied, [Ok None] when no replacement applies, and
+      [Error (MalformedPathSum message)] when an internal matcher invariant is
+      violated. *)
+
   val variable_replacement : ?debug:bool -> Path_sum.t -> Path_sum.t option
 
   val variable_replacement_factorisation :
     ?debug:bool -> Path_sum.t -> Path_sum.t
 
   val replace_not_path_var_by_var : ?debug:bool -> Path_sum.t -> Path_sum.t
+
+  val poly_normalized_result :
+    ?debug:bool -> Path_sum.t -> (Path_sum.t, reduction_error) result
+  (** [poly_normalized_result ?debug ps] is the typed version of
+      {!poly_normalized}. It returns [Error (MalformedPathSum message)] when
+      the phase or ket contains a path variable not declared by [ps.path_var]. *)
+
   val poly_normalized : ?debug:bool -> Path_sum.t -> Path_sum.t
 end
