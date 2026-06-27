@@ -13,6 +13,8 @@
   corrections.
 - [ ] Continue the targeted reduction-to-equivalence audit, one issue at a
   time.
+- [ ] Remove the old untyped `Rules.HH.hh` entry point once the typed HH
+  reduction result is validated, before merging.
 
 ## Done
 
@@ -71,3 +73,5 @@
 - The large regression selection is in `scripts/paths/regression-large/`.
   It is prepared for run-only CSV generation; baseline/check behavior is still
   pending.
+- The next Equiv cleanup should type reduction failures explicitly so malformed
+  path sums are not confused with rules that simply do not apply.
