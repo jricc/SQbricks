@@ -1333,8 +1333,37 @@ let test_gates_apply ?(debug = true) (p : Program.t) (ps : Path_sum.t) () =
     (sprintf "Test.test_gates_apply\np = %s\n" (ProgS.pretty p))
     expected greeting
 
+let test_apply_hadamard_does_not_mutate_input () =
+  let input = Path_sum.ofSize 1 in
+  let input_before = PSS.exact input in
+  let _ = Gates.Apply_gates.apply_hadamard input [] 0 in
+  check string "input unchanged" input_before (PSS.exact input)
+
+let test_apply_not_does_not_mutate_input () =
+  let input = Path_sum.ofSize 1 in
+  let input_before = PSS.exact input in
+  let _ = Gates.Apply_gates.apply_not input [] 0 in
+  check string "input unchanged" input_before (PSS.exact input)
+
+let test_apply_classical_not_does_not_mutate_input () =
+  let input : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Zero |]; path_var = [] }
+  in
+  let input_before = PSS.exact input in
+  let _ = Gates.Apply_gates.apply_classical_not input 0 in
+  check string "input unchanged" input_before (PSS.exact input)
+
 let gates_apply =
   [
+    ( "apply_hadamard does not mutate input",
+      `Quick,
+      test_apply_hadamard_does_not_mutate_input );
+    ( "apply_not does not mutate input",
+      `Quick,
+      test_apply_not_does_not_mutate_input );
+    ( "apply_classical_not does not mutate input",
+      `Quick,
+      test_apply_classical_not_does_not_mutate_input );
     ("id", `Quick, test_gates_apply id (Path_sum.ofSize 0));
     ("h", `Quick, test_gates_apply (h 0) (Path_sum_library.h 0 1));
     ("x", `Quick, test_gates_apply (x 0) (Path_sum_library.x 0 1));
