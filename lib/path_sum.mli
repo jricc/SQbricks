@@ -163,10 +163,20 @@ module Ket : sig
 
   val substitute : ?debug:bool -> t -> int -> Qubit.t -> t
   (** [substitute ?debug state var expr] substitutes occurrences of variable
-      [var] in the ket [state] with qubit expression [expr].
+      [var] in the ket [state] with qubit expression [expr], without mutating
+      [state].
 
       Example(s):
       - [substitute [|Var 1|] 1 (Var 2)] returns [[|Var 2|]] *)
+
+  val substitute_many : ?debug:bool -> t -> (int * Qubit.t) list -> t
+  (** [substitute_many ?debug state substitutions] applies all variable
+      substitutions in one traversal of [state], without mutating [state].
+      Replacement expressions are not substituted again by the same call.
+
+      Example(s):
+      - [substitute_many [|Var 1; Var 2|] [(1, Var 3); (2, One)]] returns
+        [[|Var 3; One|]] *)
 end
 
 (** {1 Path Sum Representation} *)
@@ -239,8 +249,9 @@ val remove_path_var : t -> int -> t
 val substitute :
   ?debug:bool -> ?except_path_var:bool -> t -> int -> Qubit.t -> t
 (** [substitute ?debug ?except_path_var ps var expr] substitutes occurrences of
-    variable [var] in the path sum [ps] with qubit expression [expr]. If
-    [except_path_var] is [true], path variables are not substituted. *)
+    variable [var] in the path sum [ps] with qubit expression [expr], without
+    mutating [ps]. If [except_path_var] is [true], path variables are not
+    substituted. *)
 
 (** {1 Path Sum Library} *)
 
