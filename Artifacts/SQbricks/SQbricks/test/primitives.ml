@@ -684,6 +684,22 @@ let test_variable_replacement_factorisation ?(debug = true) (input : Path_sum.t)
     (sprintf "test_variable_replacement_factorisation")
     expected greeting
 
+let test_variable_replacement_factorisation_does_not_mutate_input () =
+  let phase =
+    Prod (Scal div2, Prod (Qubit x0, Qubit (v 1)))
+    +++ to_poly (Prod (Scal div2, Prod (Qubit x0, Qubit (v 2))))
+  in
+  let input : Path_sum.t =
+    {
+      phase;
+      ket = [| x0 ++ Qubit.Var 1 ++ Qubit.Var 2 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let input_before = PSS.exact input in
+  let _ = Rules.Variable_replacement.variable_replacement_factorisation input in
+  check string "input unchanged" input_before (PSS.exact input)
+
 let variable_replacement_factorisation =
   [
     ( "|x0> -> |x0>",
@@ -810,6 +826,9 @@ let variable_replacement_factorisation =
         { phase = p'; ket = [| x0 ++ Var 1 |]; path_var = [ 1 ] }
       in
       test_variable_replacement_factorisation ps ps' );
+    ( "factorisation does not mutate input",
+      `Quick,
+      test_variable_replacement_factorisation_does_not_mutate_input );
     ( "1/4 x0y0 + 1/4 x0y1 |x0+y0+y1> -> 1/4 x0y0 + 1/4 x0y1 |x0+y0+y1>",
       `Quick,
       let p =
@@ -849,6 +868,22 @@ let test_variable_replacement ?(debug = true) (input : Path_sum.t)
   let expected = true in
   check bool (sprintf "test_variable_replacement") expected greeting
 
+let test_replace_not_path_var_by_var_does_not_mutate_input () =
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| Qubit.SumMod2 (Qubit.One, Qubit.Var 2) |];
+      path_var = [ 2 ];
+    }
+  in
+  let input_before = PSS.exact input in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  let expected_output : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 2 |]; path_var = [ 2 ] }
+  in
+  check string "input unchanged" input_before (PSS.exact input);
+  check string "replacement result" (PSS.exact expected_output) (PSS.exact output)
+
 let v i = Qubit.Var i
 let mdiv s = Monome.Scal s
 
@@ -856,6 +891,9 @@ let mdiv s = Monome.Scal s
 
 let variable_replacement =
   [
+    ( "replace_not_path_var_by_var does not mutate input",
+      `Quick,
+      test_replace_not_path_var_by_var_does_not_mutate_input );
     ( "|x0> -> |x0>",
       `Quick,
       test_variable_replacement

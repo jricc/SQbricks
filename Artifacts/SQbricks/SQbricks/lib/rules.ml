@@ -483,26 +483,50 @@ module Variable_replacement = struct
     let nb, v = number_of_path_var_of_q_outside_q q in
     if nb = 1 then Some v else None
 
-  (* original_qubit[qubit_to_substitute <- new_qubit] *)
-  let substitute_qubit_in_qubit original_qubit new_qubit qubit_to_substitute :
-      Qubit.t =
-    let rec aux (q : Qubit.t) : Qubit.t =
-      match q with
-      | q when Qubit.equal q qubit_to_substitute -> new_qubit
-      | SumMod2 (q1, q2) -> SumMod2 (aux q1, aux q2)
-      | _ -> q
+  (* original_qubit[qubit_to_replace <- replacement_qubit] *)
+  let substitute_qubit_in_qubit original_qubit replacement_qubit qubit_to_replace
+      : Qubit.t =
+    let rec substitute_in_qubit (qubit : Qubit.t) : Qubit.t =
+      match qubit with
+      | qubit when Qubit.equal qubit qubit_to_replace -> replacement_qubit
+      | Qubit.SumMod2 (left_qubit, right_qubit) ->
+          Qubit.SumMod2
+            (substitute_in_qubit left_qubit, substitute_in_qubit right_qubit)
+      | Qubit.Prod (left_qubit, right_qubit) ->
+          Qubit.Prod
+            (substitute_in_qubit left_qubit, substitute_in_qubit right_qubit)
+      | _ -> qubit
     in
-    aux original_qubit
+    Qubit.simplify (substitute_in_qubit original_qubit)
 
-  (* original_ket[qubit_to_substitute <- new_qubit] *)
-  let substitute_qubit_in_ket (original_ket : Path_sum.Ket.t) new_qubit
-      qubit_to_substitute =
-    let width = Array.length original_ket in
-    for i = 0 to width - 1 do
-      original_ket.(i) <-
-        substitute_qubit_in_qubit original_ket.(i) new_qubit qubit_to_substitute
-    done;
-    original_ket
+  (* Keep the input ket unchanged. Allocate a new ket only when a substitution
+     really changes at least one qubit. *)
+  let substitute_qubit_in_ket (ket_before_substitution : Path_sum.Ket.t)
+      replacement_qubit qubit_to_replace =
+    let width = Array.length ket_before_substitution in
+    let rec substitute_in_ket changed_ket qubit_index =
+      if qubit_index = width then
+        match changed_ket with
+        | None -> ket_before_substitution
+        | Some changed_ket -> changed_ket
+      else
+        let original_qubit = ket_before_substitution.(qubit_index) in
+        let substituted_qubit =
+          substitute_qubit_in_qubit original_qubit replacement_qubit
+            qubit_to_replace
+        in
+        if Qubit.equal original_qubit substituted_qubit then
+          substitute_in_ket changed_ket (qubit_index + 1)
+        else
+          let changed_ket =
+            match changed_ket with
+            | Some changed_ket -> changed_ket
+            | None -> Array.copy ket_before_substitution
+          in
+          changed_ket.(qubit_index) <- substituted_qubit;
+          substitute_in_ket (Some changed_ket) (qubit_index + 1)
+    in
+    substitute_in_ket None 0
 
   let variable_replacement ?(debug = false) (input : Path_sum.t) =
     let width = Array.length input.ket in
@@ -687,37 +711,43 @@ module Variable_replacement = struct
     | None -> state
 
   let replace_not_path_var_by_var ?(debug = false) (input_state : Path_sum.t) =
-    let k : Path_sum.Ket.t = input_state.ket in
-    let width = Array.length k in
+    let width = Array.length input_state.ket in
 
-    let rec aux (i : int) (acc : Path_sum.t) =
-      if i = width then acc
+    let rec replace_qubits (qubit_index : int) (current_state : Path_sum.t) =
+      if qubit_index = width then current_state
       else
-        match k.(i) with
-        | Qubit.SumMod2 (One, Var v) when width < v ->
-            k.(i) <- Qubit.Var v;
-            let p_from_q : Poly.t =
+        let current_ket = current_state.ket in
+        match current_ket.(qubit_index) with
+        | Qubit.SumMod2 (Qubit.One, Qubit.Var path_var) when width < path_var ->
+            let ket_after_replacement = Array.copy current_ket in
+            ket_after_replacement.(qubit_index) <- Qubit.Var path_var;
+            let phase_replacement : Poly.t =
               Poly.insert
                 Monome.(Scal (Q.of_int 1))
                 (Poly.insert
-                   (Prod (Scal (Q.of_int (-1)), Qubit (Var v)))
+                   (Prod (Scal (Q.of_int (-1)), Qubit (Qubit.Var path_var)))
                    Poly.empty)
             in
             if debug then
               printf
                 "Rules.replace_not_path_var_by_var, input_state.phase = %s\n\n\
                  %!"
-                (PS.pretty input_state.phase width);
+                (PS.pretty current_state.phase width);
             if debug then
-              printf "Rules.replace_not_path_var_by_var, v = %d\n\n%!" v;
+              printf "Rules.replace_not_path_var_by_var, v = %d\n\n%!" path_var;
             if debug then
               printf "Rules.replace_not_path_var_by_var, p_from_q = %s\n\n%!"
-                (PS.pretty p_from_q width);
-            let new_p =
-              Poly.substitute_poly ~debug input_state.phase v p_from_q
+                (PS.pretty phase_replacement width);
+            let phase_after_replacement =
+              Poly.substitute_poly ~debug current_state.phase path_var
+                phase_replacement
             in
             let output_state : Path_sum.t =
-              { phase = new_p; ket = k; path_var = input_state.path_var }
+              {
+                phase = phase_after_replacement;
+                ket = ket_after_replacement;
+                path_var = current_state.path_var;
+              }
             in
             if debug then
               printf
@@ -730,10 +760,10 @@ module Variable_replacement = struct
                  %s\n\n\
                  %!"
                 (PSS.pretty simplified_state);
-            aux (i + 1) simplified_state
-        | _ -> aux (i + 1) acc
+            replace_qubits (qubit_index + 1) simplified_state
+        | _ -> replace_qubits (qubit_index + 1) current_state
     in
-    aux 0 input_state
+    replace_qubits 0 input_state
 
   module Ket = Path_sum.Ket
   module ArrayBis = Common.ArrayBis
