@@ -37,6 +37,11 @@
     - [Rename]
     - [Simplification]*)
 
+type reduction_error =
+  | MalformedPathSum of string
+      (** A reduction rule received a path sum that violates one of its
+          expected invariants. *)
+
 module Elim : sig
   (** This module implements the path variable elimination rule. It removes path
       variables from the list when they don't appear in either the ket or the
@@ -54,6 +59,16 @@ end
 module HH : sig
   (** This module implements the [HH] reduction rule for path variable
       elimination. *)
+
+  val hh_result :
+    ?debug:bool ->
+    ?y0_to_remove:int ->
+    Path_sum.t ->
+    (Path_sum.t, reduction_error) result
+  (** [hh_result ?debug ?y0_to_remove ps] is the typed version of {!hh}. It
+      returns [Ok ps'] when the rule succeeds or does not apply, and
+      [Error (MalformedPathSum message)] when [ps] violates an invariant needed
+      by the rule. *)
 
   val hh : ?debug:bool -> ?y0_to_remove:int -> Path_sum.t -> Path_sum.t
   (** [hh ?debug ?y0_to_remove ps] This rule looks for a path variable y0 that

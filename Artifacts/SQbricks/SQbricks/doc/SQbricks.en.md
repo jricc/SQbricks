@@ -257,13 +257,14 @@ The corresponding unit tests were added to `test/unitary.ml` for both
 `Sequence` and `Parallel`. The remaining Equiv corrections should continue on a
 dedicated branch after the non-regression benchmarks have been validated.
 
-The next planned change concerns reduction errors. A rule may simply not apply
-to a valid path sum, but it may also receive a malformed path sum. These two
-situations should not have the same return value. The goal is therefore to
-introduce a typed reduction result, for example `Ok path_sum` or
-`Error MalformedPathSum`, then propagate it up to the public Equiv result.
+The current migration concerns reduction errors. A rule may simply not apply to
+a valid path sum, but it may also receive a malformed path sum. These two
+situations should not have the same return value. The code therefore introduces
+a typed reduction result, for example `Ok path_sum` or
+`Error (MalformedPathSum message)`, then propagates it up to the public Equiv
+result as `ErrorMalformedPathSum`.
 
-The `HH` rule will be the first case handled. During the migration, the old
-untyped `Rules.HH.hh` entry point may remain temporarily for compatibility.
-Once the typed version is validated and used by the main pipeline, this old
-entry point must be removed before merging.
+The `HH` rule is the first case handled. During the migration, the old untyped
+`Rules.HH.hh` entry point remains temporarily for compatibility. Once the typed
+version is validated and used by the main pipeline, this old entry point must be
+removed before merging.

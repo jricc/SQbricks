@@ -73,5 +73,6 @@
 - The large regression selection is in `scripts/paths/regression-large/`.
   It is prepared for run-only CSV generation; baseline/check behavior is still
   pending.
-- The next Equiv cleanup should type reduction failures explicitly so malformed
-  path sums are not confused with rules that simply do not apply.
+- The current Equiv cleanup introduces typed reduction failures so malformed
+  path sums are not confused with rules that simply do not apply. The old
+  untyped `Rules.HH.hh` entry point still has to be removed after validation.
