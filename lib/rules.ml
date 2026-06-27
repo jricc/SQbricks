@@ -29,6 +29,8 @@ module KS = Ket.String
 module PSS = Path_sum.String
 module Monome = Poly.Monome
 
+type reduction_error = MalformedPathSum of string
+
 module Simplification = struct
   let simplify ?(debug = false) (ps : Path_sum.t) : Path_sum.t =
     {
@@ -121,40 +123,43 @@ module HH = struct
       Lazy.force occurrence_y0_yi_eq_1
     else false
 
-  let extract_yi y0 ?(debug = false) p_input n : int option =
+  let extract_yi y0 ?(debug = false) p_input n :
+      (int option, reduction_error) result =
     if n <= 0 then
-      failwith
-        (sprintf "Rule_hh.hh_aux.extract_yi, n must be > 0, n = %d\n%!" n);
-    let extract_yi_monome y0 (m : Monome.t) : int option =
-      match m with
-      | Prod (Scal s, Prod (Qubit (Var v1), Qubit (Var v2)))
-        when condition_to_extract_yi s v1 v2 n p_input y0 ->
-          if debug then
-            printf "1. Rule_hh.extract_yi\np =%s\nv1 = %d, v2 = %d\n%!"
-              (Monome.String.exact m) v1 v2;
-          Some v2
-      | Prod (Scal s, Prod (Qubit (Var v1), Qubit (Var v2)))
-        when condition_to_extract_yi s v2 v1 n p_input y0 ->
-          if debug then
-            printf "2. Rule_hh.extract_yi\np =%s\nv2 = %d, v1 = %d\n%!"
-              (Monome.String.exact m) v2 v1;
-          Some v1
-      | _ ->
-          if debug then
-            printf "6. Rule_hh.extract_yi\np =%s\n%!" (Monome.String.exact m);
-          None
-    in
-    let extract_yi_rec y0 (p : Poly.t) : int option =
-      let rec aux p =
-        if Poly.equal p empty then None
-        else
-          match extract_yi_monome y0 (find p) with
-          | Some yi -> Some yi
-          | None -> aux (del p)
+      Error
+        (MalformedPathSum
+           (sprintf "Rule_hh.hh_aux.extract_yi, n must be > 0, n = %d" n))
+    else
+      let extract_yi_monome y0 (m : Monome.t) : int option =
+        match m with
+        | Prod (Scal s, Prod (Qubit (Var v1), Qubit (Var v2)))
+          when condition_to_extract_yi s v1 v2 n p_input y0 ->
+            if debug then
+              printf "1. Rule_hh.extract_yi\np =%s\nv1 = %d, v2 = %d\n%!"
+                (Monome.String.exact m) v1 v2;
+            Some v2
+        | Prod (Scal s, Prod (Qubit (Var v1), Qubit (Var v2)))
+          when condition_to_extract_yi s v2 v1 n p_input y0 ->
+            if debug then
+              printf "2. Rule_hh.extract_yi\np =%s\nv2 = %d, v1 = %d\n%!"
+                (Monome.String.exact m) v2 v1;
+            Some v1
+        | _ ->
+            if debug then
+              printf "6. Rule_hh.extract_yi\np =%s\n%!" (Monome.String.exact m);
+            None
       in
-      aux p
-    in
-    extract_yi_rec y0 p_input
+      let extract_yi_rec y0 (p : Poly.t) : int option =
+        let rec aux p =
+          if Poly.equal p empty then None
+          else
+            match extract_yi_monome y0 (find p) with
+            | Some yi -> Some yi
+            | None -> aux (del p)
+        in
+        aux p
+      in
+      Ok (extract_yi_rec y0 p_input)
 
   let extract_Q_monome ?(debug = false) (m : Monome.t) y0 yi : Monome.t option =
     if debug then printf "Rule_hh.extract_Q, y0 = %d, yi = %d\n%!" y0 yi;
@@ -178,26 +183,30 @@ module HH = struct
             None)
     | _ -> None
 
-  let extract_Q ?(debug = false) (p : Poly.t) n y0 yi : Poly.t option =
+  let extract_Q ?(debug = false) (p : Poly.t) n y0 yi :
+      (Poly.t option, reduction_error) result =
     if n <= 0 then
-      failwith (sprintf "Rule_hh.hh_aux.extract_Q, n must be > 0, n = %d\n%!" n);
-    if debug then printf "Rule_hh.extract_Q, p = %s\n%!" (PS.exact p);
-    if debug then
-      printf "Rule_hh.extract_Q, n = %d, y0 = %d, yi = %d\n%!" n y0 yi;
-    let rec aux (p : Poly.t) (acc : Poly.t) : Poly.t option =
-      if Poly.equal p empty then (
-        if debug then printf "Rule_hh.extract_Q, acc = %s\n%!" (PS.exact acc);
-        Some acc)
-      else
-        let m, p_remain = (find p, del p) in
-        match extract_Q_monome ~debug m y0 yi with
-        | Some m1 ->
-            if debug then
-              printf "Rule_hh.extract_Q, m1 = %s\n%!" (Monome.String.exact m1);
-            aux p_remain (m1 ++ acc)
-        | None -> aux p_remain acc
-    in
-    aux p empty
+      Error
+        (MalformedPathSum
+           (sprintf "Rule_hh.hh_aux.extract_Q, n must be > 0, n = %d" n))
+    else (
+      if debug then printf "Rule_hh.extract_Q, p = %s\n%!" (PS.exact p);
+      if debug then
+        printf "Rule_hh.extract_Q, n = %d, y0 = %d, yi = %d\n%!" n y0 yi;
+      let rec aux (p : Poly.t) (acc : Poly.t) : Poly.t option =
+        if Poly.equal p empty then (
+          if debug then printf "Rule_hh.extract_Q, acc = %s\n%!" (PS.exact acc);
+          Some acc)
+        else
+          let m, p_remain = (find p, del p) in
+          match extract_Q_monome ~debug m y0 yi with
+          | Some m1 ->
+              if debug then
+                printf "Rule_hh.extract_Q, m1 = %s\n%!" (Monome.String.exact m1);
+              aux p_remain (m1 ++ acc)
+          | None -> aux p_remain acc
+      in
+      Ok (aux p empty))
 
   let y0_member_unauthorized y0 (p : Poly.t) =
     let y0_member_unauthorized_monome y0 (m : Monome.t) : bool =
@@ -213,17 +222,20 @@ module HH = struct
     let condition_poly = lazy (not (y0_member_unauthorized y0 ps.phase)) in
     if condition_ket then Lazy.force condition_poly else false
 
-  let hh_aux y0 ?(debug = false) (ps : Path_sum.t) =
+  let hh_aux y0 ?(debug = false) (ps : Path_sum.t) :
+      (Path_sum.t option, reduction_error) result =
     if debug then
       printf "Rule_hh.hh_aux, y0 = y%d\n%!" (y0 - Array.length ps.ket);
     if debug then printf "Rule_hh.hh_aux, ps =\n%!%s\n%!" (PSS.pretty ps);
     let n = Array.length ps.ket in
     match extract_yi ~debug y0 ps.phase n with
-    | Some yi -> (
+    | Error reduction_error -> Error reduction_error
+    | Ok (Some yi) -> (
         if debug then
           printf "Rule_hh.hh_aux, yi = y%d\n%!" (yi - Array.length ps.ket);
         match extract_Q ~debug ps.phase n y0 yi with
-        | Some q -> (
+        | Error reduction_error -> Error reduction_error
+        | Ok (Some q) -> (
             if debug then printf "Rule_hh.hh_aux, q = %s\n%!" (PS.pretty q n);
             if debug then
               printf "Rule_hh.hh_aux, ps.phase = %s\n%!" (PS.pretty ps.phase n);
@@ -247,7 +259,7 @@ module HH = struct
                     path_var = ps.path_var;
                   }
                 in
-                Some ps_output_simplified
+                Ok (Some ps_output_simplified)
             | None ->
                 let ps_output : Path_sum.t =
                   {
@@ -256,11 +268,12 @@ module HH = struct
                     path_var = ps.path_var;
                   }
                 in
-                Some ps_output)
-        | None -> None)
-    | None -> None
+                Ok (Some ps_output))
+        | Ok None -> Ok None)
+    | Ok None -> Ok None
 
-  let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) =
+  let hh_result ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
+      (Path_sum.t, reduction_error) result =
     let width = Array.length ps.ket in
     if Int.equal y0_to_remove (-1) then
       (* Try y0 in order of arrival *)
@@ -272,7 +285,8 @@ module HH = struct
               if debug then
                 printf "Rule_hh.hh.accepted, y0 = %d\n\n%!" (y0 - width);
               match hh_aux y0 acc ~debug with
-              | Some acc_reduced ->
+              | Error reduction_error -> Error reduction_error
+              | Ok (Some acc_reduced) ->
                   (if debug then
                      printf "Rule_hh.hh.accepted.match hh_aux, y0 = %d\n%!"
                        (y0 - width);
@@ -287,9 +301,9 @@ module HH = struct
                         (Simplification.simplify acc_reduced)
                         y0))
                     y0_remain
-              | None -> aux acc y0_remain)
+              | Ok None -> aux acc y0_remain)
             else aux acc y0_remain
-        | _ -> Elim.elim acc
+        | _ -> Ok (Elim.elim acc)
       in
       aux ps ps.path_var
     else if
@@ -297,7 +311,8 @@ module HH = struct
       y0_accepted y0_to_remove ps
     then
       match hh_aux y0_to_remove ps with
-      | Some ps_output ->
+      | Error reduction_error -> Error reduction_error
+      | Ok (Some ps_output) ->
           let ps_output : Path_sum.t =
             {
               phase = ps_output.phase;
@@ -305,9 +320,14 @@ module HH = struct
               path_var = ListBis.remove y0_to_remove ps_output.path_var;
             }
           in
-          ps_output
-      | None -> ps
-    else ps
+          Ok ps_output
+      | Ok None -> Ok ps
+    else Ok ps
+
+  let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) =
+    match hh_result ~debug ~y0_to_remove ps with
+    | Ok ps -> ps
+    | Error (MalformedPathSum message) -> failwith message
 end
 
 module Rename = struct

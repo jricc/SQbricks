@@ -73,6 +73,37 @@ let v i = Qubit.Var i
   check bool (sprintf "Primitives.test_normalise_path_var") expect greet *)
 
 let p0 = Poly.zero
+
+let malformed_zero_width_path_sum : Path_sum.t =
+  { phase = p0; ket = [||]; path_var = [ 0 ] }
+
+let test_hh_result_reports_malformed_path_sum () =
+  let malformed =
+    match Rules.HH.hh_result ~y0_to_remove:0 malformed_zero_width_path_sum with
+    | Error (Rules.MalformedPathSum _) -> true
+    | Ok _ -> false
+  in
+  check bool "malformed path sum" true malformed
+
+let test_reduction_result_reports_malformed_path_sum () =
+  let malformed =
+    match
+      Reduction_algorithm.reduction_algorithm_result malformed_zero_width_path_sum
+    with
+    | Error (Rules.MalformedPathSum _) -> true
+    | Ok _ -> false
+  in
+  check bool "malformed path sum" true malformed
+
+let hh =
+  [
+    ( "hh_result reports malformed path sum",
+      `Quick,
+      test_hh_result_reports_malformed_path_sum );
+    ( "reduction_algorithm_result reports malformed path sum",
+      `Quick,
+      test_reduction_result_reports_malformed_path_sum );
+  ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)
 (* 
@@ -1421,6 +1452,7 @@ let () =
     [
       ("Poly Normalise", poly_normalize);
       (* ("Normalise Path Variables", normalise_path_var); *)
+      ("HH", hh);
       ("Lift Poly", lift_poly);
       ("Lift Monome", lift_monome);
       ("Lift Qubit", lift_qubit);

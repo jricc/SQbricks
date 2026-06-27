@@ -261,14 +261,14 @@ les modes `Sequence` et `Parallel`. Les corrections Equiv restantes doivent
 continuer sur une branche dédiée après validation des benchmarks de
 non-régression.
 
-Le prochain changement prévu concerne les erreurs de réduction. Une règle peut
-ne pas s'appliquer à un path-sum valide, mais elle peut aussi recevoir un
-path-sum mal formé. Ces deux situations ne doivent pas avoir le même retour.
-L'objectif est donc d'introduire un résultat typé pour la réduction, par
-exemple `Ok path_sum` ou `Error MalformedPathSum`, puis de le propager jusqu'au
-résultat public d'Equiv.
+La migration en cours concerne les erreurs de réduction. Une règle peut ne pas
+s'appliquer à un path-sum valide, mais elle peut aussi recevoir un path-sum mal
+formé. Ces deux situations ne doivent pas avoir le même retour. Le code introduit
+donc un résultat typé pour la réduction, par exemple `Ok path_sum` ou
+`Error (MalformedPathSum message)`, puis le propage jusqu'au résultat public
+d'Equiv avec `ErrorMalformedPathSum`.
 
-La règle `HH` sera le premier cas traité. Pendant la migration, l'ancien point
-d'entrée non typé `Rules.HH.hh` peut rester temporairement pour compatibilité.
-Une fois la version typée validée et utilisée par le pipeline principal, cet
-ancien point d'entrée doit être supprimé avant merge.
+La règle `HH` est le premier cas traité. Pendant la migration, l'ancien point
+d'entrée non typé `Rules.HH.hh` reste temporairement pour compatibilité. Une fois
+la version typée validée et utilisée par le pipeline principal, cet ancien point
+d'entrée doit être supprimé avant merge.

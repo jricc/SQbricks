@@ -46,6 +46,8 @@ type result =
       (** Error: full-circuit equivalence is not implemented *)
   | ErrorBothCircuitsHaveInits
       (** Error: sequential equivalence cannot handle initializations on both circuits *)
+  | ErrorMalformedPathSum
+      (** Error: reduction received a malformed path sum *)
 
 val result_to_string : result -> string
 (** Converts an equivalence result to a string representation.
