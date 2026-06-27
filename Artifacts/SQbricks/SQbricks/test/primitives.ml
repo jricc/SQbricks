@@ -1079,6 +1079,26 @@ let test_substitute_path_var (ps : Path_sum.t) ps_expect () =
        (PSS.pretty ps_greet) (PSS.pretty ps_expect))
     expected greeting
 
+let test_substitute_path_var_does_not_mutate_input () =
+  let ps_input : Path_sum.t =
+    {
+      phase = to_poly (Qubit (Qubit.Var 2));
+      ket = [| Qubit.Var 2 |];
+      path_var = [ 2 ];
+    }
+  in
+  let input_before = PSS.exact ps_input in
+  let ps_greet = Rules.Rename._substitute_path_var ps_input [ (2, 1) ] in
+  let ps_expect : Path_sum.t =
+    {
+      phase = to_poly (Qubit (Qubit.Var 1));
+      ket = [| Qubit.Var 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  check string "input unchanged" input_before (PSS.exact ps_input);
+  check string "substitution result" (PSS.exact ps_expect) (PSS.exact ps_greet)
+
 let update_pvs =
   [
     ( "find_pvs ps1",
@@ -1141,6 +1161,9 @@ let update_pvs =
           ket = [| Var 0; Var 4; Var 5; Var 2 |];
           path_var = [ 4; 5 ];
         } );
+    ( "subst_pv does not mutate input",
+      `Quick,
+      test_substitute_path_var_does_not_mutate_input );
   ]
 
 let test_qubit q1 q2 () =
@@ -1171,6 +1194,33 @@ let test_ket k1 k2 () =
   let greeting = KS.exact k1 in
   let expected = KS.exact k2 in
   check string "same string" expected greeting
+
+let test_ket_substitute_does_not_mutate_input () =
+  let input =
+    [| Qubit.Var 1; Qubit.SumMod2 (Qubit.Var 1, Qubit.Var 2) |]
+  in
+  let input_before = KS.exact input in
+  let output = Ket.substitute input 1 (Qubit.Var 3) in
+  let expected =
+    [| Qubit.Var 3; Qubit.SumMod2 (Qubit.Var 2, Qubit.Var 3) |]
+  in
+  check string "input unchanged" input_before (KS.exact input);
+  check string "substitution result" (KS.exact expected) (KS.exact output)
+
+let test_ket_substitute_reuses_input_when_unchanged () =
+  let input = [| Qubit.Var 0 |] in
+  let output = Ket.substitute input 1 (Qubit.Var 2) in
+  check bool "same array when unchanged" true (input == output)
+
+let test_ket_substitute_many_single_pass () =
+  let input = [| Qubit.Var 1; Qubit.Var 2 |] in
+  let input_before = KS.exact input in
+  let output =
+    Ket.substitute_many input [ (1, Qubit.Var 2); (2, Qubit.One) ]
+  in
+  let expected = [| Qubit.Var 2; Qubit.One |] in
+  check string "input unchanged" input_before (KS.exact input);
+  check string "substitution result" (KS.exact expected) (KS.exact output)
 
 let k1 =
   [|
@@ -1214,6 +1264,15 @@ let ket =
              Var 0; SumMod2 (Prod (Var 5, One ++ Var 5), Prod (Var 2, Var 3));
            |])
         [| Var 0; Prod (Var 2, Var 3) |] );
+    ( "substitute does not mutate input",
+      `Quick,
+      test_ket_substitute_does_not_mutate_input );
+    ( "substitute reuses input when unchanged",
+      `Quick,
+      test_ket_substitute_reuses_input_when_unchanged );
+    ( "substitute_many is single pass",
+      `Quick,
+      test_ket_substitute_many_single_pass );
   ]
 
 let test_gates_apply ?(debug = true) (p : Program.t) (ps : Path_sum.t) () =

@@ -367,26 +367,34 @@ module Rename = struct
     in
     path_sum_update update_pvs pvs
 
-  let q v = Poly.q v
+  let path_var_as_poly path_var = Poly.q path_var
 
-  let _substitute_path_var_rec ket_input phase_input update_input =
-    let rec aux ket phase update_pvs =
-      match update_pvs with
-      | (pv, pv') :: [] ->
-          if Int.equal pv pv' then (ket, phase)
-          else
-            ( Path_sum.Ket.substitute ket pv (Var pv'),
-              Poly.substitute_poly phase pv (q pv') )
-      | (pv, pv') :: update_pvs' ->
-          if Int.equal pv pv' then aux ket phase update_pvs'
-          else
-            aux
-              (Path_sum.Ket.substitute ket pv (Var pv'))
-              (Poly.substitute_poly phase pv (q pv'))
-              update_pvs'
-      | [] -> (ket, phase)
+  let _substitute_path_vars_in_ket_and_phase ket_before_substitution
+      phase_before_substitution path_var_updates =
+    (* Ket substitutions are independent, so all variable renamings can be
+       applied in one traversal of the ket. *)
+    let ket_substitutions =
+      List.filter_map
+        (fun (old_path_var, new_path_var) ->
+          if Int.equal old_path_var new_path_var then None
+          else Some (old_path_var, Qubit.Var new_path_var))
+        path_var_updates
     in
-    aux ket_input phase_input update_input
+    let ket_after_substitution =
+      Path_sum.Ket.substitute_many ket_before_substitution ket_substitutions
+    in
+    (* The polynomial API substitutes one variable at a time, so the phase keeps
+       a fold even though the ket can use grouped substitutions. *)
+    let phase_after_substitution =
+      List.fold_left
+        (fun phase (old_path_var, new_path_var) ->
+          if Int.equal old_path_var new_path_var then phase
+          else
+            Poly.substitute_poly phase old_path_var
+              (path_var_as_poly new_path_var))
+        phase_before_substitution path_var_updates
+    in
+    (ket_after_substitution, phase_after_substitution)
 
   (** [_substitute_path_var ?debug ps substitutions] applies substitutions to
       all components of a path sum. Updates path variables in phase polynomial,
@@ -400,7 +408,9 @@ module Rename = struct
       - phase terms use y0 and y1 (3 - 3 and 4 - 3)
       - ket becomes |y0 + y1> *)
   let _substitute_path_var ?(debug = false) (ps : Path_sum.t) update_pvs =
-    let k, p = _substitute_path_var_rec ps.ket ps.phase update_pvs in
+    let k, p =
+      _substitute_path_vars_in_ket_and_phase ps.ket ps.phase update_pvs
+    in
     let ps_output : Path_sum.t =
       {
         phase = p;

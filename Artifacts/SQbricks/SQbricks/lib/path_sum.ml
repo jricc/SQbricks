@@ -32,6 +32,28 @@ module Ket = struct
 
   let copy input = Array.copy input
 
+  (* Keep unchanged kets physically shared; allocate one copy only when at least
+     one qubit really changes. *)
+  let map_qubits_copy_on_change transform_qubit ket =
+    let rec map_qubits changed_ket qubit_index =
+      if qubit_index = Array.length ket then
+        match changed_ket with None -> ket | Some changed_ket -> changed_ket
+      else
+        let original_qubit = ket.(qubit_index) in
+        let transformed_qubit = transform_qubit original_qubit in
+        if Qubit.equal original_qubit transformed_qubit then
+          map_qubits changed_ket (qubit_index + 1)
+        else
+          let changed_ket =
+            match changed_ket with
+            | Some changed_ket -> changed_ket
+            | None -> Array.copy ket
+          in
+          changed_ket.(qubit_index) <- transformed_qubit;
+          map_qubits (Some changed_ket) (qubit_index + 1)
+    in
+    map_qubits None 0
+
   let equal ?(debug = false) ?(outputs1 = []) ?(outputs2 = []) (k1 : t) (k2 : t)
       : bool * int IntMap.t * int IntMap.t =
     if debug then
@@ -165,28 +187,62 @@ module Ket = struct
       !s ^ "|]"
   end
 
+  let substitute_variables_in_qubit ?(debug = false) qubit_substitutions =
+    let substitution_map =
+      List.fold_left
+        (fun substitution_map (variable_to_replace, replacement_qubit) ->
+          IntMap.add variable_to_replace replacement_qubit substitution_map)
+        IntMap.empty qubit_substitutions
+    in
+    let rec substitute_in_qubit (qubit : Qubit.t) : Qubit.t =
+      if debug then
+        printf "Path_sum.Ket.substitute_in_qubit, qubit = %s\n"
+          (QS.exact qubit);
+      match qubit with
+      | Qubit.SumMod2 (left_qubit, right_qubit) ->
+          Qubit.SumMod2
+            (substitute_in_qubit left_qubit, substitute_in_qubit right_qubit)
+      | Qubit.Prod (left_qubit, right_qubit) ->
+          Qubit.Prod
+            (substitute_in_qubit left_qubit, substitute_in_qubit right_qubit)
+      | Qubit.Var variable_to_replace -> (
+          match IntMap.find_opt variable_to_replace substitution_map with
+          | Some replacement_qubit -> replacement_qubit
+          | None -> qubit)
+      | _ -> qubit
+    in
+    fun qubit -> Qubit.simplify (substitute_in_qubit qubit)
+
   (* ket[variable_indice <- qubit_to_substitute] *)
-  let substitute ?(debug = false) (input : t) (variable_indice : int)
-      qubit_to_substitute =
-    let rec aux (q : Qubit.t) : Qubit.t =
-      if debug then printf "Path_sum.Ket.substitute.aux, q = %s\n" (QS.exact q);
-      match q with
-      | Qubit.SumMod2 (q1', q2') -> Qubit.SumMod2 (aux q1', aux q2')
-      | Qubit.Prod (q1', q2') -> Qubit.Prod (aux q1', aux q2')
-      | Qubit.Var variable_indice'
-        when Int.equal variable_indice variable_indice' ->
-          qubit_to_substitute
-      | _ -> q
+  let substitute ?(debug = false) (ket : t) (variable_to_replace : int)
+      replacement_qubit =
+    if debug then
+      printf "Path_sum.Ket.substitute, ket = %s\n" (String.pretty ket);
+    let substituted_ket =
+      map_qubits_copy_on_change
+        (substitute_variables_in_qubit ~debug
+           [ (variable_to_replace, replacement_qubit) ])
+        ket
     in
     if debug then
-      printf "Path_sum.Ket.substitute, input = %s\n" (String.pretty input);
-    for i = 0 to Array.length input - 1 do
-      if debug then printf "Path_sum.Ket.substitute, i = %d\n" i;
-      input.(i) <- Qubit.simplify (aux input.(i))
-    done;
+      printf "Path_sum.Ket.substitute.end, substituted_ket = %s\n\n"
+        (String.pretty substituted_ket);
+    substituted_ket
+
+  let substitute_many ?(debug = false) ket qubit_substitutions =
     if debug then
-      printf "Path_sum.Ket.substitute.end, input = %s\n\n" (String.pretty input);
-    input
+      printf "Path_sum.Ket.substitute_many, ket = %s\n" (String.pretty ket);
+    let substituted_ket =
+      if List.is_empty qubit_substitutions then ket
+      else
+        map_qubits_copy_on_change
+          (substitute_variables_in_qubit ~debug qubit_substitutions)
+          ket
+    in
+    if debug then
+      printf "Path_sum.Ket.substitute_many.end, substituted_ket = %s\n\n"
+        (String.pretty substituted_ket);
+    substituted_ket
 
   (* 
 Need to have an input "Renamed" 
