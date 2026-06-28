@@ -31,12 +31,10 @@ Le projet contient deux capacités principales :
   équivalence.
 
 Le benchmark léger sert de garde-fou court avant de lancer des campagnes plus
-longues. Le benchmark long SQbricks-only reprend les familles historiques de
-`scripts/benchmarks.sh`, mais ne conserve que les vérifications SQbricks dans
-les CSV produits.
-
-Il n'y a pas de benchmark intermédiaire prévu pour l'instant. Il ferait surtout
-doublon avec le rôle du benchmark léger et celui du benchmark long.
+longues. La régression large sélectionnée vérifie un échantillon plus coûteux
+mais encore contrôlé. Le benchmark long SQbricks-only reprend les familles
+historiques de `scripts/benchmarks.sh`, mais ne conserve que les vérifications
+SQbricks dans les CSV produits.
 
 ## Commandes du benchmark léger
 
@@ -233,14 +231,22 @@ Les points d'entrée actuels sont :
 | --- | --- |
 | `make benchmark-regression-large TYPE=owm` | Lance une seule famille sélectionnée. |
 | `make regression-large` | Lance toutes les familles sélectionnées dans `LARGE_TYPES`. |
+| `make regression-large-baseline` | Produit les baselines sélectionnées, une par famille. |
+| `make regression-large-check` | Relance la sélection et compare les résultats aux baselines. |
 
 État actuel :
 
 - la sélection de chemins existe pour chaque famille du benchmark long ;
+- pour les familles ordonnées par taille, elle garde jusqu'à trois plus gros
+  représentants afin de ne pas dépendre d'un seul cas qui peut atteindre `TO`
+  ou `OutOfMemory` selon l'exécution ;
 - le runner écrit des CSV de résultat ;
-- le mode baseline/check n'est pas encore implémenté ;
-- la prochaine étape est de valider la sélection, puis d'ajouter une baseline et
-  un check séparés du benchmark léger.
+- les baselines sont stockées par famille dans
+  `benchmarks/baseline/regression-large/` ;
+- le check est séparé du benchmark léger. Il échoue si une ligne de baseline
+  disparaît, si une capacité fonctionnelle est perdue, ou si un temps mesuré
+  dépasse à la fois le seuil relatif et le seuil absolu configurés ;
+- une amélioration fonctionnelle est signalée mais ne fait pas échouer le check.
 
 ## Audit Equiv
 

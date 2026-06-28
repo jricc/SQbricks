@@ -5,8 +5,12 @@
 - [ ] Regenerate the local light baseline after the switch from median timing
   to best-observed timing.
 - [ ] Run `make regression-light-check` and validate the new result.
-- [ ] Finish the large regression workflow: review the selected paths, add
-  baseline/check behavior, then run baseline and check.
+- [ ] Generate the selected large regression baseline with
+  `make regression-large-baseline`, then run `make regression-large-check`
+  with the three-largest-cases-per-family selection.
+- [ ] Fix the `Equiv.parallel` behavior behind
+  `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
+  `SubCircuitInconclusive` instead of a timed equivalence result.
 - [ ] Rerun the long SQbricks-only benchmark with ordered-series cutoff and
   inspect the skipped rows.
 - [ ] Create or switch to a dedicated branch before continuing the Equiv
@@ -44,6 +48,7 @@
   failures with explicit equivalence results.
 - [x] Stop ordered long benchmark series after timeout or memory failure while
   keeping other series running.
+- [x] Add baseline/check behavior to the selected large regression workflow.
 
 ## Notes
 
@@ -63,11 +68,13 @@
   tools.
 - The long runner writes `SKIP_AFTER_RESOURCE_FAILURE` for larger cases in an
   ordered source-scoped series after `TO` or `OutOfMemory`.
-- No intermediate benchmark is planned: it would mostly duplicate the light and
-  long benchmark roles.
+- SQbricks-only benchmark levels are now split into light, selected large
+  regression, and full long benchmark.
 - The global benchmark audit compared the long SQbricks-only runner with
   `scripts/benchmarks.sh`, checked manifests, CSV shapes, Makefile entry
   points, and light runner validation tests.
 - The large regression selection is in `scripts/paths/regression-large/`.
-  It is prepared for run-only CSV generation; baseline/check behavior is still
-  pending.
+  It now has per-family baselines in `benchmarks/baseline/regression-large/`
+  and check targets separate from the light benchmark.
+- Size-ordered families in the large regression keep up to the three largest
+  representatives, plus isolated watchlist cases.
