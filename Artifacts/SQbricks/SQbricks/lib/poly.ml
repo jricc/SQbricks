@@ -28,7 +28,13 @@ module Monome = struct
   type q = Qubit.t
   type t = Scal of Q.t | Qubit of q | Prod of t * t
 
-  let equal ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
+  type equality_error = IncompatibleWidths | IncompletePathVariableMap
+
+  let equality_error_of_qubit = function
+    | Qubit.IncompatibleWidths -> IncompatibleWidths
+    | Qubit.IncompletePathVariableMap -> IncompletePathVariableMap
+
+  let equal_result ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
       ?(map_path_var1 = IntMap.empty) ?(map_path_var2 = IntMap.empty) (m1 : t)
       (m2 : t) =
     if debug then
@@ -38,16 +44,34 @@ module Monome = struct
 
     let rec aux (m1 : t) (m2 : t) =
       match (m1, m2) with
-      | Scal s1, Scal s2 -> Q.equal s1 s2
+      | Scal s1, Scal s2 -> Ok (Q.equal s1 s2)
       | Qubit q1, Qubit q2 ->
           if debug then
             printf "Monome.equal, q1 = %s, q2 = %s\n\n%!" (QS.exact q1)
               (QS.exact q2);
-          Qubit.equal ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2 q1 q2
-      | Prod (q1, q2), Prod (q3, q4) -> aux q1 q3 && aux q2 q4
-      | _ -> false
+          (match
+             Qubit.equal_result ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2
+               q1 q2
+           with
+          | Ok are_equal -> Ok are_equal
+          | Error error -> Error (equality_error_of_qubit error))
+      | Prod (q1, q2), Prod (q3, q4) -> (
+          match aux q1 q3 with
+          | Error error -> Error error
+          | Ok false -> Ok false
+          | Ok true -> aux q2 q4)
+      | _ -> Ok false
     in
     aux m1 m2
+
+  let equal ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
+      ?(map_path_var1 = IntMap.empty) ?(map_path_var2 = IntMap.empty) (m1 : t)
+      (m2 : t) =
+    match
+      equal_result ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2 m1 m2
+    with
+    | Ok are_equal -> are_equal
+    | Error _ -> false
 
   let rec compare (m1 : t) (m2 : t) =
     match (m1, m2) with
@@ -210,33 +234,68 @@ module Monome = struct
     | Qubit q -> Qubit.member v q
     | _ -> false
 
-  let of_qubit_to (q : Qubit.t) : t =
+  type of_qubit_error = CannotConvertSumMod2
+
+  let of_qubit_to_result (q : Qubit.t) : (t, of_qubit_error) result =
     let rec aux (q : Qubit.t) =
       match q with
-      | One -> Scal Q.one
-      | Zero -> Scal Q.zero
-      | Var _ -> Qubit q
-      | Prod (q1, q2) -> simplify (Prod (aux q1, aux q2))
-      | SumMod2 _ -> failwith "SumMod2 forbidden in of_qubit_to"
+      | One -> Ok (Scal Q.one)
+      | Zero -> Ok (Scal Q.zero)
+      | Var _ -> Ok (Qubit q)
+      | Prod (q1, q2) -> (
+          match aux q1 with
+          | Error error -> Error error
+          | Ok m1 -> (
+              match aux q2 with
+              | Error error -> Error error
+              | Ok m2 -> Ok (simplify (Prod (m1, m2)))))
+      | SumMod2 _ -> Error CannotConvertSumMod2
     in
     aux q
 
-  let to_qubit ?(debug = false) (p : t) : Qubit.t =
-    let rec to_qubit_rec (p : t) : Qubit.t =
+  let of_qubit_to (q : Qubit.t) : t =
+    match of_qubit_to_result q with
+    | Ok monome -> monome
+    | Error CannotConvertSumMod2 ->
+        failwith "SumMod2 forbidden in of_qubit_to"
+
+  type to_qubit_error = CannotConvertScalarToQubit of Q.t
+
+  let to_qubit_result ?(debug = false) (p : t) :
+      (Qubit.t, to_qubit_error) result =
+    let rec to_qubit_rec (p : t) =
       if debug then printf "Phase.to_qubit_rec, p = %s\n" (String.pretty p 2);
       match p with
-      | Scal s when Q.equal s Q.zero -> Zero
-      | Scal s when Q.equal s Q.one -> One
-      | Scal s ->
-          failwith (sprintf "Phase.to_qubit_rec, s = %s" (Q.to_string s))
+      | Scal s when Q.equal s Q.zero -> Ok Qubit.Zero
+      | Scal s when Q.equal s Q.one -> Ok Qubit.One
+      | Scal s -> Error (CannotConvertScalarToQubit s)
       | Qubit q ->
           if debug then printf "Phase.to_qubit_rec, q = %s\n" (QS.pretty q 2);
-          q
-      | Prod (p1, p2) -> Prod (to_qubit_rec p1, to_qubit_rec p2)
+          Ok q
+      | Prod (p1, p2) -> (
+          match to_qubit_rec p1 with
+          | Error error -> Error error
+          | Ok q1 -> (
+              match to_qubit_rec p2 with
+              | Error error -> Error error
+              | Ok q2 -> Ok (Qubit.Prod (q1, q2))))
     in
-    Qubit.simplify (to_qubit_rec p)
+    match to_qubit_rec p with
+    | Error error -> Error error
+    | Ok qubit -> Ok (Qubit.simplify qubit)
 
-  let remove v m =
+  let to_qubit ?(debug = false) (p : t) : Qubit.t =
+    match to_qubit_result ~debug p with
+    | Ok qubit -> qubit
+    | Error (CannotConvertScalarToQubit s) ->
+        failwith (sprintf "Phase.to_qubit_rec, s = %s" (Q.to_string s))
+
+  type remove_error = CannotRemoveQubitSum
+
+  let remove_error_of_qubit = function
+    | Qubit.CannotRemoveFromSum -> CannotRemoveQubitSum
+
+  let remove_result v m =
     let v_removed = ref false in
     let rec aux m =
       match m with
@@ -246,17 +305,30 @@ module Monome = struct
       | Prod (Qubit (Var v1), m1) when v = v1 ->
           v_removed := true;
           aux m1
-      | Prod (m1, m2) -> Prod (aux m1, aux m2)
+      | Prod (m1, m2) -> (
+          match aux m1 with
+          | Error error -> Error error
+          | Ok m1_output -> (
+              match aux m2 with
+              | Error error -> Error error
+              | Ok m2_output -> Ok (Prod (m1_output, m2_output))))
       | Qubit q -> (
-          match Qubit.remove v q with
-          | Some q_without_v ->
+          match Qubit.remove_result v q with
+          | Error error -> Error (remove_error_of_qubit error)
+          | Ok (Some q_without_v) ->
               v_removed := true;
-              Qubit q_without_v
-          | None -> Qubit q)
-      | _ -> m
+              Ok (Qubit q_without_v)
+          | Ok None -> Ok (Qubit q))
+      | _ -> Ok m
     in
-    let m_output = simplify (aux m) in
-    if !v_removed then Some m_output else None
+    match aux m with
+    | Error error -> Error error
+    | Ok m_output -> Ok (if !v_removed then Some (simplify m_output) else None)
+
+  let remove v m =
+    match remove_result v m with
+    | Ok output -> output
+    | Error CannotRemoveQubitSum -> None
 
   let remove_qubit qubit_to_remove m =
     let qubit_removed = ref false in
@@ -372,11 +444,15 @@ end
 (** TODO : utiliser [find_opt] dans la suite *)
 let find_opt (poly : t) = if poly = empty then None else Some (find poly)
 
-(** Compares two polynomials p1 and p2. Returns true if they are equal,
-    optionally ignoring global phases. *)
-let equal ?(global_phase = false) ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
-    ?(map_path_var1 = IntMap.empty) ?(map_path_var2 = IntMap.empty) (p1 : t)
-    (p2 : t) =
+type equality_error = IncompatibleWidths | IncompletePathVariableMap
+
+let equality_error_of_monome = function
+  | Monome.IncompatibleWidths -> IncompatibleWidths
+  | Monome.IncompletePathVariableMap -> IncompletePathVariableMap
+
+let equal_result ?(global_phase = false) ?(debug = false) ?(wq1 = 0)
+    ?(wq2 = 0) ?(map_path_var1 = IntMap.empty)
+    ?(map_path_var2 = IntMap.empty) (p1 : t) (p2 : t) =
   if debug then
     printf "Poly.equal,  p1 = %s\n  p2 = %s\n%!" (String.exact p1)
       (String.exact p2);
@@ -391,8 +467,8 @@ let equal ?(global_phase = false) ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
   (* Recursive structural comparison *)
   let rec compare_poly (a : t) (b : t) =
     match (a = empty, b = empty) with
-    | true, true -> true
-    | true, false | false, true -> false
+    | true, true -> Ok true
+    | true, false | false, true -> Ok false
     | false, false ->
         let m1, rest1 = (find a, del a) in
         let m2, rest2 = (find b, del b) in
@@ -401,8 +477,13 @@ let equal ?(global_phase = false) ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
           printf "Poly.equal,\nm1 = %s\nm2 = %s\n\n%!" (MS.exact m1)
             (MS.exact m2);
 
-        Monome.equal ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2 m1 m2
-        && compare_poly rest1 rest2
+        match
+          Monome.equal_result ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2 m1
+            m2
+        with
+        | Error error -> Error (equality_error_of_monome error)
+        | Ok false -> Ok false
+        | Ok true -> compare_poly rest1 rest2
   in
 
   (* Clean up input polynomials if global phase should be ignored *)
@@ -410,6 +491,18 @@ let equal ?(global_phase = false) ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
   let p2' = if global_phase then drop_global_phase p2 else p2 in
 
   compare_poly p1' p2'
+
+(** Compares two polynomials p1 and p2. Returns true if they are equal,
+    optionally ignoring global phases. *)
+let equal ?(global_phase = false) ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
+    ?(map_path_var1 = IntMap.empty) ?(map_path_var2 = IntMap.empty) (p1 : t)
+    (p2 : t) =
+  match
+    equal_result ~global_phase ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2 p1
+      p2
+  with
+  | Ok are_equal -> are_equal
+  | Error _ -> false
 
 (* insert keeps duplicate *)
 let insert (m : Monome.t) (p : PolyHeap.t) : PolyHeap.t = PolyHeap.insert p m
@@ -596,9 +689,12 @@ let forall (p : t) (f : Monome.t -> t) =
   in
   aux p empty
 
-let distribution ?(debug = false) ?(s1 = Q.one) (m1 : Monome.t) (p2 : t) : t =
+type distribution_error = UnformattedDistributionMonome
+
+let distribution_result ?(debug = false) ?(s1 = Q.one) (m1 : Monome.t)
+    (p2 : t) : (t, distribution_error) result =
   let rec aux p2 acc =
-    if equal p2 empty then acc
+    if equal p2 empty then Ok acc
     else
       let m2 : Monome.t = find p2 in
       let p2_remain = del p2 in
@@ -609,7 +705,7 @@ let distribution ?(debug = false) ?(s1 = Q.one) (m1 : Monome.t) (p2 : t) : t =
         printf "Poly.distribution, p2_remain = %s\n%!" (String.exact p2_remain);
       let add_to_acc m3 = aux p2_remain (m3 ++ acc) in
       match m2 with
-      | Prod (_, Scal _) -> failwith "Phase.distribution, m2 is not formatted"
+      | Prod (_, Scal _) -> Error UnformattedDistributionMonome
       | Prod (Scal s2, m2') ->
           let m3' : Monome.t = Prod (Scal (Q.mul s1 s2), Prod (m1, m2')) in
           if debug then printf "Poly.distribution, m3' = %s\n%!" (MS.exact m3');
@@ -626,6 +722,12 @@ let distribution ?(debug = false) ?(s1 = Q.one) (m1 : Monome.t) (p2 : t) : t =
   in
   aux p2 empty
 
+let distribution ?(debug = false) ?(s1 = Q.one) (m1 : Monome.t) (p2 : t) : t =
+  match distribution_result ~debug ~s1 m1 p2 with
+  | Ok poly -> poly
+  | Error UnformattedDistributionMonome ->
+      failwith "Phase.distribution, m2 is not formatted"
+
 let prod ?(debug = false) ?(s1 = Q.one) p1 p2 =
   if debug then printf "Phase.prod, p2 = %s\n" (String.exact p2);
   let rec aux p1 acc =
@@ -638,22 +740,44 @@ let prod ?(debug = false) ?(s1 = Q.one) p1 p2 =
   in
   aux (simplify_monomes p1) empty
 
-let of_qubit ?(debug = false) (q : Qubit.t) (s : Q.t) : t =
-  let rec aux (q : Qubit.t) : t =
+type of_qubit_error = UnformattedQubitSum
+
+let of_qubit_error_of_monome = function
+  | Monome.CannotConvertSumMod2 -> UnformattedQubitSum
+
+let of_qubit_result ?(debug = false) (q : Qubit.t) (s : Q.t) :
+    (t, of_qubit_error) result =
+  let rec aux (q : Qubit.t) =
     match q with
-    | SumMod2 (SumMod2 _, _) -> failwith "q must be formatted"
-    | SumMod2 (q1, q2) ->
-        let p1 = simplify_monomes (aux q1) in
-        if debug then printf "Phase.of_qubit, p1 = %s\n" (String.exact p1);
-        let p2 = simplify_monomes (aux q2) in
-        if debug then printf "Phase.of_qubit, p2 = %s\n" (String.exact p2);
-        let coef = coef_lift s in
-        if debug then printf "Phase.of_qubit, coef = %s\n" (Q.to_string coef);
-        if Q.equal coef Q.zero then p1 @@ p2
-        else p1 @@ p2 @@ prod ~s1:coef p1 p2
-    | _ -> Monome.of_qubit_to q ++ empty
+    | SumMod2 (SumMod2 _, _) -> Error UnformattedQubitSum
+    | SumMod2 (q1, q2) -> (
+        match aux q1 with
+        | Error error -> Error error
+        | Ok p1 -> (
+            let p1 = simplify_monomes p1 in
+            if debug then printf "Phase.of_qubit, p1 = %s\n" (String.exact p1);
+            match aux q2 with
+            | Error error -> Error error
+            | Ok p2 ->
+                let p2 = simplify_monomes p2 in
+                if debug then
+                  printf "Phase.of_qubit, p2 = %s\n" (String.exact p2);
+                let coef = coef_lift s in
+                if debug then
+                  printf "Phase.of_qubit, coef = %s\n" (Q.to_string coef);
+                if Q.equal coef Q.zero then Ok (p1 @@ p2)
+                else Ok (p1 @@ p2 @@ prod ~s1:coef p1 p2)))
+    | _ -> (
+        match Monome.of_qubit_to_result q with
+        | Ok monome -> Ok (monome ++ empty)
+        | Error error -> Error (of_qubit_error_of_monome error))
   in
   aux q
+
+let of_qubit ?(debug = false) (q : Qubit.t) (s : Q.t) : t =
+  match of_qubit_result ~debug q s with
+  | Ok poly -> poly
+  | Error UnformattedQubitSum -> failwith "q must be formatted"
 
 (*
   Simplified version of `of_qubit`.
@@ -662,23 +786,38 @@ let of_qubit ?(debug = false) (q : Qubit.t) (s : Q.t) : t =
   Indeed, we have the following equality:
   e^{2π * 1/2 * (x0 + x1 - 2 * x0 * x1)} = e^{2π * 1/2 * (x0 + x1)}
   *)
-let of_qubit_2_pi ?(debug = false) (q : Qubit.t) : t =
-  let rec aux (q : Qubit.t) : t =
+let of_qubit_2_pi_result ?(debug = false) (q : Qubit.t) :
+    (t, of_qubit_error) result =
+  let rec aux (q : Qubit.t) =
     match q with
-    | SumMod2 (SumMod2 _, _) -> failwith "q must be formatted"
-    | SumMod2 (q1, q2) ->
-        let p1 = aux q1 in
-        if debug then printf "Phase.of_qubit_2_pi, p1 = %s\n" (String.exact p1);
-        let p2 = aux q2 in
-        if debug then printf "Phase.of_qubit_2_pi, p2 = %s\n" (String.exact p2);
-        let p_output = simplify_monomes (p1 @@ p2) in
-        if debug then
-          printf "Phase.of_qubit_2_pi, p_output = %s\n\n"
-            (String.exact p_output);
-        p_output
-    | _ -> Monome.of_qubit_to q ++ empty
+    | SumMod2 (SumMod2 _, _) -> Error UnformattedQubitSum
+    | SumMod2 (q1, q2) -> (
+        match aux q1 with
+        | Error error -> Error error
+        | Ok p1 -> (
+            if debug then
+              printf "Phase.of_qubit_2_pi, p1 = %s\n" (String.exact p1);
+            match aux q2 with
+            | Error error -> Error error
+            | Ok p2 ->
+                if debug then
+                  printf "Phase.of_qubit_2_pi, p2 = %s\n" (String.exact p2);
+                let p_output = simplify_monomes (p1 @@ p2) in
+                if debug then
+                  printf "Phase.of_qubit_2_pi, p_output = %s\n\n"
+                    (String.exact p_output);
+                Ok p_output))
+    | _ -> (
+        match Monome.of_qubit_to_result q with
+        | Ok monome -> Ok (monome ++ empty)
+        | Error error -> Error (of_qubit_error_of_monome error))
   in
   aux q
+
+let of_qubit_2_pi ?(debug = false) (q : Qubit.t) : t =
+  match of_qubit_2_pi_result ~debug q with
+  | Ok poly -> poly
+  | Error UnformattedQubitSum -> failwith "q must be formatted"
 
 (* In the following, we identify s with k1/2^k2 *)
 (* `s` is the poly scalar *)
@@ -699,14 +838,28 @@ let lift ?(debug = false) (p : t) (s : Q.t) : t =
   in
   aux p
 
-let to_qubit (p : t) : Qubit.t =
+type to_qubit_error = CannotConvertScalarMonomeToQubit of Q.t
+
+let to_qubit_error_of_monome = function
+  | Monome.CannotConvertScalarToQubit scalar ->
+      CannotConvertScalarMonomeToQubit scalar
+
+let to_qubit_result (p : t) : (Qubit.t, to_qubit_error) result =
   let rec aux p (acc : Qubit.t) =
-    if equal p empty then acc
+    if equal p empty then Ok acc
     else
       let m, p_remain = (find p, del p) in
-      aux p_remain (SumMod2 (Monome.to_qubit m, acc))
+      match Monome.to_qubit_result m with
+      | Error error -> Error (to_qubit_error_of_monome error)
+      | Ok qubit -> aux p_remain (Qubit.SumMod2 (qubit, acc))
   in
   aux p Qubit.Zero
+
+let to_qubit (p : t) : Qubit.t =
+  match to_qubit_result p with
+  | Ok qubit -> qubit
+  | Error (CannotConvertScalarMonomeToQubit scalar) ->
+      failwith (sprintf "Phase.to_qubit_rec, s = %s" (Q.to_string scalar))
 
 (* m[yi <- Q] *)
 let substitute_rules_monome_hh ?(debug = false) (yi : int) (q : t)

@@ -149,6 +149,18 @@ val member : int -> t -> bool
     - [member 1 (Var 1)] returns [true]
     - [member 1 (Prod (Var 1, Var 2))] returns [true] *)
 
+type remove_error = CannotRemoveFromSum
+(** Errors that can prevent variable removal from a qubit expression.
+
+    [CannotRemoveFromSum] means the expression contains a [SumMod2] where the
+    requested variable cannot be isolated by this helper. *)
+
+val remove_result : int -> t -> (t option, remove_error) result
+(** [remove_result v q] is the typed version of {!remove}. It returns
+    [Ok (Some q')] when [Var v] was removed, [Ok None] when [Var v] is absent
+    or cannot be removed from a product, and [Error CannotRemoveFromSum] when
+    the expression contains a sum. *)
+
 val remove : int -> t -> t option
 (** [remove v q] removes variable [Var v] from expression [q] when possible.
 

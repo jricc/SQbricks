@@ -80,3 +80,17 @@
   untyped `Rules.HH.hh`, `Rules.Variable_replacement.variable_replacement`,
   and `Rules.Variable_replacement.poly_normalized` entry points still have to be
   removed after validation.
+- Watch the behavior change in `Path_sum.substitute_result`: target path
+  variables are now protected. This is intended, but it may expose a bug if an
+  external caller relied on the old `except_path_var=true` behavior still
+  substituting inside `phase` or `ket`.
+- Watch the stricter `Ket.path_var_order_result` behavior: a ket containing
+  path variables while the declared path-variable count is zero now reports
+  malformed metadata instead of silently returning empty ordering arrays.
+- Watch the recent direct `Poly.t` construction in tests: replacing local
+  `to_poly` uses with `+++ Poly.empty` should be equivalent, but it may expose a
+  hidden ordering or duplicate-insertion assumption in polynomial tests.
+- Watch the new typed `Path_sum_library` gate constructors: the non-typed
+  wrappers should preserve the old path sums and failure order, but this broad
+  mechanical pass may expose a mismatch in one gate formula or target-index
+  validation path.

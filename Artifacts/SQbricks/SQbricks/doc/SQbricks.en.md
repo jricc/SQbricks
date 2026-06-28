@@ -273,3 +273,84 @@ the old untyped `Rules.HH.hh`,
 `Rules.Variable_replacement.poly_normalized` entry points remain temporarily for
 compatibility. Once the typed versions are validated and used by the main
 pipeline, these old entry points must be removed before merging.
+
+Symbolic comparison now follows the same principle. The functions
+`Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
+`Path_sum.Ket.equal_result`, and `Path_sum.equal_result` distinguish a real
+equality answer (`Ok true` or `Ok false`) from a malformed comparison. The
+currently typed cases are incompatible widths, incomplete path-variable maps,
+output lists with different lengths, and invalid output indices. The old
+`equal` functions remain compatibility wrappers that return `false` on typed
+errors. Unit tests cover each observable return possibility for these typed
+results.
+
+Initial path-sum construction follows the same model with
+`Path_sum.ofSize_init_result`. The function builds the initial state of width
+`width`, sets the qubits listed in `inits_0` to `Zero`, then renumbers the other
+qubits as input variables `Var 0`, `Var 1`, etc. It returns
+`Error InvalidWidth` when the width is negative and `Error InvalidInitIndex`
+when an index from `inits_0` is outside `[0, width)`. The validated tests cover
+the cases with no initialization, with one or several initialized qubits, zero
+width, and both typed errors.
+
+Path-sum substitution is typed with `Path_sum.substitute_result`. It substitutes
+only free variables in the phase and ket. A variable declared in `path_var` is a
+bound summation variable: it cannot be substituted like a free variable. If the
+target is a path variable, the function returns
+`Error CannotSubstitutePathVariable`; with `except_path_var=true`, it protects
+that variable and returns the path sum unchanged. The old
+`Path_sum.substitute` remains a compatibility wrapper.
+
+Path-variable ordering is typed with `Path_sum.Ket.path_var_order_result`. It
+reconstructs the temporary and final order of path variables present in a ket.
+It returns `Error InvalidPathVariableCount` when the declared path-variable
+count is negative and `Error InvalidPathVariableIndex` when the ket contains a
+path variable outside the declared interval. This behavior is stricter than the
+old one: a ket that contains path variables while the declared count is zero is
+now reported as malformed.
+
+Several local operations on qubits, monomials, and polynomials now also have a
+typed return:
+
+- `Qubit.remove_result` distinguishes an effective removal, an absent variable,
+  and the non-isolatable `CannotRemoveFromSum` case;
+- `Poly.Monome.remove_result` propagates this case as
+  `CannotRemoveQubitSum`;
+- `Poly.Monome.of_qubit_to_result` explicitly rejects `SumMod2` with
+  `CannotConvertSumMod2`;
+- `Poly.Monome.to_qubit_result` reports scalars that do not directly represent
+  a qubit with `CannotConvertScalarToQubit`;
+- `Poly.to_qubit_result` and `Poly.of_qubit_result` type conversions between
+  polynomials and qubits, including unformatted modulo-2 sums;
+- `Poly.of_qubit_2_pi_result` uses the same formatting contract as
+  `Poly.of_qubit_result`, but applies the shortcut for the `2*pi` case.
+
+The old wrappers remain in place during the migration. They preserve historical
+behavior, often still raising `Failure` or returning `None`, but the new tests
+target the `*_result` versions.
+
+Polynomial algebra now exposes `Poly.distribution_result`. This function
+distributes a monomial over a polynomial and returns
+`Error UnformattedDistributionMonome` when a monomial from the right polynomial
+has a scalar on the right (`Prod (_, Scal _)`). This case previously raised in
+`Poly.distribution`. The untyped wrapper remains available for compatibility.
+
+The gate constructors in `Path_sum.Path_sum_library` now have public typed
+versions. Their common contract is simple: a target, control, or secondary
+control outside the declared width returns `Error TargetIndexOutOfWidth`. The
+old constructors remain compatibility wrappers that preserve the historical
+failure message.
+
+The validated typed constructors are:
+
+- single-target gates: `h_result`, `x_result`, `u1_result`, `z_result`,
+  `s_result`, `t_result`, `zinv_result`, `sinv_result`, `tinv_result`,
+  `rz_result`, `rx_result`, `ry_result`;
+- controlled gates: `ch_result`, `cx_result`, `crz_result`, `cz_result`,
+  `cs_result`, `ct_result`;
+- double-controlled gates: `ccx_result`, `ccz_result`.
+
+The internal helpers that depended on index validation were also typed,
+including `normalisation_factor_result`, `q2_result`, and `ccrz_result`. They
+are not exposed in the public interface, but they let the public typed
+constructors propagate the error instead of triggering an uncontrolled failure.

@@ -79,23 +79,40 @@ let reduction_for_equiv ?(debug = false) state =
   | Ok reduced_state -> Ok reduced_state
   | Error (Rules.MalformedPathSum _) -> Error ErrorMalformedPathSum
 
+let path_sum_equal_for_equiv ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
+    ?(global_phase = false) state1 state2 =
+  match
+    Path_sum.equal_result ~debug ~outputs1 ~outputs2 ~global_phase state1 state2
+  with
+  | Ok are_equal -> Ok are_equal
+  | Error Path_sum.DifferentOutputLengths -> Error NotEquivDiffOutputs
+  | Error Path_sum.InvalidOutputIndex -> Error ErrorInvalidQubitIndex
+
 let compute_result ?(debug = false) inputs (output_state : Path_sum.t)
     (identity_state : Path_sum.t) =
-  if List.is_empty inputs then Path_sum.equal output_state identity_state
+  if List.is_empty inputs then
+    path_sum_equal_for_equiv ~debug output_state identity_state
   else
     let width = Array.length identity_state.ket in
-    let rec aux = function
-      | input :: inputs' ->
-          let q_expect = identity_state.ket.(input) in
-          let q_greet = output_state.ket.(input) in
-          if debug then
-            printf "Equiv.compute_result, q_expect = %s, q_greet = %s\n\n%!"
-              (QS.pretty q_expect width) (QS.pretty q_greet width);
+    let output_width = Array.length output_state.ket in
+    if
+      not
+        (ListBis.valid_indices width inputs
+        && ListBis.valid_indices output_width inputs)
+    then Error ErrorInvalidQubitIndex
+    else
+      let rec aux = function
+        | input :: inputs' ->
+            let q_expect = identity_state.ket.(input) in
+            let q_greet = output_state.ket.(input) in
+            if debug then
+              printf "Equiv.compute_result, q_expect = %s, q_greet = %s\n\n%!"
+                (QS.pretty q_expect width) (QS.pretty q_greet width);
 
-          if Qubit.equal q_greet q_expect then aux inputs' else false
-      | _ -> true
-    in
-    aux inputs
+            if Qubit.equal q_greet q_expect then aux inputs' else false
+        | _ -> true
+      in
+      Ok (aux inputs)
 
 let separability_states ?(debug = false) (state : Path_sum.t) outputs wq =
   if debug then
@@ -415,18 +432,22 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
 
                   (* Evaluate result according to the phase condition *)
                   match condition_zero_phase with
-                  | SubCircuitEquality ->
-                      if
+                  | SubCircuitEquality -> (
+                      match
                         compute_result ~debug inputs1 output_state_reduced
                           identity_state
-                      then SubCircuitEquivalent
-                      else SubCircuitInconclusive
-                  | GlobalPhaseEquality ->
-                      if
+                      with
+                      | Error result -> result
+                      | Ok true -> SubCircuitEquivalent
+                      | Ok false -> SubCircuitInconclusive)
+                  | GlobalPhaseEquality -> (
+                      match
                         compute_result ~debug inputs1 output_state_reduced
                           identity_state
-                      then GlobalPhaseEquivalent
-                      else SubCircuitInconclusive
+                      with
+                      | Error result -> result
+                      | Ok true -> GlobalPhaseEquivalent
+                      | Ok false -> SubCircuitInconclusive)
                   | ConditionalEquality -> (
                       match equivalence with
                       | SubCircuit -> SubCircuitInconclusive
@@ -518,23 +539,28 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                 res
                             | None ->
                                 (* Entanglement of out and disc*)
-                                if
-                                  Path_sum.equal ~outputs1 ~outputs2
-                                    output_path_var_norm1 output_path_var_norm2
-                                then SubCircuitEquivalent
-                                else SubCircuitInconclusive)
+                                (match
+                                   path_sum_equal_for_equiv ~debug ~outputs1
+                                     ~outputs2 output_path_var_norm1
+                                     output_path_var_norm2
+                                 with
+                                | Error result -> result
+                                | Ok true -> SubCircuitEquivalent
+                                | Ok false -> SubCircuitInconclusive))
                         | GlobalPhase -> (
                             match check_separability () with
                             | Some res ->
                                 (* Entanglement of out and disc*)
                                 res
                             | None ->
-                                if
-                                  Path_sum.equal ~outputs1 ~outputs2
-                                    ~global_phase:true output_path_var_norm1
-                                    output_path_var_norm2
-                                then GlobalPhaseEquivalent
-                                else GlobalPhaseInconclusive)
+                                (match
+                                   path_sum_equal_for_equiv ~debug ~outputs1
+                                     ~outputs2 ~global_phase:true
+                                     output_path_var_norm1 output_path_var_norm2
+                                 with
+                                | Error result -> result
+                                | Ok true -> GlobalPhaseEquivalent
+                                | Ok false -> GlobalPhaseInconclusive))
                         | FullCircuit -> ErrorFullCircuitNotImplemented))
 
 (* Defines the type 'algo' representing the algorithm type to use. *)

@@ -361,6 +361,152 @@ let test_monome_to_scalar_monome ?(debug = true) (input : Monome.t)
   in
   check bool (sprintf "Primitives.test_monome_to_scalar_monome") expect greet
 
+let test_monome_equal_result_returns_true () =
+  match
+    Monome.equal_result (Monome.Qubit (Qubit.Var 0))
+      (Monome.Qubit (Qubit.Var 0))
+  with
+  | Ok true -> check bool "equal monomes" true true
+  | Ok false -> check bool "equal monomes expected" true false
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_monome_equal_result_returns_false () =
+  match Monome.equal_result (Monome.Scal Q.zero) (Monome.Scal Q.one) with
+  | Ok false -> check bool "different monomes" false false
+  | Ok true -> check bool "different monomes expected" false true
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_monome_equal_result_reports_incompatible_widths () =
+  match
+    Monome.equal_result ~wq1:0 ~wq2:1 (Monome.Qubit Qubit.Zero)
+      (Monome.Qubit Qubit.Zero)
+  with
+  | Error Monome.IncompatibleWidths -> check bool "incompatible widths" true true
+  | Error Monome.IncompletePathVariableMap ->
+      check bool "incompatible widths expected" true false
+  | Ok _ -> check bool "incompatible widths expected" true false
+
+let test_monome_equal_result_reports_incomplete_path_var_map () =
+  let map_path_var1 = IntMap.singleton 1 0 in
+  let map_path_var2 = IntMap.empty in
+  match
+    Monome.equal_result ~wq1:1 ~wq2:1 ~map_path_var1 ~map_path_var2
+      (Monome.Qubit (Qubit.Var 1)) (Monome.Qubit (Qubit.Var 1))
+  with
+  | Error Monome.IncompletePathVariableMap ->
+      check bool "incomplete path variable map" true true
+  | Error Monome.IncompatibleWidths ->
+      check bool "incomplete path variable map expected" true false
+  | Ok _ -> check bool "incomplete path variable map expected" true false
+
+let test_monome_of_qubit_to_result_returns_monome () =
+  let check_ok name qubit expected_monome =
+    match Monome.of_qubit_to_result qubit with
+    | Ok monome ->
+        check string name (Monome.String.exact expected_monome)
+          (Monome.String.exact monome)
+    | Error Monome.CannotConvertSumMod2 ->
+        check bool "direct monome conversion expected" true false
+  in
+  check_ok "constant zero" Qubit.Zero (Monome.Scal Q.zero);
+  check_ok "variable" (Qubit.Var 1) (Monome.Qubit (Qubit.Var 1));
+  check_ok "product" (Qubit.Prod (Qubit.Var 1, Qubit.Var 2))
+    (Monome.Prod
+       (Monome.Qubit (Qubit.Var 1), Monome.Qubit (Qubit.Var 2)))
+
+let test_monome_of_qubit_to_result_reports_sum_mod2 () =
+  match Monome.of_qubit_to_result (Qubit.SumMod2 (Qubit.Var 1, Qubit.Var 2)) with
+  | Error Monome.CannotConvertSumMod2 ->
+      check bool "sum modulo 2 rejected" true true
+  | Ok _ -> check bool "sum modulo 2 rejection expected" true false
+
+let test_monome_to_qubit_result_returns_qubit () =
+  let check_ok name monome expected_qubit =
+    match Monome.to_qubit_result monome with
+    | Ok qubit -> check string name (QS.exact expected_qubit) (QS.exact qubit)
+    | Error (Monome.CannotConvertScalarToQubit _) ->
+        check bool "qubit conversion expected" true false
+  in
+  check_ok "zero scalar" (Monome.Scal Q.zero) Qubit.Zero;
+  check_ok "qubit monome" (Monome.Qubit (Qubit.Var 1)) (Qubit.Var 1);
+  check_ok "product monome"
+    (Monome.Prod
+       (Monome.Qubit (Qubit.Var 1), Monome.Qubit (Qubit.Var 2)))
+    (Qubit.Prod (Qubit.Var 1, Qubit.Var 2))
+
+let test_monome_to_qubit_result_reports_scalar () =
+  match Monome.to_qubit_result (Monome.Scal (Q.of_int 2)) with
+  | Error (Monome.CannotConvertScalarToQubit scalar) ->
+      check string "invalid scalar" "2" (Q.to_string scalar)
+  | Ok _ -> check bool "invalid scalar expected" true false
+
+let test_monome_remove_result_returns_some () =
+  match
+    Monome.remove_result 1
+      (Monome.Prod
+         (Monome.Qubit (Qubit.Var 1), Monome.Qubit (Qubit.Var 2)))
+  with
+  | Ok (Some output) ->
+      check string "removed variable"
+        (Monome.String.exact (Monome.Qubit (Qubit.Var 2)))
+        (Monome.String.exact output)
+  | Ok None -> check bool "removed variable expected" true false
+  | Error Monome.CannotRemoveQubitSum ->
+      check bool "product monome expected" true false
+
+let test_monome_remove_result_returns_none () =
+  match Monome.remove_result 3 (Monome.Qubit (Qubit.Var 1)) with
+  | Ok None -> check bool "absent variable" true true
+  | Ok (Some _) -> check bool "absent variable expected" true false
+  | Error Monome.CannotRemoveQubitSum ->
+      check bool "non-sum qubit expected" true false
+
+let test_monome_remove_result_reports_qubit_sum () =
+  match
+    Monome.remove_result 1
+      (Monome.Qubit (Qubit.SumMod2 (Qubit.Var 1, Qubit.Var 2)))
+  with
+  | Error Monome.CannotRemoveQubitSum ->
+      check bool "qubit sum rejected" true true
+  | Ok _ -> check bool "qubit sum rejection expected" true false
+
+let monome_equality =
+  [
+    ( "equal_result returns true",
+      `Quick,
+      test_monome_equal_result_returns_true );
+    ( "equal_result returns false",
+      `Quick,
+      test_monome_equal_result_returns_false );
+    ( "equal_result reports incompatible widths",
+      `Quick,
+      test_monome_equal_result_reports_incompatible_widths );
+    ( "equal_result reports incomplete path variable map",
+      `Quick,
+      test_monome_equal_result_reports_incomplete_path_var_map );
+    ( "of_qubit_to_result returns monome",
+      `Quick,
+      test_monome_of_qubit_to_result_returns_monome );
+    ( "of_qubit_to_result reports sum modulo 2",
+      `Quick,
+      test_monome_of_qubit_to_result_reports_sum_mod2 );
+    ( "to_qubit_result returns qubit",
+      `Quick,
+      test_monome_to_qubit_result_returns_qubit );
+    ( "to_qubit_result reports scalar",
+      `Quick,
+      test_monome_to_qubit_result_reports_scalar );
+    ( "remove_result returns some",
+      `Quick,
+      test_monome_remove_result_returns_some );
+    ( "remove_result returns none",
+      `Quick,
+      test_monome_remove_result_returns_none );
+    ( "remove_result reports qubit sum",
+      `Quick,
+      test_monome_remove_result_reports_qubit_sum );
+  ]
+
 let monome_to_scalar_monome =
   [
     ( "1/2 x0 -> 1/2, x0",
@@ -384,6 +530,358 @@ let monome_to_scalar_monome =
       `Quick,
       test_monome_to_scalar_monome (Qubit (Var 0))
         (Q.of_int 0, Monome.Scal (Q.of_int 0)) );
+  ]
+
+let test_poly_equal_result_returns_true () =
+  match Poly.equal_result Poly.zero Poly.zero with
+  | Ok true -> check bool "equal polynomials" true true
+  | Ok false -> check bool "equal polynomials expected" true false
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_poly_equal_result_returns_false () =
+  match Poly.equal_result Poly.zero Poly.one with
+  | Ok false -> check bool "different polynomials" false false
+  | Ok true -> check bool "different polynomials expected" false true
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_poly_equal_result_reports_incompatible_widths () =
+  match
+    Poly.equal_result ~wq1:0 ~wq2:1
+      (to_poly (Monome.Qubit Qubit.Zero))
+      (to_poly (Monome.Qubit Qubit.Zero))
+  with
+  | Error Poly.IncompatibleWidths -> check bool "incompatible widths" true true
+  | Error Poly.IncompletePathVariableMap ->
+      check bool "incompatible widths expected" true false
+  | Ok _ -> check bool "incompatible widths expected" true false
+
+let test_poly_equal_result_reports_incomplete_path_var_map () =
+  let map_path_var1 = IntMap.singleton 1 0 in
+  let map_path_var2 = IntMap.empty in
+  match
+    Poly.equal_result ~wq1:1 ~wq2:1 ~map_path_var1 ~map_path_var2
+      (to_poly (Monome.Qubit (Qubit.Var 1)))
+      (to_poly (Monome.Qubit (Qubit.Var 1)))
+  with
+  | Error Poly.IncompletePathVariableMap ->
+      check bool "incomplete path variable map" true true
+  | Error Poly.IncompatibleWidths ->
+      check bool "incomplete path variable map expected" true false
+  | Ok _ -> check bool "incomplete path variable map expected" true false
+
+let poly_equality =
+  [
+    ( "equal_result returns true",
+      `Quick,
+      test_poly_equal_result_returns_true );
+    ( "equal_result returns false",
+      `Quick,
+      test_poly_equal_result_returns_false );
+    ( "equal_result reports incompatible widths",
+      `Quick,
+      test_poly_equal_result_reports_incompatible_widths );
+    ( "equal_result reports incomplete path variable map",
+      `Quick,
+      test_poly_equal_result_reports_incomplete_path_var_map );
+  ]
+
+let test_poly_to_qubit_result_returns_qubit () =
+  let check_ok name poly expected_qubit =
+    match Poly.to_qubit_result poly with
+    | Ok qubit -> check string name (QS.exact expected_qubit) (QS.exact qubit)
+    | Error (Poly.CannotConvertScalarMonomeToQubit _) ->
+        check bool "qubit conversion expected" true false
+  in
+  (* An empty polynomial represents no parity term, so it converts to Zero. *)
+  check_ok "empty polynomial" Poly.empty Qubit.Zero;
+  (* Poly.to_qubit folds monomes into a SumMod2 accumulator initialized to Zero. *)
+  check_ok "single qubit monome"
+    (Monome.Qubit (Qubit.Var 1) +++ Poly.empty)
+    (Qubit.SumMod2 (Qubit.Var 1, Qubit.Zero))
+
+let test_poly_to_qubit_result_reports_scalar_monome () =
+  (* A scalar monome is a phase term, not a qubit expression. *)
+  match Poly.to_qubit_result (Monome.Scal (Q.of_int 2) +++ Poly.empty) with
+  | Error (Poly.CannotConvertScalarMonomeToQubit scalar) ->
+      check string "invalid scalar" "2" (Q.to_string scalar)
+  | Ok _ -> check bool "invalid scalar expected" true false
+
+let test_poly_of_qubit_result_returns_poly () =
+  let check_ok name qubit expected_poly =
+    match Poly.of_qubit_result qubit Q.one with
+    | Ok poly -> check bool name true (Poly.equal expected_poly poly)
+    | Error Poly.UnformattedQubitSum ->
+        check bool "formatted qubit expected" true false
+  in
+  (* For scalar 1, lifting x1 ++ x2 gives x1 + x2 - x1.x2:
+     coef_lift(1) = -1, hence the product term below has coefficient -1. *)
+  let expected_sum =
+    Monome.Qubit (Qubit.Var 1)
+    +++ (Monome.Qubit (Qubit.Var 2)
+        +++ (Monome.Prod
+               ( Monome.Scal (Q.of_int (-1)),
+                 Monome.Prod
+                   (Monome.Qubit (Qubit.Var 1), Monome.Qubit (Qubit.Var 2)) )
+            +++ Poly.empty))
+  in
+  (* A single variable is already directly convertible to one monome. *)
+  check_ok "single variable" (Qubit.Var 1)
+    (Monome.Qubit (Qubit.Var 1) +++ Poly.empty);
+  (* This is the accepted binary SumMod2 shape: SumMod2 (x1, x2). *)
+  check_ok "formatted sum" (Qubit.SumMod2 (Qubit.Var 1, Qubit.Var 2))
+    expected_sum
+
+let test_poly_of_qubit_result_reports_unformatted_sum () =
+  (* The current implementation rejects a nested sum on the left. Such qubits
+     must be normalized before calling Poly.of_qubit_result. *)
+  let unformatted_sum =
+    Qubit.SumMod2 (Qubit.SumMod2 (Qubit.Var 1, Qubit.Var 2), Qubit.Var 3)
+  in
+  match Poly.of_qubit_result unformatted_sum Q.one with
+  | Error Poly.UnformattedQubitSum ->
+      check bool "unformatted qubit sum rejected" true true
+  | Ok _ -> check bool "unformatted qubit sum rejection expected" true false
+
+let test_poly_of_qubit_2_pi_result_returns_poly () =
+  (* The 2*pi shortcut drops the product correction term. For x1 ++ x2, the
+     expected polynomial is only x1 + x2. *)
+  let expected_sum =
+    Monome.Qubit (Qubit.Var 1)
+    +++ (Monome.Qubit (Qubit.Var 2) +++ Poly.empty)
+  in
+  match Poly.of_qubit_2_pi_result (Qubit.SumMod2 (Qubit.Var 1, Qubit.Var 2)) with
+  | Ok poly -> check bool "2*pi formatted sum" true (Poly.equal expected_sum poly)
+  | Error Poly.UnformattedQubitSum ->
+      check bool "formatted qubit expected" true false
+
+let test_poly_of_qubit_2_pi_result_reports_unformatted_sum () =
+  (* Same format restriction as Poly.of_qubit_result: a nested left sum must be
+     normalized before this conversion. *)
+  let unformatted_sum =
+    Qubit.SumMod2 (Qubit.SumMod2 (Qubit.Var 1, Qubit.Var 2), Qubit.Var 3)
+  in
+  match Poly.of_qubit_2_pi_result unformatted_sum with
+  | Error Poly.UnformattedQubitSum ->
+      check bool "unformatted qubit sum rejected" true true
+  | Ok _ -> check bool "unformatted qubit sum rejection expected" true false
+
+let poly_conversion =
+  [
+    ( "of_qubit_result returns poly",
+      `Quick,
+      test_poly_of_qubit_result_returns_poly );
+    ( "of_qubit_result reports unformatted sum",
+      `Quick,
+      test_poly_of_qubit_result_reports_unformatted_sum );
+    ( "of_qubit_2_pi_result returns poly",
+      `Quick,
+      test_poly_of_qubit_2_pi_result_returns_poly );
+    ( "of_qubit_2_pi_result reports unformatted sum",
+      `Quick,
+      test_poly_of_qubit_2_pi_result_reports_unformatted_sum );
+    ( "to_qubit_result returns qubit",
+      `Quick,
+      test_poly_to_qubit_result_returns_qubit );
+    ( "to_qubit_result reports scalar monome",
+      `Quick,
+      test_poly_to_qubit_result_reports_scalar_monome );
+  ]
+
+let test_poly_distribution_result_returns_poly () =
+  (* Distribution multiplies one monome by each monome of the right polynomial.
+     Here both polynomials contain a single qubit monome, so the result is
+     exactly x1.x2. *)
+  let left = Monome.Qubit (Qubit.Var 1) in
+  let right = Monome.Qubit (Qubit.Var 2) +++ Poly.empty in
+  let expected =
+    Monome.Prod (Monome.Qubit (Qubit.Var 1), Monome.Qubit (Qubit.Var 2))
+    +++ Poly.empty
+  in
+  match Poly.distribution_result left right with
+  | Ok poly -> check bool "distributed product" true (Poly.equal expected poly)
+  | Error Poly.UnformattedDistributionMonome ->
+      check bool "formatted distribution monome expected" true false
+
+let test_poly_distribution_result_reports_unformatted_monome () =
+  (* Scalars are expected on the left of Prod. The old distribution function
+     raised Failure on this shape; the typed version reports it explicitly. *)
+  let unformatted_right =
+    Monome.Prod (Monome.Qubit (Qubit.Var 1), Monome.Scal (Q.of_int 2))
+    +++ Poly.empty
+  in
+  match
+    Poly.distribution_result (Monome.Qubit (Qubit.Var 0)) unformatted_right
+  with
+  | Error Poly.UnformattedDistributionMonome ->
+      check bool "unformatted distribution monome rejected" true true
+  | Ok _ -> check bool "unformatted distribution monome expected" true false
+
+let poly_algebra =
+  [
+    ( "distribution_result returns poly",
+      `Quick,
+      test_poly_distribution_result_returns_poly );
+    ( "distribution_result reports unformatted monome",
+      `Quick,
+      test_poly_distribution_result_reports_unformatted_monome );
+  ]
+
+let test_path_sum_equal_result_returns_true () =
+  let path_sum : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  match Path_sum.equal_result path_sum path_sum with
+  | Ok true -> check bool "equal path sums" true true
+  | Ok false -> check bool "equal path sums expected" true false
+  | Error Path_sum.DifferentOutputLengths ->
+      check bool "well-formed comparison expected" true false
+  | Error Path_sum.InvalidOutputIndex ->
+      check bool "well-formed comparison expected" true false
+
+let test_path_sum_equal_result_returns_false () =
+  let path_sum1 : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Zero |]; path_var = [] }
+  in
+  let path_sum2 : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.One |]; path_var = [] }
+  in
+  match Path_sum.equal_result path_sum1 path_sum2 with
+  | Ok false -> check bool "different path sums" false false
+  | Ok true -> check bool "different path sums expected" false true
+  | Error Path_sum.DifferentOutputLengths ->
+      check bool "well-formed comparison expected" true false
+  | Error Path_sum.InvalidOutputIndex ->
+      check bool "well-formed comparison expected" true false
+
+let test_path_sum_equal_result_reports_different_output_lengths () =
+  let path_sum : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  match Path_sum.equal_result ~outputs1:[ 0 ] ~outputs2:[] path_sum path_sum with
+  | Error Path_sum.DifferentOutputLengths ->
+      check bool "different output lengths" true true
+  | Error Path_sum.InvalidOutputIndex ->
+      check bool "different output lengths expected" true false
+  | Ok _ -> check bool "different output lengths expected" true false
+
+let test_path_sum_equal_result_reports_invalid_output_index () =
+  let path_sum : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  match
+    Path_sum.equal_result ~outputs1:[ 1 ] ~outputs2:[ 0 ] path_sum path_sum
+  with
+  | Error Path_sum.InvalidOutputIndex ->
+      check bool "invalid output index" true true
+  | Error Path_sum.DifferentOutputLengths ->
+      check bool "invalid output index expected" true false
+  | Ok _ -> check bool "invalid output index expected" true false
+
+let path_sum_equality =
+  [
+    ( "equal_result returns true",
+      `Quick,
+      test_path_sum_equal_result_returns_true );
+    ( "equal_result returns false",
+      `Quick,
+      test_path_sum_equal_result_returns_false );
+    ( "equal_result reports different output lengths",
+      `Quick,
+      test_path_sum_equal_result_reports_different_output_lengths );
+    ( "equal_result reports invalid output index",
+      `Quick,
+      test_path_sum_equal_result_reports_invalid_output_index );
+  ]
+
+let test_path_sum_ofSize_init_result_returns_path_sum () =
+  let check_ok name width inits_0 expected_output =
+    match Path_sum.ofSize_init_result width inits_0 with
+    | Ok output ->
+        check string name (PSS.exact expected_output) (PSS.exact output)
+    | Error Path_sum.InvalidWidth ->
+        check bool "valid width expected" true false
+    | Error Path_sum.InvalidInitIndex ->
+        check bool "valid initialization indices expected" true false
+  in
+  check_ok "no initialized qubit" 2 []
+    { phase = Poly.zero; ket = [| Qubit.Var 0; Qubit.Var 1 |]; path_var = [] };
+  check_ok "one initialized qubit" 2 [ 0 ]
+    { phase = Poly.zero; ket = [| Qubit.Zero; Qubit.Var 0 |]; path_var = [] };
+  check_ok "several initialized qubits" 3 [ 0; 2 ]
+    {
+      phase = Poly.zero;
+      ket = [| Qubit.Zero; Qubit.Var 0; Qubit.Zero |];
+      path_var = [];
+    };
+  check_ok "zero width" 0 [] { phase = Poly.zero; ket = [||]; path_var = [] }
+
+let test_path_sum_ofSize_init_result_reports_invalid_width () =
+  match Path_sum.ofSize_init_result (-1) [] with
+  | Error Path_sum.InvalidWidth -> check bool "invalid width" true true
+  | Error Path_sum.InvalidInitIndex ->
+      check bool "invalid width expected" true false
+  | Ok _ -> check bool "invalid width expected" true false
+
+let test_path_sum_ofSize_init_result_reports_invalid_init_index () =
+  match Path_sum.ofSize_init_result 1 [ 1 ] with
+  | Error Path_sum.InvalidInitIndex ->
+      check bool "invalid initialization index" true true
+  | Error Path_sum.InvalidWidth ->
+      check bool "invalid initialization index expected" true false
+  | Ok _ -> check bool "invalid initialization index expected" true false
+
+let path_sum_initialization =
+  [
+    ( "ofSize_init_result returns path sum",
+      `Quick,
+      test_path_sum_ofSize_init_result_returns_path_sum );
+    ( "ofSize_init_result reports invalid width",
+      `Quick,
+      test_path_sum_ofSize_init_result_reports_invalid_width );
+    ( "ofSize_init_result reports invalid init index",
+      `Quick,
+      test_path_sum_ofSize_init_result_reports_invalid_init_index );
+  ]
+
+let test_path_sum_substitute_result_returns_path_sum () =
+  let check_ok name ?(except_path_var = false) input variable replacement
+      expected_output =
+    match
+      Path_sum.substitute_result ~except_path_var input variable replacement
+    with
+    | Ok output ->
+        check string name (PSS.exact expected_output) (PSS.exact output)
+    | Error Path_sum.CannotSubstitutePathVariable ->
+        check bool "substitutable variable expected" true false
+  in
+  let input : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 1; Qubit.Var 2 |]; path_var = [ 2 ] }
+  in
+  (* Var 1 is not declared as a path variable, so it may be replaced. *)
+  check_ok "substituted free variable" input 1 Qubit.One
+    { phase = Poly.zero; ket = [| Qubit.One; Qubit.Var 2 |]; path_var = [ 2 ] };
+  (* With except_path_var=true, declared path variables are left untouched. *)
+  check_ok "protected path variable" ~except_path_var:true input 2 Qubit.One
+    input
+
+let test_path_sum_substitute_result_reports_path_var_substitution () =
+  let input : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 1 |]; path_var = [ 1 ] }
+  in
+  (* Without except_path_var=true, substituting a path variable is rejected. *)
+  match Path_sum.substitute_result input 1 Qubit.One with
+  | Error Path_sum.CannotSubstitutePathVariable ->
+      check bool "path variable substitution rejected" true true
+  | Ok _ -> check bool "path variable substitution rejection expected" true false
+
+let path_sum_substitution =
+  [
+    ( "substitute_result returns path sum",
+      `Quick,
+      test_path_sum_substitute_result_returns_path_sum );
+    ( "substitute_result reports path variable substitution",
+      `Quick,
+      test_path_sum_substitute_result_reports_path_var_substitution );
   ]
 
 let test_lift_poly ?(debug = true) (p : Poly.t) (expect : Poly.t) (wq : int) ()
@@ -1331,6 +1829,26 @@ let test_qubit_equal_result_reports_incomplete_path_var_map () =
       check bool "incomplete path variable map expected" true false
   | Ok _ -> check bool "incomplete path variable map expected" true false
 
+let test_qubit_remove_result_returns_some () =
+  match Qubit.remove_result 1 (Prod (Var 1, Var 2)) with
+  | Ok (Some output) -> check string "removed variable" "(Var 2)" (QS.exact output)
+  | Ok None -> check bool "removed variable expected" true false
+  | Error Qubit.CannotRemoveFromSum ->
+      check bool "product expression expected" true false
+
+let test_qubit_remove_result_returns_none () =
+  match Qubit.remove_result 3 (Prod (Var 1, Var 2)) with
+  | Ok None -> check bool "absent variable" true true
+  | Ok (Some _) -> check bool "absent variable expected" true false
+  | Error Qubit.CannotRemoveFromSum ->
+      check bool "product expression expected" true false
+
+let test_qubit_remove_result_reports_sum () =
+  match Qubit.remove_result 1 (SumMod2 (Var 1, Var 2)) with
+  | Error Qubit.CannotRemoveFromSum ->
+      check bool "sum expression rejected" true true
+  | Ok _ -> check bool "sum expression rejection expected" true false
+
 let qubit =
   [
     ( "equal_result returns true",
@@ -1345,6 +1863,9 @@ let qubit =
     ( "equal_result reports incomplete path variable map",
       `Quick,
       test_qubit_equal_result_reports_incomplete_path_var_map );
+    ("remove_result returns some", `Quick, test_qubit_remove_result_returns_some);
+    ("remove_result returns none", `Quick, test_qubit_remove_result_returns_none);
+    ("remove_result reports sum", `Quick, test_qubit_remove_result_reports_sum);
     ( "simplify: x0.(1 ++ x0) -> Zero",
       `Quick,
       test_qubit (Qubit.simplify (Prod (Var 0, One ++ Var 0))) Zero );
@@ -1366,6 +1887,80 @@ let test_ket k1 k2 () =
   let greeting = KS.exact k1 in
   let expected = KS.exact k2 in
   check string "same string" expected greeting
+
+let test_ket_equal_result_returns_true () =
+  match Ket.equal_result [| Qubit.Var 0 |] [| Qubit.Var 0 |] with
+  | Ok (true, _, _) -> check bool "equal kets" true true
+  | Ok (false, _, _) -> check bool "equal kets expected" true false
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_ket_equal_result_returns_false () =
+  match Ket.equal_result [| Qubit.Zero |] [| Qubit.One |] with
+  | Ok (false, _, _) -> check bool "different kets" false false
+  | Ok (true, _, _) -> check bool "different kets expected" false true
+  | Error _ -> check bool "well-formed comparison expected" true false
+
+let test_ket_equal_result_reports_different_output_lengths () =
+  match
+    Ket.equal_result ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ]
+      [| Qubit.Var 0; Qubit.Var 1 |]
+      [| Qubit.Var 0; Qubit.Var 1 |]
+  with
+  | Error Ket.DifferentOutputLengths ->
+      check bool "different output lengths" true true
+  | Error Ket.InvalidOutputIndex ->
+      check bool "different output lengths expected" true false
+  | Ok _ -> check bool "different output lengths expected" true false
+
+let test_ket_equal_result_reports_invalid_output_index () =
+  match
+    Ket.equal_result ~outputs1:[ 1 ] ~outputs2:[ 0 ] [| Qubit.Var 0 |]
+      [| Qubit.Var 0 |]
+  with
+  | Error Ket.InvalidOutputIndex -> check bool "invalid output index" true true
+  | Error Ket.DifferentOutputLengths ->
+      check bool "invalid output index expected" true false
+  | Ok _ -> check bool "invalid output index expected" true false
+
+let test_ket_path_var_order_result_returns_order () =
+  (* For a ket of width 2, variables 0 and 1 are input/output variables x0,x1.
+     Variables starting at 2 are path variables y0,y1,... *)
+  let check_ok name ket path_var_count expected_tmp expected_final =
+    match Ket.path_var_order_result ket path_var_count with
+    | Ok (tmp_path_vars, path_vars) ->
+        check string (name ^ " temporary path vars") expected_tmp
+          (ArrayBis.string_int tmp_path_vars);
+        check string (name ^ " path vars") expected_final
+          (ArrayBis.string_int path_vars)
+    | Error Ket.InvalidPathVariableCount ->
+        check bool "valid path-variable count expected" true false
+    | Error Ket.InvalidPathVariableIndex ->
+        check bool "valid path-variable indices expected" true false
+  in
+  (* The ket contains y0 then y1. The function records their final order
+     [2;3] and a temporary negative order [-2;-3] used during renaming. *)
+  check_ok "ordered path vars" [| Qubit.Var 2; Qubit.Var 3 |] 2 "-2;-3" "2;3";
+  (* With width 1 and no declared path variable, Var 0 is just x0. *)
+  check_ok "no path vars" [| Qubit.Var 0 |] 0 "" ""
+
+let test_ket_path_var_order_result_reports_invalid_path_var_count () =
+  (* A negative number of declared path variables is malformed metadata. *)
+  match Ket.path_var_order_result [||] (-1) with
+  | Error Ket.InvalidPathVariableCount ->
+      check bool "invalid path-variable count" true true
+  | Error Ket.InvalidPathVariableIndex ->
+      check bool "invalid path-variable count expected" true false
+  | Ok _ -> check bool "invalid path-variable count expected" true false
+
+let test_ket_path_var_order_result_reports_invalid_path_var_index () =
+  (* Width is 1, so Var 2 would be y1. With only one declared path variable,
+     the only valid path variable is y0, encoded as Var 1. *)
+  match Ket.path_var_order_result [| Qubit.Var 2 |] 1 with
+  | Error Ket.InvalidPathVariableIndex ->
+      check bool "invalid path-variable index" true true
+  | Error Ket.InvalidPathVariableCount ->
+      check bool "invalid path-variable index expected" true false
+  | Ok _ -> check bool "invalid path-variable index expected" true false
 
 let test_ket_substitute_does_not_mutate_input () =
   let input =
@@ -1420,6 +2015,23 @@ let k4 = [| Qubit.Var 0; Var 2; Var 3 |]
 
 let ket =
   [
+    ("equal_result returns true", `Quick, test_ket_equal_result_returns_true);
+    ("equal_result returns false", `Quick, test_ket_equal_result_returns_false);
+    ( "equal_result reports different output lengths",
+      `Quick,
+      test_ket_equal_result_reports_different_output_lengths );
+    ( "equal_result reports invalid output index",
+      `Quick,
+      test_ket_equal_result_reports_invalid_output_index );
+    ( "path_var_order_result returns order",
+      `Quick,
+      test_ket_path_var_order_result_returns_order );
+    ( "path_var_order_result reports invalid path-variable count",
+      `Quick,
+      test_ket_path_var_order_result_reports_invalid_path_var_count );
+    ( "path_var_order_result reports invalid path-variable index",
+      `Quick,
+      test_ket_path_var_order_result_reports_invalid_path_var_index );
     ("(x0.x1 ++ (x0.x1 ++ x2) -> x2", `Quick, test_ket k1_simplified k2);
     ("(x0.x1.x2 ++ (x1.x2.x0 ++ x3) -> x3", `Quick, test_ket k3_simplified k4);
     ( "(x0,(x0.(1 ++ x0) ++ x1.One) -> x1",
@@ -1467,6 +2079,415 @@ let test_gates_apply ?(debug = true) (p : Program.t) (ps : Path_sum.t) () =
     (sprintf "Test.test_gates_apply\np = %s\n" (ProgS.pretty p))
     expected greeting
 
+let test_path_sum_library_h_result_returns_path_sum () =
+  (* For width 1, target 0 is x0 and the first path variable is y0 = Var 1. *)
+  (* H maps |x0> to sum_y exp(2.pi.i.x0.y0/2)|y0>. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Prod
+          ( Monome.Scal div2,
+            Monome.Prod
+              (Monome.Qubit (Qubit.Var 0), Monome.Qubit (Qubit.Var 1)) )
+        +++ Poly.empty;
+      ket = [| Qubit.Var 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  match Path_sum_library.h_result 0 1 with
+  | Ok path_sum ->
+      check string "h gate path sum" (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_h_result_reports_invalid_target () =
+  (* Target 1 is outside width 1; the typed constructor reports that directly. *)
+  match Path_sum_library.h_result 1 1 with
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+let test_path_sum_library_x_result_returns_path_sum () =
+  (* For width 1, target 0 is the only valid input variable: x0. *)
+  (* X maps |x0> to |1+x0> and does not introduce phase or path variables. *)
+  let expected : Path_sum.t =
+    {
+      phase = Monome.Scal Q.zero +++ Poly.empty;
+      ket = [| Qubit.SumMod2 (Qubit.One, Qubit.Var 0) |];
+      path_var = [];
+    }
+  in
+  match Path_sum_library.x_result 0 1 with
+  | Ok path_sum ->
+      check string "x gate path sum" (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_x_result_reports_invalid_target () =
+  (* Target indices are zero-based: target 1 is outside a width-1 path sum. *)
+  (* This checks the typed error that replaces the old unchecked xx failure. *)
+  match Path_sum_library.x_result 1 1 with
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+let test_path_sum_library_u1_result_returns_path_sum () =
+  (* With k=1 and default s=1, U1 adds the phase x0 / 2 and keeps |x0>. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 0))
+        +++ Poly.empty;
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  match Path_sum_library.u1_result 1 0 1 with
+  | Ok path_sum ->
+      check string "u1 gate path sum" (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_u1_result_reports_invalid_target () =
+  (* U1 also relies on xx: target 1 is outside width 1 and must be reported. *)
+  match Path_sum_library.u1_result 1 1 1 with
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+let test_path_sum_library_z_result_returns_path_sum () =
+  (* Z is U1 with k=1: it adds phase x0 / 2 and keeps |x0>. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 0))
+        +++ Poly.empty;
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  match Path_sum_library.z_result 0 1 with
+  | Ok path_sum ->
+      check string "z gate path sum" (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_z_result_reports_invalid_target () =
+  (* z_result delegates target validation to u1_result and reports the same error. *)
+  match Path_sum_library.z_result 1 1 with
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+let test_path_sum_library_s_result_returns_path_sum () =
+  (* S is U1 with k=2: it adds phase x0 / 4 and keeps |x0>. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var 0))
+        +++ Poly.empty;
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  match Path_sum_library.s_result 0 1 with
+  | Ok path_sum ->
+      check string "s gate path sum" (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_s_result_reports_invalid_target () =
+  (* s_result delegates target validation to u1_result and reports the same error. *)
+  match Path_sum_library.s_result 1 1 with
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+let test_path_sum_library_t_result_returns_path_sum () =
+  (* T is U1 with k=3: it adds phase x0 / 8 and keeps |x0>. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Prod (Monome.Scal div8, Monome.Qubit (Qubit.Var 0))
+        +++ Poly.empty;
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  match Path_sum_library.t_result 0 1 with
+  | Ok path_sum ->
+      check string "t gate path sum" (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_t_result_reports_invalid_target () =
+  (* t_result delegates target validation to u1_result and reports the same error. *)
+  match Path_sum_library.t_result 1 1 with
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+let test_path_sum_library_zinv_result_returns_path_sum () =
+  (* Z inverse is U1 with s=-1 and k=1. The negative angle is normalized to
+     1/2, so the expected path sum is the same as Z on one qubit. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 0))
+        +++ Poly.empty;
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  match Path_sum_library.zinv_result 0 1 with
+  | Ok path_sum ->
+      check string "zinv gate path sum" (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_zinv_result_reports_invalid_target () =
+  (* zinv_result delegates target validation to u1_result and reports the same error. *)
+  match Path_sum_library.zinv_result 1 1 with
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+(* These helpers keep the gate-result tests focused on the expected path sum
+   instead of repeating the same Ok/Error plumbing in every case. *)
+let check_gate_result name expected = function
+  | Ok path_sum -> check string name (PSS.exact expected) (PSS.exact path_sum)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let check_gate_invalid_target = function
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "invalid target rejected" true true
+  | Ok _ -> check bool "invalid target expected" true false
+
+let one_qubit_phase_path_sum scalar : Path_sum.t =
+  {
+    phase =
+      Monome.Prod (Monome.Scal scalar, Monome.Qubit (Qubit.Var 0))
+      +++ Poly.empty;
+    ket = [| Qubit.Var 0 |];
+    path_var = [];
+  }
+
+let test_path_sum_library_sinv_result_returns_path_sum () =
+  (* S inverse is U1 with s=-1 and k=2; -1/4 is normalized to 3/4. *)
+  check_gate_result "sinv gate path sum"
+    (one_qubit_phase_path_sum (3 /// 4))
+    (Path_sum_library.sinv_result 0 1)
+
+let test_path_sum_library_sinv_result_reports_invalid_target () =
+  (* sinv_result reports the same target-width error as u1_result. *)
+  check_gate_invalid_target (Path_sum_library.sinv_result 1 1)
+
+let test_path_sum_library_tinv_result_returns_path_sum () =
+  (* T inverse is U1 with s=-1 and k=3; -1/8 is normalized to 7/8. *)
+  check_gate_result "tinv gate path sum"
+    (one_qubit_phase_path_sum (7 /// 8))
+    (Path_sum_library.tinv_result 0 1)
+
+let test_path_sum_library_tinv_result_reports_invalid_target () =
+  (* tinv_result reports the same target-width error as u1_result. *)
+  check_gate_invalid_target (Path_sum_library.tinv_result 1 1)
+
+let test_path_sum_library_rz_result_returns_path_sum () =
+  (* RZ with k=1 adds the global term 3/4 and the target phase x0/2. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Scal (3 /// 4)
+        +++ (Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 0))
+            +++ Poly.empty);
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  check_gate_result "rz gate path sum" expected (Path_sum_library.rz_result 1 0 1)
+
+let test_path_sum_library_rz_result_reports_invalid_target () =
+  (* rz_result validates its target before building the phase polynomial. *)
+  check_gate_invalid_target (Path_sum_library.rz_result 1 1 1)
+
+let test_path_sum_library_rx_result_returns_path_sum () =
+  (* With s=0, RX is represented here as the identity path sum on the target. *)
+  let expected : Path_sum.t =
+    { phase = Monome.Scal Q.zero +++ Poly.empty; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  check_gate_result "rx gate path sum" expected
+    (Path_sum_library.rx_result ~s:0 1 0 1)
+
+let test_path_sum_library_rx_result_reports_invalid_target () =
+  (* rx_result still validates the target even when s=0 makes the phase trivial. *)
+  check_gate_invalid_target (Path_sum_library.rx_result ~s:0 1 1 1)
+
+let test_path_sum_library_ry_result_returns_path_sum () =
+  (* With s=0, RY is represented here as the identity path sum on the target. *)
+  let expected : Path_sum.t =
+    { phase = Monome.Scal Q.zero +++ Poly.empty; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  check_gate_result "ry gate path sum" expected
+    (Path_sum_library.ry_result ~s:0 1 0 1)
+
+let test_path_sum_library_ry_result_reports_invalid_target () =
+  (* ry_result still validates the target even when s=0 makes the phase trivial. *)
+  check_gate_invalid_target (Path_sum_library.ry_result ~s:0 1 1 1)
+
+let test_path_sum_library_ch_result_returns_path_sum () =
+  (* CH introduces one path variable y0 = Var 2 for width 2. The phase is the
+     controlled-Hadamard phase plus its normalization factor. *)
+  let control = Qubit.Var 0 in
+  let target = Qubit.Var 1 in
+  let path_var = Qubit.Var 2 in
+  let normalisation =
+    Monome.Scal div8
+    +++ (Monome.Prod (Monome.Scal divm8, Monome.Qubit control)
+        +++ (Monome.Prod
+               ( Monome.Scal div4,
+                 Monome.Prod (Monome.Qubit control, Monome.Qubit path_var) )
+            +++ (Monome.Prod (Monome.Scal divm4, Monome.Qubit path_var)
+                +++ Poly.empty)))
+  in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Monome.Prod
+             ( Monome.Scal div2,
+               Monome.Prod
+                 ( Monome.Qubit control,
+                   Monome.Prod (Monome.Qubit target, Monome.Qubit path_var) ) )
+          +++ normalisation);
+      ket =
+        Ket.simplify
+          [|
+            control;
+            Qubit.SumMod2
+              ( Qubit.Prod (control, target),
+                Qubit.SumMod2 (Qubit.Prod (control, path_var), target) );
+          |];
+      path_var = [ 2 ];
+    }
+  in
+  check_gate_result "ch gate path sum" expected (Path_sum_library.ch_result 0 1 2)
+
+let test_path_sum_library_ch_result_reports_invalid_target () =
+  (* ch_result validates both selected input variables from left to right. *)
+  check_gate_invalid_target (Path_sum_library.ch_result 0 2 2)
+
+let test_path_sum_library_cx_result_returns_path_sum () =
+  (* CX maps |x0,x1> to |x0,x0+x1> without phase or path variables. *)
+  let expected : Path_sum.t =
+    {
+      phase = Monome.Scal Q.zero +++ Poly.empty;
+      ket = [| Qubit.Var 0; Qubit.SumMod2 (Qubit.Var 0, Qubit.Var 1) |];
+      path_var = [];
+    }
+  in
+  check_gate_result "cx gate path sum" expected (Path_sum_library.cx_result 0 1 2)
+
+let test_path_sum_library_cx_result_reports_invalid_target () =
+  (* cx_result reports an out-of-width control or target. *)
+  check_gate_invalid_target (Path_sum_library.cx_result 0 2 2)
+
+let controlled_phase_path_sum scalar : Path_sum.t =
+  {
+    phase =
+      Monome.Prod
+        ( Monome.Scal scalar,
+          Monome.Prod (Monome.Qubit (Qubit.Var 0), Monome.Qubit (Qubit.Var 1)) )
+      +++ Poly.empty;
+    ket = [| Qubit.Var 0; Qubit.Var 1 |];
+    path_var = [];
+  }
+
+let test_path_sum_library_crz_result_returns_path_sum () =
+  (* CRZ with k=1 adds the controlled phase x0.x1/2. *)
+  check_gate_result "crz gate path sum"
+    (controlled_phase_path_sum div2)
+    (Path_sum_library.crz_result 1 0 1 2)
+
+let test_path_sum_library_crz_result_reports_invalid_target () =
+  (* crz_result validates both selected input variables. *)
+  check_gate_invalid_target (Path_sum_library.crz_result 1 0 2 2)
+
+let test_path_sum_library_cz_result_returns_path_sum () =
+  (* CZ is CRZ with k=1. *)
+  check_gate_result "cz gate path sum"
+    (controlled_phase_path_sum div2)
+    (Path_sum_library.cz_result 0 1 2)
+
+let test_path_sum_library_cz_result_reports_invalid_target () =
+  (* cz_result reports the same target-width error as crz_result. *)
+  check_gate_invalid_target (Path_sum_library.cz_result 0 2 2)
+
+let test_path_sum_library_cs_result_returns_path_sum () =
+  (* CS is CRZ with k=2, so the controlled phase is x0.x1/4. *)
+  check_gate_result "cs gate path sum"
+    (controlled_phase_path_sum div4)
+    (Path_sum_library.cs_result 0 1 2)
+
+let test_path_sum_library_cs_result_reports_invalid_target () =
+  (* cs_result reports the same target-width error as crz_result. *)
+  check_gate_invalid_target (Path_sum_library.cs_result 0 2 2)
+
+let test_path_sum_library_ct_result_returns_path_sum () =
+  (* CT is CRZ with k=3, so the controlled phase is x0.x1/8. *)
+  check_gate_result "ct gate path sum"
+    (controlled_phase_path_sum div8)
+    (Path_sum_library.ct_result 0 1 2)
+
+let test_path_sum_library_ct_result_reports_invalid_target () =
+  (* ct_result reports the same target-width error as crz_result. *)
+  check_gate_invalid_target (Path_sum_library.ct_result 0 2 2)
+
+let test_path_sum_library_ccx_result_returns_path_sum () =
+  (* CCX maps |x0,x1,x2> to |x0,x1,x0.x1+x2>. *)
+  let expected : Path_sum.t =
+    {
+      phase = Monome.Scal Q.zero +++ Poly.empty;
+      ket =
+        [|
+          Qubit.Var 0;
+          Qubit.Var 1;
+          Qubit.SumMod2
+            (Qubit.Prod (Qubit.Var 0, Qubit.Var 1), Qubit.Var 2);
+        |];
+      path_var = [];
+    }
+  in
+  check_gate_result "ccx gate path sum" expected
+    (Path_sum_library.ccx_result 0 1 2 3)
+
+let test_path_sum_library_ccx_result_reports_invalid_target () =
+  (* ccx_result validates both controls and the target. *)
+  check_gate_invalid_target (Path_sum_library.ccx_result 0 1 3 3)
+
+let test_path_sum_library_ccz_result_returns_path_sum () =
+  (* CCZ adds the triple controlled phase x0.x1.x2/2. *)
+  let expected : Path_sum.t =
+    {
+      phase =
+        Monome.Prod
+          ( Monome.Scal div2,
+            Monome.Prod
+              ( Monome.Qubit (Qubit.Var 0),
+                Monome.Prod
+                  (Monome.Qubit (Qubit.Var 1), Monome.Qubit (Qubit.Var 2)) ) )
+        +++ Poly.empty;
+      ket = [| Qubit.Var 0; Qubit.Var 1; Qubit.Var 2 |];
+      path_var = [];
+    }
+  in
+  check_gate_result "ccz gate path sum" expected
+    (Path_sum_library.ccz_result 0 1 2 3)
+
+let test_path_sum_library_ccz_result_reports_invalid_target () =
+  (* ccz_result validates both controls and the target. *)
+  check_gate_invalid_target (Path_sum_library.ccz_result 0 1 3 3)
+
 let test_apply_hadamard_does_not_mutate_input () =
   let input = Path_sum.ofSize 1 in
   let input_before = PSS.exact input in
@@ -1489,6 +2510,126 @@ let test_apply_classical_not_does_not_mutate_input () =
 
 let gates_apply =
   [
+    ( "h_result returns path sum",
+      `Quick,
+      test_path_sum_library_h_result_returns_path_sum );
+    ( "h_result reports invalid target",
+      `Quick,
+      test_path_sum_library_h_result_reports_invalid_target );
+    ( "x_result returns path sum",
+      `Quick,
+      test_path_sum_library_x_result_returns_path_sum );
+    ( "x_result reports invalid target",
+      `Quick,
+      test_path_sum_library_x_result_reports_invalid_target );
+    ( "u1_result returns path sum",
+      `Quick,
+      test_path_sum_library_u1_result_returns_path_sum );
+    ( "u1_result reports invalid target",
+      `Quick,
+      test_path_sum_library_u1_result_reports_invalid_target );
+    ( "z_result returns path sum",
+      `Quick,
+      test_path_sum_library_z_result_returns_path_sum );
+    ( "z_result reports invalid target",
+      `Quick,
+      test_path_sum_library_z_result_reports_invalid_target );
+    ( "s_result returns path sum",
+      `Quick,
+      test_path_sum_library_s_result_returns_path_sum );
+    ( "s_result reports invalid target",
+      `Quick,
+      test_path_sum_library_s_result_reports_invalid_target );
+    ( "t_result returns path sum",
+      `Quick,
+      test_path_sum_library_t_result_returns_path_sum );
+    ( "t_result reports invalid target",
+      `Quick,
+      test_path_sum_library_t_result_reports_invalid_target );
+    ( "zinv_result returns path sum",
+      `Quick,
+      test_path_sum_library_zinv_result_returns_path_sum );
+    ( "zinv_result reports invalid target",
+      `Quick,
+      test_path_sum_library_zinv_result_reports_invalid_target );
+    ( "sinv_result returns path sum",
+      `Quick,
+      test_path_sum_library_sinv_result_returns_path_sum );
+    ( "sinv_result reports invalid target",
+      `Quick,
+      test_path_sum_library_sinv_result_reports_invalid_target );
+    ( "tinv_result returns path sum",
+      `Quick,
+      test_path_sum_library_tinv_result_returns_path_sum );
+    ( "tinv_result reports invalid target",
+      `Quick,
+      test_path_sum_library_tinv_result_reports_invalid_target );
+    ( "rz_result returns path sum",
+      `Quick,
+      test_path_sum_library_rz_result_returns_path_sum );
+    ( "rz_result reports invalid target",
+      `Quick,
+      test_path_sum_library_rz_result_reports_invalid_target );
+    ( "rx_result returns path sum",
+      `Quick,
+      test_path_sum_library_rx_result_returns_path_sum );
+    ( "rx_result reports invalid target",
+      `Quick,
+      test_path_sum_library_rx_result_reports_invalid_target );
+    ( "ry_result returns path sum",
+      `Quick,
+      test_path_sum_library_ry_result_returns_path_sum );
+    ( "ry_result reports invalid target",
+      `Quick,
+      test_path_sum_library_ry_result_reports_invalid_target );
+    ( "ch_result returns path sum",
+      `Quick,
+      test_path_sum_library_ch_result_returns_path_sum );
+    ( "ch_result reports invalid target",
+      `Quick,
+      test_path_sum_library_ch_result_reports_invalid_target );
+    ( "cx_result returns path sum",
+      `Quick,
+      test_path_sum_library_cx_result_returns_path_sum );
+    ( "cx_result reports invalid target",
+      `Quick,
+      test_path_sum_library_cx_result_reports_invalid_target );
+    ( "crz_result returns path sum",
+      `Quick,
+      test_path_sum_library_crz_result_returns_path_sum );
+    ( "crz_result reports invalid target",
+      `Quick,
+      test_path_sum_library_crz_result_reports_invalid_target );
+    ( "cz_result returns path sum",
+      `Quick,
+      test_path_sum_library_cz_result_returns_path_sum );
+    ( "cz_result reports invalid target",
+      `Quick,
+      test_path_sum_library_cz_result_reports_invalid_target );
+    ( "cs_result returns path sum",
+      `Quick,
+      test_path_sum_library_cs_result_returns_path_sum );
+    ( "cs_result reports invalid target",
+      `Quick,
+      test_path_sum_library_cs_result_reports_invalid_target );
+    ( "ct_result returns path sum",
+      `Quick,
+      test_path_sum_library_ct_result_returns_path_sum );
+    ( "ct_result reports invalid target",
+      `Quick,
+      test_path_sum_library_ct_result_reports_invalid_target );
+    ( "ccx_result returns path sum",
+      `Quick,
+      test_path_sum_library_ccx_result_returns_path_sum );
+    ( "ccx_result reports invalid target",
+      `Quick,
+      test_path_sum_library_ccx_result_reports_invalid_target );
+    ( "ccz_result returns path sum",
+      `Quick,
+      test_path_sum_library_ccz_result_returns_path_sum );
+    ( "ccz_result reports invalid target",
+      `Quick,
+      test_path_sum_library_ccz_result_reports_invalid_target );
     ( "apply_hadamard does not mutate input",
       `Quick,
       test_apply_hadamard_does_not_mutate_input );
@@ -1556,9 +2697,16 @@ let () =
       ("Poly Normalise", poly_normalize);
       (* ("Normalise Path Variables", normalise_path_var); *)
       ("HH", hh);
+      ("Path-sum equality", path_sum_equality);
+      ("Path-sum initialization", path_sum_initialization);
+      ("Path-sum substitution", path_sum_substitution);
+      ("Poly equality", poly_equality);
+      ("Poly conversion", poly_conversion);
+      ("Poly algebra", poly_algebra);
       ("Lift Poly", lift_poly);
       ("Lift Monome", lift_monome);
       ("Lift Qubit", lift_qubit);
+      ("Monome equality", monome_equality);
       ("Monome to scalar monome", monome_to_scalar_monome);
       ("Variable replacement Factorisation", variable_replacement_factorisation);
       ("Variable replacement", variable_replacement);

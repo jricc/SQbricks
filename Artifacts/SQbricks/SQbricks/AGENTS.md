@@ -84,11 +84,18 @@ If a more generic design is possible, mention it only as an alternative, but do 
   keeping a local copy.
 - Add minimal comments for non-obvious implementation choices, especially when
   two similar data structures must be handled differently.
+- As soon as code or tests are even slightly non-trivial, add a short comment
+  explaining the intention, invariant, or reason for the case.
 
 ## OCaml-specific rules
 
 - Prefer a functional style.
 - Prefer pure functions when possible.
+- Prefer existing infix notations when they make the code more readable; for
+  example, in tests, prefer the local `+++` notation over direct `Poly.insert`
+  calls.
+- When a `Poly.t` can be built directly and readably, avoid wrapping a single
+  monome with `to_poly`; for example, prefer `monome +++ Poly.empty` in tests.
 - Use explicit types when they improve readability or documentation.
 - Use small functions and clear pattern matching.
 - Avoid unnecessary mutation.

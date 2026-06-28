@@ -1,0 +1,764 @@
+Testing `Symbolic execution'.
+This run has ID `SMIEWSXF'.
+
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           0   id.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           1   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           2   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           3   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           4   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           5   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           6   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           7   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           8   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                           9   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          10   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          11   zz.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          12   zz.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          13   zz.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          14   zz.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          15   s.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          16   ss.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          17   ss.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          18   ss rewrite.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          19   t.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          20   tt rewrite.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          21   sinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          22   tinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          23   zinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          24   zinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          25   zinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          26   u1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          27   u1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          28   u1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          29   h.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          30   h.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          31   hh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          32   x.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          33   x.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          34   x.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          35   x.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          36   x.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          37   xx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          38   cx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          39   cx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          40   cx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          41   cx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          42   cx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          43   cxcx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          44   cxcx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          45   cxcx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          46   cxcx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          47   hx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          48   xh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          49   hxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          50   hz.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          51   zh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          52   hzh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          53   ht.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          54   th.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          55   hth.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          56   hs.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          57   sh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          58   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          59   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          60   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          61   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          62   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          63   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          64   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          65   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          66   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          67   cxhh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          68   hcxhh'.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          69   hcxhh''.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          70   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          71   ccxoq2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          72   x_qb.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          73   crzdecomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          74   cu1decomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          75   cu1decomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          76   cu1decomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          77   cu1decomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          78   chdecomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          79   bv2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          80   bv3.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          81   bv7.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          82   cxn.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          83   ccx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          84   swap.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          85   swap.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          86   pe3'.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq OWM                          87   pe3.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        0   id.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        1   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        2   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        3   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        4   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        5   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        6   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        7   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        8   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                        9   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       10   z.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       11   zz.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       12   zz.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       13   zz.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       14   zz.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       15   s.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       16   ss.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       17   ss.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       18   ss rewrite.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       19   t.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       20   tt rewrite.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       21   sinv.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       22   tinv.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       23   zinv.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       24   zinv.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       25   zinv.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       26   u1.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       27   u1.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       28   u1.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       29   h.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       30   h.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       31   hh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       32   x.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       33   x.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       34   x.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       35   x.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       36   x.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       37   xx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       38   cx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       39   cx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       40   cx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       41   cx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       42   cx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       43   cxcx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       44   cxcx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       45   cxcx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       46   cxcx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       47   hx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       48   xh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       49   hxh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       50   hz.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       51   zh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       52   hzh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       53   ht.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       54   th.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       55   hth.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       56   hs.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       57   sh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       58   hsh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       59   hsh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       60   hsh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       61   hsh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       62   hsh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       63   cxh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       64   cxh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       65   cxh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       66   cxh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       67   cxhh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       68   hcxhh'.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       69   hcxhh''.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       70   cxh.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       71   ccxoq2.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       72   x_qb.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       73   crzdecomp.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       74   cu1decomp.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       75   cu1decomp.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       76   cu1decomp.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       77   cu1decomp.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       78   chdecomp.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       79   bv2.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       80   bv3.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       81   bv7.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       82   cxn.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       83   ccx.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       84   swap.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       85   swap.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       86   pe3'.
+  [OK]          Gobal-Phase-Seq-Part-Hyb-Eq OWM                       87   pe3.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            0   id.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            1   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            2   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            3   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            4   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            5   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            6   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            7   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            8   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                            9   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           10   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           11   zz.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           12   zz.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           13   zz.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           14   zz.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           15   s.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           16   ss.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           17   ss.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           18   ss rewrite.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           19   t.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           20   tt rewrite.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           21   sinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           22   tinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           23   zinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           24   zinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           25   zinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           26   u1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           27   u1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           28   u1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           29   h.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           30   h.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           31   hh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           32   x.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           33   x.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           34   x.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           35   x.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           36   x.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           37   xx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           38   cx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           39   cx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           40   cx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           41   cx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           42   cx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           43   cxcx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           44   cxcx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           45   cxcx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           46   cxcx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           47   hx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           48   xh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           49   hxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           50   hz.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           51   zh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           52   hzh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           53   ht.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           54   th.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           55   hth.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           56   hs.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           57   sh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           58   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           59   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           60   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           61   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           62   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           63   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           64   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           65   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           66   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           67   cxhh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           68   hcxhh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           69   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           70   ccxoq2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           71   x_qb.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           72   crzdecomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           73   cu1decomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           74   cu1decomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           75   cu1decomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           76   cu1decomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           77   bv2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           78   bv3.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           79   bv7.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           80   cxn.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           81   ccx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           82   swap.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq OWM                           83   swap.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       0   id.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       1   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       2   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       3   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       4   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       5   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       6   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       7   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       8   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                       9   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      10   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      11   zz.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      12   zz.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      13   zz.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      14   zz.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      15   s.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      16   ss.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      17   ss.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      18   ss rewrite.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      19   t.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      20   tt rewrite.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      21   sinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      22   tinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      23   zinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      24   zinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      25   zinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      26   u1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      27   u1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      28   u1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      29   h.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      30   h.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      31   hh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      32   x.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      33   x.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      34   x.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      35   x.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      36   x.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      37   xx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      38   cx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      39   cx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      40   cx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      41   cx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      42   cx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      43   cxcx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      44   cxcx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      45   cxcx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      46   cxcx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      47   hx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      48   xh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      49   hxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      50   hz.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      51   zh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      52   hzh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      53   ht.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      54   th.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      55   hth.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      56   hs.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      57   sh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      58   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      59   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      60   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      61   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      62   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      63   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      64   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      65   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      66   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      67   cxhh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      68   hcxhh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      69   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      70   ccxoq2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      71   x_qb.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      72   crzdecomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      73   cu1decomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      74   cu1decomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      75   cu1decomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      76   cu1decomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      77   bv2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      78   bv3.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      79   bv7.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      80   cxn.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      81   ccx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      82   swap.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq OWM                      83   swap.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          0   h 0.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          1   false_teleportation h.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          2   h 2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          3   false_teleportation h.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          4   hh 0.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          5   false_teleportation hh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          6   x 0.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          7   false_teleportation x.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          8   x 0.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                          9   x 2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         10   x 3.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         11   xn 0.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         12   false_teleportation cx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         13   cx 0 3.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         14   cx 1 2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         15   cx 1 0.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         16   cx 5 3.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         17   false_teleportation cx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         18   cxn 0 1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         19   cxn.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         20   cxn.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         21   ccxoq2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         22   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         23   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         24   z.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         25   s.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         26   t.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         27   sinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         28   tinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         29   zinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         30   zinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         31   zinv.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         32   u1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         33   u1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         34   u1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         35   hx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         36   xh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         37   hxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         38   hz.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         39   zh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         40   hzh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         41   ht.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         42   th.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         43   hth.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         44   hs.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         45   sh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         46   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         47   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         48   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         49   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         50   hsh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         51   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         52   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         53   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         54   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         55   cxhh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         56   hcxhh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         57   hcxhh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         58   false_teleportation hcxhh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         59   cxh.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         60   x_qb.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         61   chdecomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         62   crzdecomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         63   cu1decomp.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         64   bv2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         65   bv3.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         66   false_teleportation bv3.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         67   bv7.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         68   cxn.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         69   ccx_part1.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         70   ccx_part2.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         71   ccx.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         72   qft4.
+  [OK]          Sub-Circ-Seq-Part-Hyb-Eq Tele                         73   false_teleportation qft4.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      0   h 0.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      1   false_teleportation h.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      2   h 2.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      3   false_teleportation h.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      4   hh 0.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      5   false_teleportation hh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      6   x 0.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      7   false_teleportation x.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      8   x 0.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                      9   x 2.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     10   x 3.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     11   xn 0.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     12   false_teleportation cx.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     13   cx 0 3.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     14   cx 1 2.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     15   cx 1 0.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     16   cx 5 3.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     17   false_teleportation cx.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     18   cxn 0 1.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     19   cxn.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     20   cxn.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     21   ccxoq2.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     22   z.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     23   z.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     24   z.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     25   s.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     26   t.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     27   sinv.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     28   tinv.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     29   zinv.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     30   zinv.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     31   zinv.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     32   u1.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     33   u1.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     34   u1.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     35   hx.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     36   xh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     37   hxh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     38   hz.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     39   zh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     40   hzh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     41   ht.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     42   th.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     43   hth.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     44   hs.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     45   sh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     46   hsh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     47   hsh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     48   hsh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     49   hsh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     50   hsh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     51   cxh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     52   cxh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     53   cxh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     54   cxh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     55   cxhh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     56   hcxhh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     57   hcxhh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     58   false_teleportation hcxhh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     59   cxh.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     60   x_qb.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     61   chdecomp.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     62   crzdecomp.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     63   cu1decomp.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     64   bv2.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     65   bv3.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     66   false_teleportation bv3.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     67   bv7.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     68   cxn.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     69   ccx_part1.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     70   ccx_part2.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     71   ccx.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     72   qft4.
+  [OK]          Global-Phase-Seq-Part-Hyb-Eq Tele                     73   false_teleportation qft4.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           0   h 0.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           1   false_teleportation h.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           2   h 2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           3   false_teleportation h.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           4   hh 0.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           5   false_teleportation hh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           6   x 0.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           7   false_teleportation x.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           8   x 0.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                           9   x 2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          10   x 3.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          11   xn 0.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          12   false_teleportation cx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          13   cx 0 3.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          14   cx 1 2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          15   cx 1 0.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          16   cx 5 3.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          17   false_teleportation cx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          18   cxn 0 1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          19   cxn.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          20   cxn.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          21   ccxoq2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          22   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          23   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          24   z.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          25   s.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          26   t.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          27   sinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          28   tinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          29   zinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          30   zinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          31   zinv.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          32   u1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          33   u1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          34   u1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          35   hx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          36   xh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          37   hxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          38   hz.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          39   zh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          40   hzh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          41   ht.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          42   th.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          43   hth.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          44   hs.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          45   sh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          46   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          47   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          48   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          49   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          50   hsh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          51   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          52   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          53   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          54   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          55   cxhh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          56   hcxhh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          57   false_teleportation hcxhh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          58   cxh.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          59   x_qb.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          60   chdecomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          61   crzdecomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          62   cu1decomp.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          63   bv2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          64   bv3.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          65   false_teleportation bv3.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          66   bv7.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          67   cxn.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          68   ccx_part1.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          69   ccx_part2.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          70   ccx.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          71   qft4.
+  [OK]          Sub-Cir-Par-Part-Hyb-Eq Tele                          72   false_teleportation qft4.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      0   h 0.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      1   false_teleportation h.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      2   h 2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      3   false_teleportation h.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      4   hh 0.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      5   false_teleportation hh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      6   x 0.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      7   false_teleportation x.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      8   x 0.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                      9   x 2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     10   x 3.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     11   xn 0.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     12   false_teleportation cx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     13   cx 0 3.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     14   cx 1 2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     15   cx 1 0.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     16   cx 5 3.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     17   false_teleportation cx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     18   cxn 0 1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     19   cxn.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     20   cxn.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     21   ccxoq2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     22   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     23   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     24   z.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     25   s.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     26   t.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     27   sinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     28   tinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     29   zinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     30   zinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     31   zinv.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     32   u1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     33   u1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     34   u1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     35   hx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     36   xh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     37   hxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     38   hz.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     39   zh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     40   hzh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     41   ht.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     42   th.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     43   hth.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     44   hs.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     45   sh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     46   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     47   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     48   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     49   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     50   hsh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     51   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     52   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     53   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     54   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     55   cxhh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     56   hcxhh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     57   false_teleportation hcxhh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     58   cxh.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     59   x_qb.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     60   chdecomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     61   crzdecomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     62   cu1decomp.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     63   bv2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     64   bv3.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     65   false_teleportation bv3.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     66   bv7.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     67   cxn.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     68   ccx_part1.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     69   ccx_part2.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     70   ccx.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     71   qft4.
+  [OK]          Global-Phase-Par-Part-Hyb-Eq Tele                     72   false_teleportation qft4.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               0   h 0.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               1   h 2.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               2   hh 0.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               3   x 0.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               4   x 0.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               5   x 2.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               6   x 3.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               7   xn 0.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               8   cx 0 3.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation               9   cx 1 2.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              10   cx 1 0.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              11   cx 5 3.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              12   cxn 0 1.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              13   cxn.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              14   cxn.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              15   ccxoq2.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              16   z.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              17   z.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              18   z.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              19   s.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              20   t.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              21   sinv.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              22   tinv.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              23   zinv.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              24   zinv.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              25   zinv.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              26   u1.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              27   u1.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              28   u1.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              29   hx.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              30   xh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              31   hxh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              32   hz.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              33   zh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              34   hzh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              35   ht.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              36   th.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              37   hth.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              38   hs.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              39   sh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              40   hsh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              41   hsh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              42   hsh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              43   hsh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              44   hsh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              45   cxh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              46   cxh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              47   cxh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              48   cxh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              49   cxhh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              50   hcxhh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              51   cxh.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              52   x_qb.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              53   crzdecomp.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              54   cu1decomp.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              55   bv2.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              56   bv3.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              57   bv7.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              58   cxn.
+  [OK]          Sub-Cir-Part-Hyb-Eq OWM vs Teleportation              59   ccx.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          0   h 0.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          1   h 2.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          2   hh 0.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          3   x 0.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          4   x 0.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          5   x 2.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          6   x 3.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          7   xn 0.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          8   cx 0 3.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation          9   cx 1 2.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         10   cx 1 0.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         11   cx 5 3.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         12   cxn 0 1.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         13   cxn.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         14   cxn.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         15   ccxoq2.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         16   z.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         17   z.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         18   z.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         19   s.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         20   t.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         21   sinv.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         22   tinv.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         23   zinv.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         24   zinv.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         25   zinv.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         26   u1.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         27   u1.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         28   u1.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         29   hx.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         30   xh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         31   hxh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         32   hz.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         33   zh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         34   hzh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         35   ht.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         36   th.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         37   hth.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         38   hs.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         39   sh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         40   hsh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         41   hsh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         42   hsh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         43   hsh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         44   hsh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         45   cxh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         46   cxh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         47   cxh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         48   cxh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         49   cxhh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         50   hcxhh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         51   cxh.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         52   x_qb.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         53   crzdecomp.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         54   cu1decomp.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         55   bv2.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         56   bv3.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         57   bv7.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         58   cxn.
+  [OK]          Global-Phase-Part-Hyb-Eq OWM vs Teleportation         59   ccx.
+
+Full test results in `~/git/quantum/qbricks.github-fork/Artifacts/SQbricks/SQbricks/_build/mbqc/default/test/_build/_tests/Symbolic execution'.
+Test Successful in 1.610s. 758 tests run.

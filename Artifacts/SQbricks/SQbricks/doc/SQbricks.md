@@ -278,3 +278,86 @@ la migration, les anciens points d'entrée non typés `Rules.HH.hh`,
 compatibilité. Une fois les versions typées validées et utilisées par le
 pipeline principal, ces anciens points d'entrée doivent être supprimés avant
 merge.
+
+La comparaison symbolique suit maintenant le même principe. Les fonctions
+`Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
+`Path_sum.Ket.equal_result` et `Path_sum.equal_result` distinguent une vraie
+réponse d'égalité (`Ok true` ou `Ok false`) d'une comparaison mal formée. Les
+cas actuellement typés sont les largeurs incompatibles, les tables de variables
+de chemin incomplètes, les listes de sorties de tailles différentes et les
+indices de sorties invalides. Les anciennes fonctions `equal` restent des
+wrappers de compatibilité qui retournent `false` en cas d'erreur typée. Les tests
+unitaires couvrent chaque possibilité observable de ces retours typés.
+
+La construction initiale de path-sums suit aussi ce modèle avec
+`Path_sum.ofSize_init_result`. La fonction construit l'état initial de largeur
+`width`, met à `Zero` les qubits listés dans `inits_0`, puis renumérote les
+autres qubits en variables d'entrée `Var 0`, `Var 1`, etc. Elle renvoie
+`Error InvalidWidth` si la largeur est négative et `Error InvalidInitIndex` si
+un indice de `inits_0` est hors de `[0, width)`. Les tests validés couvrent les
+cas sans initialisation, avec une ou plusieurs initialisations, la largeur zéro
+et les deux erreurs typées.
+
+La substitution de path-sum est typée avec `Path_sum.substitute_result`. Elle
+remplace seulement des variables libres dans la phase et le ket. Une variable
+déclarée dans `path_var` est une variable liée de somme : elle ne peut pas être
+substituée comme une variable libre. Si la cible est une path variable, la
+fonction renvoie `Error CannotSubstitutePathVariable`; avec
+`except_path_var=true`, elle protège cette variable et renvoie le path-sum
+inchangé. L'ancien `Path_sum.substitute` reste un wrapper de compatibilité.
+
+La lecture de l'ordre des variables de chemin est typée avec
+`Path_sum.Ket.path_var_order_result`. Elle reconstruit l'ordre temporaire et
+l'ordre final des variables de chemin présentes dans un ket. Elle renvoie
+`Error InvalidPathVariableCount` si le nombre de variables déclaré est négatif
+et `Error InvalidPathVariableIndex` si le ket contient une variable de chemin en
+dehors de l'intervalle déclaré. Ce comportement est plus strict que l'ancien :
+un ket qui contient des variables de chemin alors que le nombre déclaré vaut
+zéro est maintenant signalé comme mal formé.
+
+Plusieurs opérations locales sur qubits, monômes et polynômes ont aussi reçu un
+retour typé :
+
+- `Qubit.remove_result` distingue une suppression effective, une absence de la
+  variable et le cas non isolable `CannotRemoveFromSum` ;
+- `Poly.Monome.remove_result` propage ce cas sous
+  `CannotRemoveQubitSum` ;
+- `Poly.Monome.of_qubit_to_result` refuse explicitement un `SumMod2` avec
+  `CannotConvertSumMod2` ;
+- `Poly.Monome.to_qubit_result` signale les scalaires qui ne représentent pas
+  directement un qubit avec `CannotConvertScalarToQubit` ;
+- `Poly.to_qubit_result` et `Poly.of_qubit_result` typent les conversions entre
+  polynômes et qubits, notamment les sommes modulo 2 non formatées ;
+- `Poly.of_qubit_2_pi_result` applique le même contrat de format que
+  `Poly.of_qubit_result`, mais utilise le raccourci adapté au cas `2*pi`.
+
+Les anciens wrappers restent en place pendant la migration. Ils conservent le
+comportement historique, souvent en levant encore `Failure` ou en retournant
+`None`, mais les tests nouveaux ciblent les versions `*_result`.
+
+L'algèbre de polynômes expose maintenant `Poly.distribution_result`. Cette
+fonction distribue un monôme sur un polynôme et renvoie
+`Error UnformattedDistributionMonome` quand un monôme du polynôme de droite a
+un scalaire placé à droite (`Prod (_, Scal _)`). Ce cas levait auparavant dans
+`Poly.distribution`. Le wrapper non typé reste disponible pour compatibilité.
+
+Les constructeurs de portes de `Path_sum.Path_sum_library` ont maintenant une
+version typée publique. Le contrat commun est simple : une cible, un contrôle ou
+un contrôle secondaire hors de la largeur déclarée renvoie
+`Error TargetIndexOutOfWidth`. Les anciens constructeurs restent des wrappers de
+compatibilité qui préservent le message d'échec historique.
+
+Les constructeurs typés validés sont :
+
+- portes à une cible : `h_result`, `x_result`, `u1_result`, `z_result`,
+  `s_result`, `t_result`, `zinv_result`, `sinv_result`, `tinv_result`,
+  `rz_result`, `rx_result`, `ry_result` ;
+- portes contrôlées : `ch_result`, `cx_result`, `crz_result`, `cz_result`,
+  `cs_result`, `ct_result` ;
+- portes doublement contrôlées : `ccx_result`, `ccz_result`.
+
+Les helpers internes qui dépendaient de la validation d'indices ont aussi été
+typés, notamment `normalisation_factor_result`, `q2_result` et `ccrz_result`.
+Ils ne sont pas exposés dans l'interface publique, mais ils permettent aux
+constructeurs publics typés de propager l'erreur au lieu de déclencher un
+échec non maîtrisé.
