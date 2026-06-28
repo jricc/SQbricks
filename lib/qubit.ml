@@ -231,11 +231,13 @@ let rec member v q =
   | Var v' -> v = v'
   | _ -> false
 
-let remove v q =
+type remove_error = CannotRemoveFromSum
+
+let remove_result v q =
   let v_removed = ref false in
   let rec aux v q =
     match q with
-    | SumMod2 _ -> failwith "Qubit.remove"
+    | SumMod2 _ -> Error CannotRemoveFromSum
     | Prod (Var v1, q2) when v1 = v ->
         v_removed := true;
         aux v q2
@@ -244,11 +246,17 @@ let remove v q =
         aux v q1
     | Var v1 when v = v1 ->
         v_removed := true;
-        One
-    | _ -> q
+        Ok One
+    | _ -> Ok q
   in
-  let q_output = aux v q in
-  if !v_removed then Some q_output else None
+  match aux v q with
+  | Error error -> Error error
+  | Ok q_output -> Ok (if !v_removed then Some q_output else None)
+
+let remove v q =
+  match remove_result v q with
+  | Ok output -> output
+  | Error CannotRemoveFromSum -> None
 
 let substitute v original_qubit qubit_to_substitute =
   let rec aux q =
