@@ -1,2 +1,6 @@
+benchmarks/VeriQbench/combinational/pe/pe_70.qasm;benchmarks/VeriQbench/dynamic/pe/dqc_pe_70.qasm
+benchmarks/VeriQbench/combinational/pe/pe_71.qasm;benchmarks/VeriQbench/dynamic/pe/dqc_pe_71.qasm
 benchmarks/VeriQbench/combinational/pe/pe_72.qasm;benchmarks/VeriQbench/dynamic/pe/dqc_pe_72.qasm
+benchmarks/VeriQbench/combinational/qft/qft_98.qasm;benchmarks/VeriQbench/dynamic/qft/dqc_qft_98.qasm
+benchmarks/VeriQbench/combinational/qft/qft_99.qasm;benchmarks/VeriQbench/dynamic/qft/dqc_qft_99.qasm
 benchmarks/VeriQbench/combinational/qft/qft_100.qasm;benchmarks/VeriQbench/dynamic/qft/dqc_qft_100.qasm

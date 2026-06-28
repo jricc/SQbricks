@@ -19,7 +19,7 @@ Avoid large feature additions before the benchmark and regression setup are reli
 
 ## Current checkpoint
 
-As of 2026-06-21:
+As of 2026-06-27:
 
 - the light non-regression benchmark exists and checks both functional status
   and tracked performance;
@@ -29,8 +29,8 @@ As of 2026-06-21:
 - the SQbricks-only long benchmark runner exists;
 - the long runner stops source-scoped ordered-size series after timeout or
   memory failure, while continuing other series;
-- the large regression path selection exists, but its baseline/check workflow
-  is still pending;
+- the large regression path selection exists and has a separate baseline/check
+  workflow;
 - the targeted reduction-to-equivalence audit has started with Equiv parameter
   validation.
 

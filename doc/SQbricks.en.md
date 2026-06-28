@@ -30,12 +30,10 @@ The project contains two main capabilities:
   equivalence.
 
 The light benchmark is a short guardrail before running longer campaigns. The
-long SQbricks-only benchmark reuses the historical families from
+selected large regression checks a more expensive but still controlled sample.
+The long SQbricks-only benchmark reuses the historical families from
 `scripts/benchmarks.sh`, but keeps only SQbricks verification rows in the
 generated CSV files.
-
-There is no intermediate benchmark planned for now. It would mostly duplicate
-the role of the light benchmark and the long benchmark.
 
 ## Light benchmark commands
 
@@ -230,14 +228,21 @@ The current entry points are:
 | --- | --- |
 | `make benchmark-regression-large TYPE=owm` | Run one selected family. |
 | `make regression-large` | Run every selected family listed in `LARGE_TYPES`. |
+| `make regression-large-baseline` | Produce the selected baselines, one file per family. |
+| `make regression-large-check` | Rerun the selection and compare results with those baselines. |
 
 Current status:
 
 - path selections exist for every long benchmark family;
+- for size-ordered families, the selection keeps up to the three largest
+  representatives so the check does not depend on a single case that may reach
+  `TO` or `OutOfMemory` depending on the run;
 - the runner writes result CSV files;
-- baseline/check mode is not implemented yet;
-- the next step is to validate the selection, then add a baseline and check
-  workflow separate from the light benchmark.
+- baselines are stored per family in `benchmarks/baseline/regression-large/`;
+- the check is separate from the light benchmark. It fails when a baseline row
+  disappears, when functional capability is lost, or when a measured time
+  exceeds both configured relative and absolute thresholds;
+- a functional improvement is reported but does not fail the check.
 
 ## Equiv audit
 

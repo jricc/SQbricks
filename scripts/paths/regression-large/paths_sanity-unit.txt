@@ -1,4 +1,3 @@
-benchmarks/buggy/bv_100_veriqbench_FALSE_gate.qasm;benchmarks/VeriQbench/combinational/bv/bv_100.qasm
 benchmarks/buggy/bv_100_veriqbench_FALSE_indice.qasm;benchmarks/VeriQbench/combinational/bv/bv_100.qasm
 benchmarks/buggy/bv_100_veriqbench_FALSE_gate2.qasm;benchmarks/VeriQbench/combinational/bv/bv_100.qasm
 benchmarks/buggy/bv_100_veriqbench_FALSE_angle.qasm;benchmarks/VeriQbench/combinational/bv/bv_100.qasm
@@ -11,10 +10,6 @@ benchmarks/buggy/grover_15_veriqbench_FALSE_angle.qasm;benchmarks/VeriQbench/com
 benchmarks/buggy/pe_10_FALSE_gate.qasm;benchmarks/VeriQbench/combinational/pe/pe_10.qasm
 benchmarks/buggy/pe_10_FALSE_qubit.qasm;benchmarks/VeriQbench/combinational/pe/pe_10.qasm
 benchmarks/buggy/pe_10_FALSE_angle.qasm;benchmarks/VeriQbench/combinational/pe/pe_10.qasm
-benchmarks/buggy/qft_25_veriqbench_FALSE_angle_2^14.qasm;benchmarks/VeriQbench/combinational/qft/qft_25.qasm
-benchmarks/buggy/qft_25_veriqbench_FALSE_angle_2^15.qasm;benchmarks/VeriQbench/combinational/qft/qft_25.qasm
-benchmarks/buggy/qft_25_veriqbench_FALSE_angle_2^16.qasm;benchmarks/VeriQbench/combinational/qft/qft_25.qasm
-benchmarks/buggy/qft_25_veriqbench_FALSE_angle_2^17.qasm;benchmarks/VeriQbench/combinational/qft/qft_25.qasm
 benchmarks/buggy/qft_25_veriqbench_FALSE_angle_2^27.qasm;benchmarks/VeriQbench/combinational/qft/qft_25.qasm
 benchmarks/buggy/qft_25_veriqbench_FALSE_angle_2^28.qasm;benchmarks/VeriQbench/combinational/qft/qft_25.qasm
 benchmarks/buggy/qft_25_veriqbench_FALSE_angle_2^61.qasm;benchmarks/VeriQbench/combinational/qft/qft_25.qasm

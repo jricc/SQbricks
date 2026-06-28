@@ -524,11 +524,10 @@ The metrics can be found in the `totals` sheet:
 
 ### SQbricks-only benchmarks
 
-Two SQbricks-only benchmark levels are available when the goal is to check
+Three SQbricks-only benchmark levels are available when the goal is to check
 SQbricks itself without running the external verification tools used by
-`scripts/benchmarks.sh`: a short non-regression benchmark and a long benchmark.
-There is no intermediate benchmark for now, because it would mostly duplicate
-one of those two roles.
+`scripts/benchmarks.sh`: the short light non-regression benchmark, the selected
+large regression, and the full long benchmark.
 
 | Command | Description |
 |:--------|-------------|
@@ -539,6 +538,8 @@ one of those two roles.
 | `make benchmarks-sqbricks` | Runs all long SQbricks-only families listed in `LONG_TYPES`. |
 | `make benchmark-regression-large TYPE=owm` | Runs one selected large-regression family. |
 | `make regression-large` | Runs all selected large-regression families listed in `LARGE_TYPES`. |
+| `make regression-large-baseline` | Builds per-family selected large-regression baselines. |
+| `make regression-large-check` | Runs the selected large regression and compares it with those baselines. |
 
 The light baseline is local to the machine. Regenerate it after changing the
 light benchmark selection or timing policy.
@@ -550,7 +551,13 @@ reported as a verification tool in the generated CSV.
 
 The selected large regression currently reuses the SQbricks-only long runner
 with shorter path files in `scripts/paths/regression-large/`. It writes CSV
-results; baseline/check behavior is planned separately.
+results, stores per-family baselines in
+`benchmarks/baseline/regression-large/`, and checks that current rows do not
+lose functional capability or exceed the configured performance thresholds.
+Functional improvements are reported but do not fail the check.
+For sized families, the selection keeps up to the three largest representatives
+instead of only the largest one, so the check can still observe nearby cases
+when the largest case reaches the timeout or memory limit.
 
 For ordered-size series, the long runner stops trying larger cases in the same
 series after a timeout or memory limit and writes `SKIP_AFTER_RESOURCE_FAILURE`

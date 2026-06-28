@@ -1,4 +1,8 @@
+benchmarks/VeriQbench/dynamic/pe/dqc_pe_40.qasm
+benchmarks/VeriQbench/dynamic/pe/dqc_pe_41.qasm
 benchmarks/VeriQbench/dynamic/pe/dqc_pe_42.qasm
+benchmarks/VeriQbench/dynamic/qft/dqc_qft_40.qasm
+benchmarks/VeriQbench/dynamic/qft/dqc_qft_41.qasm
 benchmarks/VeriQbench/dynamic/qft/dqc_qft_42.qasm
 benchmarks/VeriQbench/dynamic/dqc_bitflip_code_corrected.qasm
 benchmarks/VeriQbench/dynamic/dqc_phaseflip_code_corrected.qasm
