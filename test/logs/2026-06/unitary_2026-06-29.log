@@ -1,5 +1,5 @@
 Testing `Symbolic execution'.
-This run has ID `OBJUJ711'.
+This run has ID `IV3BOCKM'.
 
   [OK]          Global-Phase-Seq-Unit-Eq                  0   rz 1 <> u1 1.
   [OK]          Global-Phase-Seq-Unit-Eq                  1   crz 1 <> cu1 1, conditional phase.
@@ -95,74 +95,76 @@ This run has ID `OBJUJ711'.
   [OK]          Sub-Cir-Seq-Unit-Eq                      18   apply swap result ok.
   [OK]          Sub-Cir-Seq-Unit-Eq                      19   apply swap result invalid place.
   [OK]          Sub-Cir-Seq-Unit-Eq                      20   apply swap result different lengths.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      21   seq unit vs hybrid.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      22   x = gp 2 -- rx 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      23   h = h.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      24   z = hxh.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      25   x = hzh.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      26   cz = hcxh.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      27   cz = hcrxh.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      28   cx = hczh.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      29   ccx = ccxoq2.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      30   ccx = ccxoq2.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      31   x_qb.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      32   ccx_qb.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      33   gp 2 -- gp 2 = gp 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      34   gp 5 -- gp 5 = gp 4.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      35   gp 4 = gp 5 -- gp 5.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      36   gp -4 = gp -5 -- gp -5.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      37   u1 2 -- u1 2 = rx 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      38   rx 2 -- rx 2 = rx 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      39   rx 5 -- rx 5 = rx 4.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      40   ry 2 -- ry 2 = ry 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      41   ry 5 -- ry 5 = ry 4.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      42   ry (-3) -- ry (-3) = ry (-2).
-  [OK]          Sub-Cir-Seq-Unit-Eq                      43   rz 2 -- rz 2 = rz 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      44   rz 2 -- gp 3 -- rz 2 -- gp 3 = rz 1 -- gp 2.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      45   h -- h = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      46   x -- x = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      47   x 0 -- ss 0 -- h 0 = x 0 -- ss 0 -- h 0.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      48   y -- y = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      49   z -- z = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      50   gp 0 -- gp (0) = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      51   gp 2 -- gp (-2) = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      52   gp (-5) -- gp 5 = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      53   gp (-7/2^19) -- gp 7/2^19 = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      54   rx 0 -- rx 0 = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      55   rx 2 -- rx (-2) = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      56   rx 17/2^2 -- rx (-17/2^2) = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      57   rz 0 -- rz 0 = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      58   rz 2 -- rz (-2) = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      59   ry 0 -- ry 0 = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      60   ry 1 -- ry (-1) = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      61   ry 2 -- ry (-2) = id.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      62   ry_not 1 = ry -1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      63   y = gp 2 -- ry 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      64   rx 3 = sinv -- ry 3 -- s.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      65   rz (-4) = h -- rx (-4) -- h.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      66   rz (4) = u1(2) -- x -- u1(-2) -- x.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      67   rz (4) = gp (-5) -- u1 4.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      68   gp 5 -- rz (4) = u1 4.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      69   u1 2 0 -- crz (1) = cu1 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      70   crz (4) = u1 (-5) --  cu1 4.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      71   rz (4) = u1(5) -- x -- u1(-5) -- x.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      72   u1 (4) = gp 5 -- u1(5) -- x -- u1(-5) -- x.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      73   crz (4) =  u1(5) -- cx -- u1(-5) -- cx.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      74   cu1 (4) = u1 (5) -- u1(5) -- cx -- u1(-5) -- cx.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      75   cu1 (-4) = u1 (-5) -- u1(-5) -- cx -- u1(5) -- cx.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      76   cu1 (-1) = cu1decomp (-1).
-  [OK]          Sub-Cir-Seq-Unit-Eq                      77   cu1 (1) = cu1decomp (1).
-  [OK]          Sub-Cir-Seq-Unit-Eq                      78   cu1 (0) = cu1decomp (0).
-  [OK]          Sub-Cir-Seq-Unit-Eq                      79   ccu1 (1) 0 1 2 = cu1decomp 1 0 1 2.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      80   ccu1 (-1) 2 3 0 1 = cu1decomp (-1) 2 3 0 1.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      81   ry 5 = s -- h -- rz 5 -- h -- sinv.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      82   FALSE angle gf2^32.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      83   FALSE gate gf2^32.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      84   FALSE indice gf2^32.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      85   FALSE gate grover_15.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      86   FALSE indice grover_15.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      87   FALSE angle grover_15.
-  [OK]          Sub-Cir-Seq-Unit-Eq                      88   FALSE angle grover_5.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      21   inverse result ok.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      22   inverse result non reversible.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      23   seq unit vs hybrid.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      24   x = gp 2 -- rx 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      25   h = h.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      26   z = hxh.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      27   x = hzh.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      28   cz = hcxh.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      29   cz = hcrxh.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      30   cx = hczh.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      31   ccx = ccxoq2.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      32   ccx = ccxoq2.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      33   x_qb.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      34   ccx_qb.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      35   gp 2 -- gp 2 = gp 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      36   gp 5 -- gp 5 = gp 4.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      37   gp 4 = gp 5 -- gp 5.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      38   gp -4 = gp -5 -- gp -5.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      39   u1 2 -- u1 2 = rx 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      40   rx 2 -- rx 2 = rx 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      41   rx 5 -- rx 5 = rx 4.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      42   ry 2 -- ry 2 = ry 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      43   ry 5 -- ry 5 = ry 4.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      44   ry (-3) -- ry (-3) = ry (-2).
+  [OK]          Sub-Cir-Seq-Unit-Eq                      45   rz 2 -- rz 2 = rz 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      46   rz 2 -- gp 3 -- rz 2 -- gp 3 = rz 1 -- gp 2.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      47   h -- h = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      48   x -- x = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      49   x 0 -- ss 0 -- h 0 = x 0 -- ss 0 -- h 0.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      50   y -- y = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      51   z -- z = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      52   gp 0 -- gp (0) = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      53   gp 2 -- gp (-2) = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      54   gp (-5) -- gp 5 = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      55   gp (-7/2^19) -- gp 7/2^19 = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      56   rx 0 -- rx 0 = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      57   rx 2 -- rx (-2) = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      58   rx 17/2^2 -- rx (-17/2^2) = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      59   rz 0 -- rz 0 = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      60   rz 2 -- rz (-2) = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      61   ry 0 -- ry 0 = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      62   ry 1 -- ry (-1) = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      63   ry 2 -- ry (-2) = id.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      64   ry_not 1 = ry -1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      65   y = gp 2 -- ry 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      66   rx 3 = sinv -- ry 3 -- s.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      67   rz (-4) = h -- rx (-4) -- h.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      68   rz (4) = u1(2) -- x -- u1(-2) -- x.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      69   rz (4) = gp (-5) -- u1 4.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      70   gp 5 -- rz (4) = u1 4.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      71   u1 2 0 -- crz (1) = cu1 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      72   crz (4) = u1 (-5) --  cu1 4.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      73   rz (4) = u1(5) -- x -- u1(-5) -- x.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      74   u1 (4) = gp 5 -- u1(5) -- x -- u1(-5) -- x.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      75   crz (4) =  u1(5) -- cx -- u1(-5) -- cx.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      76   cu1 (4) = u1 (5) -- u1(5) -- cx -- u1(-5) -- cx.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      77   cu1 (-4) = u1 (-5) -- u1(-5) -- cx -- u1(5) -- cx.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      78   cu1 (-1) = cu1decomp (-1).
+  [OK]          Sub-Cir-Seq-Unit-Eq                      79   cu1 (1) = cu1decomp (1).
+  [OK]          Sub-Cir-Seq-Unit-Eq                      80   cu1 (0) = cu1decomp (0).
+  [OK]          Sub-Cir-Seq-Unit-Eq                      81   ccu1 (1) 0 1 2 = cu1decomp 1 0 1 2.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      82   ccu1 (-1) 2 3 0 1 = cu1decomp (-1) 2 3 0 1.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      83   ry 5 = s -- h -- rz 5 -- h -- sinv.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      84   FALSE angle gf2^32.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      85   FALSE gate gf2^32.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      86   FALSE indice gf2^32.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      87   FALSE gate grover_15.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      88   FALSE indice grover_15.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      89   FALSE angle grover_15.
+  [OK]          Sub-Cir-Seq-Unit-Eq                      90   FALSE angle grover_5.
   [OK]          Sub-Cir-Seq-Unit-Eq Into Feynman          0   cz_feynman 0 1.
   [OK]          Sub-Cir-Seq-Unit-Eq Into Feynman          1   cz_feynman 1 2 -- h 3.
   [OK]          Sub-Cir-Seq-Unit-Eq Into Feynman          2   cz_feynman 0 3 -- h 3.
@@ -341,4 +343,4 @@ This run has ID `OBJUJ711'.
   [OK]          Global-Phase-Par-Unit-Eq                 74   FALSE angle grover_5.
 
 Full test results in `/sqbricks/_build/unitary/default/test/_build/_tests/Symbolic execution'.
-Test Successful in 126.637s. 338 tests run.
+Test Successful in 133.677s. 340 tests run.

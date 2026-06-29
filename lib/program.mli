@@ -77,6 +77,12 @@ val execution : ?debug:bool -> ?input_state:Path_sum.t -> t -> Path_sum.t
 (** [execution ?debug ?input_state prog] runs [prog] on the optional
     [input_state] path-sum or an initialized path sum. *)
 
+type inverse_error = NonReversibleProgram of t
+
+val inverse_result : ?debug:bool -> t -> (t, inverse_error) result
+(** [inverse_result ?debug prog] computes the inverse of [prog] or reports the
+    first non-reversible subprogram. *)
+
 val inverse : ?debug:bool -> t -> t
 (** [inverse ?debug prog] computes the inverse of the quantum program.
 

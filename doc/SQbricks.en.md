@@ -337,6 +337,9 @@ extracting variables; inconsistent data is reported as `ErrorInvalidQubitIndex`.
 Internal permutation preparation uses `Program.Macros.apply_swap_result` from
 `Equiv`, so inconsistent list lengths or placement options do not escape as
 `failwith`.
+Internal inversion also uses `Program.inverse_result`: a non-reversible
+subprogram is reported explicitly, then converted by `Equiv` to
+`ErrorCircuitNotUnitary`.
 
 Initial path-sum construction follows the same model with
 `Path_sum.ofSize_init_result`. The function builds the initial state of width

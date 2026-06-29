@@ -347,6 +347,9 @@ indices de sortie avant d'extraire les variables ; une incohérence remonte comm
 La préparation des permutations internes utilise `Program.Macros.apply_swap_result`
 dans `Equiv`, afin qu'une incohérence de tailles de listes ou d'option de
 placement ne remonte pas comme `failwith`.
+L'inversion interne utilise aussi `Program.inverse_result` : un sous-programme
+non réversible est signalé explicitement, puis converti par `Equiv` en
+`ErrorCircuitNotUnitary`.
 
 La construction initiale de path-sums suit aussi ce modèle avec
 `Path_sum.ofSize_init_result`. La fonction construit l'état initial de largeur

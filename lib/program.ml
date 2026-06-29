@@ -339,19 +339,30 @@ let execution ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
     execution_aux (format p) (Path_sum.ofSize width)
   else execution_aux (format p) input_state
 
-let inverse ?(debug = false) (p : t) : t =
-  let rec aux (p : t) : t =
+type inverse_error = NonReversibleProgram of t
+
+let inverse_result ?(debug = false) (p : t) : (t, inverse_error) result =
+  let rec aux (p : t) : (t, inverse_error) result =
     if debug then printf "Program.aux\n";
     match p with
-    | Sequence (p1, p2) -> Sequence (aux p2, aux p1)
-    | Apply (U1 (s, k), co, ta) -> Apply (U1 (Q.neg s, k), co, ta)
-    | Apply (GP (s, k), co, ta) -> Apply (GP (Q.neg s, k), co, ta)
+    | Sequence (p1, p2) -> (
+        match (aux p2, aux p1) with
+        | Ok p2_inv, Ok p1_inv -> Ok (Sequence (p2_inv, p1_inv))
+        | Error error, _ | _, Error error -> Error error)
+    | Apply (U1 (s, k), co, ta) -> Ok (Apply (U1 (Q.neg s, k), co, ta))
+    | Apply (GP (s, k), co, ta) -> Ok (Apply (GP (Q.neg s, k), co, ta))
     | Measure _ | It _ | InitQ _ | Not _ ->
-        failwith
-          (sprintf "Program.aux, p = %s isn't reversible" (String.pretty p))
-    | _ -> p
+        Error (NonReversibleProgram p)
+    | _ -> Ok p
   in
-  format (aux p)
+  match aux p with Ok p_inv -> Ok (format p_inv) | Error error -> Error error
+
+let inverse ?(debug = false) (p : t) : t =
+  match inverse_result ~debug p with
+  | Ok p_inv -> p_inv
+  | Error (NonReversibleProgram p) ->
+      failwith
+        (sprintf "Program.aux, p = %s isn't reversible" (String.pretty p))
 
 let create_state ?(circuit = E) (width : int) (inits_0 : int list) =
   execution ~input_state:(Path_sum.ofSize_init width inits_0) circuit

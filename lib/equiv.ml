@@ -104,6 +104,11 @@ let apply_swap_for_equiv different_lengths_result program targets1 targets2 =
       Error different_lengths_result
   | Error Program.Macros.InvalidSwapPlace -> Error ErrorInvalidProgram
 
+let inverse_for_equiv program =
+  match Program.inverse_result program with
+  | Ok inverse -> Ok inverse
+  | Error (Program.NonReversibleProgram _) -> Error ErrorCircuitNotUnitary
+
 let program_has_valid_gate_applications width program =
   let gate_indices_are_valid controls targets =
     ListBis.valid_indices width controls && ListBis.valid_indices width targets
@@ -441,125 +446,137 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                             separability;
 
                         if separability then (
-                          let unitary2_inv = Program.inverse unitary2 in
-                          if debug then
-                            printf
-                              "Equiv.seq, good order unitary2_inv =\n%s\n\n"
-                              (ProgS.pretty unitary2_inv);
-                          match
-                            apply_swap_for_equiv NotEquivDiffInputs
-                              unitary2_inv inputs1 inputs2
-                          with
+                          match inverse_for_equiv unitary2 with
                           | Error result -> result
-                          | Ok unitary2_swap ->
+                          | Ok unitary2_inv -> (
                               if debug then
                                 printf
-                                  "Equiv.seq, good order unitary2_swap =\n%s\n\n"
-                                  (ProgS.pretty unitary2_swap);
-
-                              (* `[|unit1--unit2^(-1)|] : |x>|0>_init1 -> |output_state>` *)
-                              let output_state =
-                                if length_inputs1 = 0 then
-                                  Program.execution ~input_state:state1
-                                    unitary2_inv
-                                else
-                                  Program.execution ~input_state:state1
-                                    unitary2_swap
-                              in
-
-                              if debug then
-                                printf "Equiv.seq, output_state =\n%s\n\n%!"
-                                  (PSS.pretty output_state);
-
-                              match reduction_for_equiv ~debug output_state with
+                                  "Equiv.seq, good order unitary2_inv =\n%s\n\n"
+                                  (ProgS.pretty unitary2_inv);
+                              match
+                                apply_swap_for_equiv NotEquivDiffInputs
+                                  unitary2_inv inputs1 inputs2
+                              with
                               | Error result -> result
-                              | Ok output_state_reduced ->
+                              | Ok unitary2_swap ->
                                   if debug then
                                     printf
-                                      "Equiv.seq, output_state_reduced =\n%s\n\n"
-                                      (PSS.pretty output_state_reduced);
+                                      "Equiv.seq, good order unitary2_swap =\n%s\n\n"
+                                      (ProgS.pretty unitary2_swap);
+
+                                  (* `[|unit1--unit2^(-1)|] : |x>|0>_init1 -> |output_state>` *)
+                                  let output_state =
+                                    if length_inputs1 = 0 then
+                                      Program.execution ~input_state:state1
+                                        unitary2_inv
+                                    else
+                                      Program.execution ~input_state:state1
+                                        unitary2_swap
+                                  in
+
+                                  if debug then
+                                    printf "Equiv.seq, output_state =\n%s\n\n%!"
+                                      (PSS.pretty output_state);
 
                                   match
-                                    initialized_path_sum_for_equiv ~debug width
-                                      inits1
+                                    reduction_for_equiv ~debug output_state
                                   with
                                   | Error result -> result
-                                  | Ok identity_state ->
-                                      let var_inputs =
-                                        Ket.extract_var
-                                          output_state_reduced.ket inputs1
-                                      in
+                                  | Ok output_state_reduced ->
                                       if debug then
                                         printf
-                                          "Equiv.seq, var_inputs =\n%s\n\n%!"
-                                          (ListBis.string_int var_inputs);
+                                          "Equiv.seq, output_state_reduced =\n%s\n\n"
+                                          (PSS.pretty output_state_reduced);
 
-                                      (* Determine the type of phase equality for the reduced output state. *)
-                                      let condition_zero_phase_result =
-                                        match output_state_reduced.phase with
-                                        | phase when Poly.is_constant phase -> (
-                                            (* A constant phase is either zero or a global phase. *)
-                                            match
-                                              Poly.equal_result phase Poly.zero
-                                            with
-                                            | Ok true -> Ok SubCircuitEquality
-                                            | Ok false -> Ok GlobalPhaseEquality
-                                            | Error _ ->
-                                                Error ErrorMalformedPathSum)
-                                        | phase
-                                          when not
-                                                 (Poly.member_list var_inputs
-                                                    phase) ->
-                                            (* Phase depends only on path variables. *)
-                                            Ok SubCircuitEquality
-                                        | _ -> Ok ConditionalEquality
-                                      in
-
-                                      match condition_zero_phase_result with
+                                      match
+                                        initialized_path_sum_for_equiv ~debug
+                                          width inits1
+                                      with
                                       | Error result -> result
-                                      | Ok condition_zero_phase -> (
-                                          (* Debug display *)
-                                          if debug then (
+                                      | Ok identity_state ->
+                                          let var_inputs =
+                                            Ket.extract_var
+                                              output_state_reduced.ket inputs1
+                                          in
+                                          if debug then
                                             printf
-                                              "Equiv.seq, output_state_reduced.phase = %s\n\n%!"
-                                              (PS.exact
-                                                 output_state_reduced.phase);
+                                              "Equiv.seq, var_inputs =\n%s\n\n%!"
+                                              (ListBis.string_int var_inputs);
 
-                                            printf
-                                              "Equiv.seq, condition_zero_phase = %s\n\n%!"
-                                              (phase_equality_to_string
-                                                 condition_zero_phase));
+                                          (* Determine the type of phase equality for the reduced output state. *)
+                                          let condition_zero_phase_result =
+                                            match output_state_reduced.phase with
+                                            | phase
+                                              when Poly.is_constant phase -> (
+                                                (* A constant phase is either zero or a global phase. *)
+                                                match
+                                                  Poly.equal_result phase
+                                                    Poly.zero
+                                                with
+                                                | Ok true ->
+                                                    Ok SubCircuitEquality
+                                                | Ok false ->
+                                                    Ok GlobalPhaseEquality
+                                                | Error _ ->
+                                                    Error ErrorMalformedPathSum)
+                                            | phase
+                                              when not
+                                                     (Poly.member_list
+                                                        var_inputs phase) ->
+                                                (* Phase depends only on path variables. *)
+                                                Ok SubCircuitEquality
+                                            | _ -> Ok ConditionalEquality
+                                          in
 
-                                          (* Evaluate result according to the phase condition. *)
-                                          match condition_zero_phase with
-                                          | SubCircuitEquality -> (
-                                              match
-                                                compute_result ~debug inputs1
-                                                  output_state_reduced
-                                                  identity_state
-                                              with
-                                              | Error result -> result
-                                              | Ok true -> SubCircuitEquivalent
-                                              | Ok false ->
-                                                  SubCircuitInconclusive)
-                                          | GlobalPhaseEquality -> (
-                                              match
-                                                compute_result ~debug inputs1
-                                                  output_state_reduced
-                                                  identity_state
-                                              with
-                                              | Error result -> result
-                                              | Ok true -> GlobalPhaseEquivalent
-                                              | Ok false ->
-                                                  SubCircuitInconclusive)
-                                          | ConditionalEquality -> (
-                                              match equivalence with
-                                              | SubCircuit ->
-                                                  SubCircuitInconclusive
-                                              | GlobalPhase ->
-                                                  GlobalPhaseInconclusive
-                                              | FullCircuit ->
-                                                  ErrorFullCircuitNotImplemented)))
+                                          match condition_zero_phase_result with
+                                          | Error result -> result
+                                          | Ok condition_zero_phase -> (
+                                              (* Debug display *)
+                                              if debug then (
+                                                printf
+                                                  "Equiv.seq, output_state_reduced.phase = %s\n\n%!"
+                                                  (PS.exact
+                                                     output_state_reduced.phase);
+
+                                                printf
+                                                  "Equiv.seq, condition_zero_phase = %s\n\n%!"
+                                                  (phase_equality_to_string
+                                                     condition_zero_phase));
+
+                                              (* Evaluate result according to the phase condition. *)
+                                              match condition_zero_phase with
+                                              | SubCircuitEquality -> (
+                                                  match
+                                                    compute_result ~debug
+                                                      inputs1
+                                                      output_state_reduced
+                                                      identity_state
+                                                  with
+                                                  | Error result -> result
+                                                  | Ok true ->
+                                                      SubCircuitEquivalent
+                                                  | Ok false ->
+                                                      SubCircuitInconclusive)
+                                              | GlobalPhaseEquality -> (
+                                                  match
+                                                    compute_result ~debug
+                                                      inputs1
+                                                      output_state_reduced
+                                                      identity_state
+                                                  with
+                                                  | Error result -> result
+                                                  | Ok true ->
+                                                      GlobalPhaseEquivalent
+                                                  | Ok false ->
+                                                      SubCircuitInconclusive)
+                                              | ConditionalEquality -> (
+                                                  match equivalence with
+                                                  | SubCircuit ->
+                                                      SubCircuitInconclusive
+                                                  | GlobalPhase ->
+                                                      GlobalPhaseInconclusive
+                                                  | FullCircuit ->
+                                                      ErrorFullCircuitNotImplemented))))
                 else Entanglement1
 
 let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
