@@ -38,7 +38,11 @@ type poly = Poly.t
 type monome = Monome.t
 
 let to_poly (m : monome) : poly = Poly.to_poly m
-let reduction = Reduction_algorithm.reduction_algorithm
+let reduce_valid_path_sum ?(debug = false) input =
+  match Reduction_algorithm.reduction_algorithm_result ~debug input with
+  | Ok output -> output
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
 let ( ++ ) (q1 : Qubit.t) (q2 : Qubit.t) : Qubit.t = Qubit.SumMod2 (q1, q2)
 let zero : Qubit.t = Qubit.Zero
 let one : Qubit.t = Qubit.One
@@ -209,8 +213,13 @@ let test_poly_normalize ?(debug = true) (input : Path_sum.t)
   if debug then
     printf "Primitives.test_normalise_path_var, input =\n%s\n\n%!"
       (PSS.pretty input);
+  (* This helper is used only for valid examples; malformed path sums have
+     dedicated tests for the typed error below. *)
   let input_normalised =
-    Rules.Variable_replacement.poly_normalized ~debug input
+    match Rules.Variable_replacement.poly_normalized_result ~debug input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
   in
   if debug then
     printf "Primitives.test_normalise_path_var, input_normalised =\n%s\n\n%!"
@@ -1391,10 +1400,14 @@ let test_variable_replacement ?(debug = true) (input : Path_sum.t)
     (expect : Path_sum.t) () =
   if debug then
     printf "Test.test_variable_replacement, input =\n%s\n\n" (PSS.pretty input);
+  (* This helper keeps the historical expectation: no replacement means the
+     input path sum is unchanged. *)
   let greet_repl =
-    match Rules.Variable_replacement.variable_replacement ~debug input with
-    | Some ps -> ps
-    | None -> input
+    match Rules.Variable_replacement.variable_replacement_result ~debug input with
+    | Ok (Some ps) -> ps
+    | Ok None -> input
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
   in
   if debug then
     printf "Test.test_variable_replacement, greet_repl =\n%s%!\n\n"
@@ -2067,10 +2080,10 @@ let test_gates_apply ?(debug = true) (p : Program.t) (ps : Path_sum.t) () =
     let ps_exe = Program.execution p in
     if debug then
       printf "Test.test_apply_gates, ps_exe =\n%s\n\n" (PSS.pretty ps_exe);
-    let ps_greet = reduction ~debug ps_exe in
+    let ps_greet = reduce_valid_path_sum ~debug ps_exe in
     if debug then
       printf "Test.test_apply_gates, ps_greet =\n%s\n\n" (PSS.pretty ps_greet);
-    let ps_expect = reduction ~debug ps in
+    let ps_expect = reduce_valid_path_sum ~debug ps in
     printf "\nTest.test_gates_apply, ps_expect =\n%s\n\n" (PSS.pretty ps_expect);
     Path_sum.equal ~debug ps_greet ps_expect
   in

@@ -65,14 +65,12 @@ module HH : sig
     ?y0_to_remove:int ->
     Path_sum.t ->
     (Path_sum.t, reduction_error) result
-  (** [hh_result ?debug ?y0_to_remove ps] is the typed version of {!hh}. It
+  (** [hh_result ?debug ?y0_to_remove ps] applies the [HH] reduction rule. It
       returns [Ok ps'] when the rule succeeds or does not apply, and
       [Error (MalformedPathSum message)] when [ps] violates an invariant needed
-      by the rule. *)
+      by the rule.
 
-  val hh : ?debug:bool -> ?y0_to_remove:int -> Path_sum.t -> Path_sum.t
-  (** [hh ?debug ?y0_to_remove ps] This rule looks for a path variable y0 that
-      appears in the form:
+      This rule looks for a path variable y0 that appears in the form:
 
       {[
         Phase = 1/2 * y0 * (yi + Q) + R
@@ -93,7 +91,7 @@ module HH : sig
         Phase: 1/2 * y0 * y1 + 0
         Ket: |y1>
       ]}
-      After applying [hh] rule:
+      After applying the [HH] rule:
       {[
         Phase: 0
         Ket: |x>
@@ -228,20 +226,17 @@ module Variable_replacement : sig
       as |y0 + y1> -> |y0>. Three specialized implementations are provided for
       different use cases.
 
-      Additionally, [poly_normalized] normalizes path variables to achieve a
-      canonical form. *)
+      Additionally, [poly_normalized_result] normalizes path variables to
+      achieve a canonical form. *)
 
   val variable_replacement_result :
     ?debug:bool ->
     Path_sum.t ->
     (Path_sum.t option, reduction_error) result
-  (** [variable_replacement_result ?debug ps] is the typed version of
-      {!variable_replacement}. It returns [Ok (Some ps')] when one replacement
-      is applied, [Ok None] when no replacement applies, and
+  (** [variable_replacement_result ?debug ps] returns [Ok (Some ps')] when one
+      replacement is applied, [Ok None] when no replacement applies, and
       [Error (MalformedPathSum message)] when an internal matcher invariant is
       violated. *)
-
-  val variable_replacement : ?debug:bool -> Path_sum.t -> Path_sum.t option
 
   val variable_replacement_factorisation :
     ?debug:bool -> Path_sum.t -> Path_sum.t
@@ -250,9 +245,7 @@ module Variable_replacement : sig
 
   val poly_normalized_result :
     ?debug:bool -> Path_sum.t -> (Path_sum.t, reduction_error) result
-  (** [poly_normalized_result ?debug ps] is the typed version of
-      {!poly_normalized}. It returns [Error (MalformedPathSum message)] when
-      the phase or ket contains a path variable not declared by [ps.path_var]. *)
-
-  val poly_normalized : ?debug:bool -> Path_sum.t -> Path_sum.t
+  (** [poly_normalized_result ?debug ps] returns
+      [Error (MalformedPathSum message)] when the phase or ket contains a path
+      variable not declared by [ps.path_var]. *)
 end

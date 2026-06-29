@@ -324,10 +324,6 @@ module HH = struct
       | Ok None -> Ok ps
     else Ok ps
 
-  let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) =
-    match hh_result ~debug ~y0_to_remove ps with
-    | Ok ps -> ps
-    | Error (MalformedPathSum message) -> failwith message
 end
 
 module Rename = struct
@@ -625,11 +621,6 @@ module Variable_replacement = struct
           in
           Ok (Some (Rename.rename output))
       | Ok None -> Ok None
-
-  let variable_replacement ?(debug = false) (input : Path_sum.t) =
-    match variable_replacement_result ~debug input with
-    | Ok output -> output
-    | Error (MalformedPathSum message) -> failwith message
 
   (* Factorization by variable replacement.
    Example: phase = x0y0 + x0y1, ket = |y0 + y1>
@@ -998,8 +989,4 @@ module Variable_replacement = struct
     in
     Ok output
 
-  let poly_normalized ?(debug = false) (ps : Path_sum.t) =
-    match poly_normalized_result ~debug ps with
-    | Ok output -> output
-    | Error (MalformedPathSum message) -> failwith message
 end
