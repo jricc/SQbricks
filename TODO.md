@@ -50,6 +50,29 @@
   typed reduction results.
 - [x] Remove the old untyped `Reduction_algorithm.reduction_algorithm` entry
   point after migrating local callers to `reduction_algorithm_result`.
+- [x] Route Equiv initial-state construction through
+  `Path_sum.ofSize_init_result` so invalid initialization data becomes
+  `ErrorInvalidQubitIndex`.
+- [x] Route observable-qubit comparison in `Equiv.compute_result` through
+  `Qubit.equal_result` so malformed comparison metadata becomes
+  `ErrorMalformedPathSum`.
+- [x] Reject non-unitary `Program` constructs such as `InitQ` during Equiv
+  parameter preparation before symbolic execution.
+- [x] Reject malformed unitary gate applications in Equiv parameter preparation
+  with `ErrorInvalidProgram`.
+- [x] Reject empty targets for gates that need one in Equiv parameter
+  preparation with `ErrorInvalidProgram`.
+- [x] Keep `GP` targets valid in Equiv parameter preparation because they do
+  not affect symbolic execution.
+- [x] Document the well-formed circuit constraints enforced by Equiv.
+- [x] Keep malformed `GP/U1` programs printable so Equiv diagnostics can report
+  `ErrorInvalidProgram`.
+- [x] Route the sequential phase classification through `Poly.equal_result` so
+  malformed phase comparisons become `ErrorMalformedPathSum`.
+- [x] Make Equiv separability checks validate ket width and output indices
+  before extracting variables.
+- [x] Add `Program.Macros.apply_swap_result` and use it from Equiv so swap
+  preparation errors do not escape as `failwith`.
 
 ## Notes
 

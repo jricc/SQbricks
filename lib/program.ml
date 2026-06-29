@@ -71,6 +71,14 @@ let widths (p : t) : int * int =
     (wc + 1, wq + 1)
 
 module String = struct
+  let u1_exact s k co ta =
+    sprintf "Apply (U1 (%s,%d),%s,%s)" (Q.to_string s) k
+      (ListBis.string_int co) (ListBis.string_int ta)
+
+  let gp_exact s k co ta =
+    sprintf "Apply (GP (%s,%d),%s,%s)" (Q.to_string s) k
+      (ListBis.string_int co) (ListBis.string_int ta)
+
   let pretty p =
     let rec aux p =
       match p with
@@ -87,9 +95,8 @@ module String = struct
           sprintf "Apply (X,%s,%s)" (ListBis.string_int co)
             (ListBis.string_int ta)
       | Apply (U1 (s, k), [ co ], [ ta ]) ->
-          if k < 0 then
-            failwith (sprintf "Program.pretty.CU1, k = %d must be positive" k);
-          if Q.leq Q.zero s then
+          if k < 0 then u1_exact s k [ co ] [ ta ]
+          else if Q.leq Q.zero s then
             let angle = Q.div_2exp s k in
             if Q.equal angle div2 then sprintf "cz %d %d" co ta
             else if Q.equal angle div4 then sprintf "cs %d %d" co ta
@@ -102,18 +109,16 @@ module String = struct
             else if Q.equal angle div8 then sprintf "ctinv %d %d" co ta
             else sprintf "cu1 (-2.pi.%s) %d %d" (Q.to_string angle) co ta
       | Apply (U1 (s, k), [ co1; co2 ], [ ta ]) ->
-          if k < 0 then
-            failwith (sprintf "Program.pretty.CU1, k = %d must be positive" k);
-          if Q.leq Q.zero s then
+          if k < 0 then u1_exact s k [ co1; co2 ] [ ta ]
+          else if Q.leq Q.zero s then
             let angle = Q.div_2exp s k in
             sprintf "ccu1 (2.pi.%s) %d %d %d" (Q.to_string angle) co1 co2 ta
           else
             let angle = Q.div_2exp (Q.neg s) k in
             sprintf "cu1 (-2.pi.%s) %d %d %d" (Q.to_string angle) co1 co2 ta
       | Apply (U1 (s, k), [], [ ta ]) ->
-          if k < 0 then
-            failwith (sprintf "Program.pretty.CU1, k = %d must be positive" k);
-          if Q.leq Q.zero s then
+          if k < 0 then u1_exact s k [] [ ta ]
+          else if Q.leq Q.zero s then
             let angle = Q.div_2exp s k in
             if Q.equal angle div2 then sprintf "z %d" ta
             else if Q.equal angle div4 then sprintf "s %d" ta
@@ -126,9 +131,8 @@ module String = struct
             else if Q.equal angle div8 then sprintf "tinv %d" ta
             else sprintf "u1 (-2.pi.%s) %d" (Q.to_string angle) ta
       | Apply (U1 (s, k), co, ta) ->
-          if k < 0 then
-            failwith (sprintf "Program.pretty.CU1, k = %d must be positive" k);
-          if Q.leq Q.zero s then
+          if k < 0 then u1_exact s k co ta
+          else if Q.leq Q.zero s then
             let angle = Q.div_2exp s k in
             sprintf "Apply (U1 (2.pi.%s),%s,%s)" (Q.to_string angle)
               (ListBis.string_int co) (ListBis.string_int ta)
@@ -137,24 +141,31 @@ module String = struct
             sprintf "Apply (U1 (-2.pi.%s),%s,%s)" (Q.to_string angle)
               (ListBis.string_int co) (ListBis.string_int ta)
       | Apply (GP (s, k), [], []) ->
-          if k < 0 then
-            failwith (sprintf "Program.pretty.GP, need 0 < k, k = %d" k);
-          if Q.leq Q.zero s then
+          if k < 0 then gp_exact s k [] []
+          else if Q.leq Q.zero s then
             let angle = Q.div_2exp s k in
             sprintf "gp (2.pi.%s)" (Q.to_string angle)
           else
             let angle = Q.div_2exp (Q.neg s) k in
             sprintf "gp (-2.pi.%s)" (Q.to_string angle)
       | Apply (GP (s, k), [ co ], []) ->
-          if k < 0 then
-            failwith (sprintf "Program.pretty.CGP, need 0 < k, k = %d" k);
-          if Q.leq Q.zero s then
+          if k < 0 then gp_exact s k [ co ] []
+          else if Q.leq Q.zero s then
             let angle = Q.div_2exp s k in
             sprintf "cgp (2.pi.%s) %d" (Q.to_string angle) co
           else
             let angle = Q.div_2exp (Q.neg s) k in
             sprintf "cgp (-2.pi.%s) %d" (Q.to_string angle) co
-      | Apply (GP _, _, _) -> failwith "Gobal phase is not applied to a qubit"
+      | Apply (GP (s, k), co, ta) ->
+          if k < 0 then gp_exact s k co ta
+          else if Q.leq Q.zero s then
+            let angle = Q.div_2exp s k in
+            sprintf "Apply (GP (2.pi.%s),%s,%s)" (Q.to_string angle)
+              (ListBis.string_int co) (ListBis.string_int ta)
+          else
+            let angle = Q.div_2exp (Q.neg s) k in
+            sprintf "Apply (GP (-2.pi.%s),%s,%s)" (Q.to_string angle)
+              (ListBis.string_int co) (ListBis.string_int ta)
       | Measure (k, ta) -> sprintf "m %d %d" k ta
       | InitQ ta -> sprintf "iq0 %d" ta
       | Not ta -> sprintf "notC %d" ta
@@ -534,25 +545,29 @@ module Macros = struct
   let s_n ta n = rz_n 2 ta n
   let t_n ta n = rz_n 3 ta n
 
-  let rec apply_swap ?(place = "after") p targets1 targets2 =
+  type apply_swap_error = InvalidSwapPlace | DifferentSwapLengths
+
+  let apply_one_swap place p ta1 ta2 =
+    if Int.equal ta1 ta2 then Ok p
+    else if place = "after" then Ok (p -- swap ta1 ta2)
+    else if place = "before" then Ok (swap ta1 ta2 -- p)
+    else Error InvalidSwapPlace
+
+  let rec apply_swap_result ?(place = "after") p targets1 targets2 =
     match (targets1, targets2) with
-    | ta1 :: [], ta2 :: [] when not (Int.equal ta1 ta2) ->
-        if place = "after" then p -- swap ta1 ta2
-        else if place = "before" then swap ta1 ta2 -- p
-        else failwith "Program.equiv, place forbidden"
-    | _ :: [], _ :: [] -> p
-    | ta1 :: targets1_remain, ta2 :: targets2_remain
-      when not (Int.equal ta1 ta2) ->
-        let p' =
-          if place = "after" then p -- swap ta1 ta2
-          else if place = "before" then swap ta1 ta2 -- p
-          else failwith "Program.equiv, place forbidden"
-        in
-        apply_swap p' targets1_remain targets2_remain
-    | _ :: targets1_remain, _ :: targets2_remain ->
-        apply_swap p targets1_remain targets2_remain
-    | [], [] -> p
-    | _ -> failwith "Macros.apply_swap, targets1.length <> targets2.length"
+    | [], [] -> Ok p
+    | ta1 :: targets1_remain, ta2 :: targets2_remain -> (
+        match apply_one_swap place p ta1 ta2 with
+        | Error error -> Error error
+        | Ok p' -> apply_swap_result ~place p' targets1_remain targets2_remain)
+    | _ -> Error DifferentSwapLengths
+
+  let apply_swap ?place p targets1 targets2 =
+    match apply_swap_result ?place p targets1 targets2 with
+    | Ok p -> p
+    | Error InvalidSwapPlace -> failwith "Program.equiv, place forbidden"
+    | Error DifferentSwapLengths ->
+        failwith "Macros.apply_swap, targets1.length <> targets2.length"
 
   let apply_measure p targets wc =
     let rec aux p targets ic =
