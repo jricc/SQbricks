@@ -88,6 +88,23 @@ let test_apply_swap_result_reports_different_lengths () =
   | Ok _ | Error InvalidSwapPlace ->
       check bool "different lengths expected" true false
 
+let test_inverse_result_returns_inverse_program () =
+  (* Inversion reverses the sequence and negates phase-like gates. *)
+  let input = h 0 -- u1 1 0 in
+  let expected_output = u1 ~s:(-1) 1 0 -- h 0 in
+  match Program.inverse_result input with
+  | Ok output ->
+      check string "inverse program" (ProgS.exact expected_output)
+        (ProgS.exact output)
+  | Error _ -> check bool "inverse program expected" true false
+
+let test_inverse_result_reports_non_reversible_program () =
+  (* Hybrid operations are not reversible unitary programs. *)
+  match Program.inverse_result (iq0 0) with
+  | Error (Program.NonReversibleProgram _) ->
+      check bool "non reversible program" true true
+  | Ok _ -> check bool "non reversible program expected" true false
+
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
     (p2' : string) () =
@@ -445,6 +462,12 @@ let unitary =
     ( "apply swap result different lengths",
       `Quick,
       test_apply_swap_result_reports_different_lengths );
+    ( "inverse result ok",
+      `Quick,
+      test_inverse_result_returns_inverse_program );
+    ( "inverse result non reversible",
+      `Quick,
+      test_inverse_result_reports_non_reversible_program );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );

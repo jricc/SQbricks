@@ -73,6 +73,8 @@
   before extracting variables.
 - [x] Add `Program.Macros.apply_swap_result` and use it from Equiv so swap
   preparation errors do not escape as `failwith`.
+- [x] Add `Program.inverse_result` and use it from Equiv so non-reversible
+  programs are reported explicitly.
 
 ## Notes
 
