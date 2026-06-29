@@ -336,6 +336,13 @@ module Macros : sig
   val apply_measure : t -> int list -> int -> t
   (** [apply_measure prog qubits register] Adds measurements. *)
 
+  type apply_swap_error = InvalidSwapPlace | DifferentSwapLengths
+
+  val apply_swap_result :
+    ?place:string -> t -> int list -> int list -> (t, apply_swap_error) result
+  (** [apply_swap_result ?place prog a b] adds swap operations or reports why
+      they cannot be added. *)
+
   val apply_swap : ?place:string -> t -> int list -> int list -> t
   (** [apply_swap ?place prog a b] Adds swap operations. *)
 

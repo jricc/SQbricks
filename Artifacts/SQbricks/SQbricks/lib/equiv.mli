@@ -42,6 +42,8 @@ type result =
   | FullCircuitInconclusiveKet
   | ErrorCircuitNotUnitary  (** Error: circuit is not unitary *)
   | ErrorInvalidQubitIndex  (** Error: input, output, or measurement index is invalid *)
+  | ErrorInvalidProgram
+      (** Error: the program has an invalid gate application *)
   | ErrorFullCircuitNotImplemented
       (** Error: full-circuit equivalence is not implemented *)
   | ErrorBothCircuitsHaveInits

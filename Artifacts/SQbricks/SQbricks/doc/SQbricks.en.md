@@ -276,6 +276,50 @@ reduction pipeline and tests now use typed results directly. The untyped
 must use `Reduction_algorithm.reduction_algorithm_result` and handle
 `MalformedPathSum` explicitly.
 
+In `Equiv`, initial state construction now goes through
+`Path_sum.ofSize_init_result`. An invalid width or initialization index is
+converted to `ErrorInvalidQubitIndex`, avoiding an escaping `invalid_arg` during
+verification.
+
+Observable-qubit comparison in `compute_result` now goes through
+`Qubit.equal_result`. A comparison error means malformed path-sum metadata and
+is returned as `ErrorMalformedPathSum`; `Ok true` and `Ok false` keep the
+previous equivalence behavior.
+
+Parameter preparation now explicitly checks `Program.unitary`. A hybrid or
+non-unitary program, for example a circuit containing `InitQ`, returns
+`ErrorCircuitNotUnitary` before symbolic execution.
+
+### Well-formed circuits for Equiv
+
+Before symbolic execution, `Equiv` distinguishes three families of problems:
+invalid equivalence parameters, non-unitary circuits, and malformed unitary
+programs.
+
+Input, output, and measurement lists must refer to existing qubits.
+Incompatible input/output lengths return `NotEquivDiffInputs`,
+`NotEquivDiffOutputs`, or `NotEquivDiffInputsOutputs`. An out-of-bounds index
+returns `ErrorInvalidQubitIndex`.
+
+A circuit passed to the equivalence checker must be unitary according to
+`Program.unitary`. Hybrid or classical constructors such as `Measure`, `InitQ`,
+`It`, and `Not` return `ErrorCircuitNotUnitary` before symbolic execution.
+
+Unitary gate applications must then be well formed:
+
+- control and target indices must be inside the circuit width;
+- a target gate such as `H`, `X`, or `U1` must have at least one target;
+- for these gates, a control must not also be a target;
+- the exponent of `GP` and `U1` must be non-negative.
+
+A violation of these constraints returns `ErrorInvalidProgram`. A global phase
+`GP` is a special case: it may carry targets, possibly with controls. These
+targets are validated as indices, but they do not affect symbolic execution.
+
+Malformed programs remain printable for diagnostics:
+`Program.String.pretty` uses a generic form for `GP` and `U1` when the exponent
+is negative, instead of raising during display.
+
 Symbolic comparison now follows the same principle. The functions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
 `Path_sum.Ket.equal_result`, and `Path_sum.equal_result` distinguish a real
@@ -285,6 +329,14 @@ output lists with different lengths, and invalid output indices. The old
 `equal` functions remain compatibility wrappers that return `false` on typed
 errors. Unit tests cover each observable return possibility for these typed
 results.
+In the sequential algorithm, the decision that separates zero phase, global
+phase, and conditional phase also uses `Poly.equal_result`, so a malformed
+comparison is reported as `ErrorMalformedPathSum`.
+Separability checks also validate the ket width and output indices before
+extracting variables; inconsistent data is reported as `ErrorInvalidQubitIndex`.
+Internal permutation preparation uses `Program.Macros.apply_swap_result` from
+`Equiv`, so inconsistent list lengths or placement options do not escape as
+`failwith`.
 
 Initial path-sum construction follows the same model with
 `Path_sum.ofSize_init_result`. The function builds the initial state of width

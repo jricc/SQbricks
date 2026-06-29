@@ -64,6 +64,30 @@ let test_sqv_result ?(debug = true) ?(algo = Equiv.Sequence)
     (Equiv.result_to_string expected)
     (Equiv.result_to_string greeting)
 
+let test_apply_swap_result_returns_swapped_program () =
+  (* Different target orders require one explicit swap after the program. *)
+  let input = h 0 in
+  let expected_output = h 0 -- swap 0 1 in
+  match apply_swap_result input [ 0 ] [ 1 ] with
+  | Ok output ->
+      check string "swapped program" (ProgS.exact expected_output)
+        (ProgS.exact output)
+  | Error _ -> check bool "swapped program expected" true false
+
+let test_apply_swap_result_reports_invalid_place () =
+  (* Only before/after insertion is supported. *)
+  match apply_swap_result ~place:"middle" (h 0) [ 0 ] [ 1 ] with
+  | Error InvalidSwapPlace -> check bool "invalid place" true true
+  | Ok _ | Error DifferentSwapLengths ->
+      check bool "invalid place expected" true false
+
+let test_apply_swap_result_reports_different_lengths () =
+  (* The two target lists describe a pairwise permutation and must align. *)
+  match apply_swap_result (h 0) [ 0 ] [ 1; 2 ] with
+  | Error DifferentSwapLengths -> check bool "different lengths" true true
+  | Ok _ | Error InvalidSwapPlace ->
+      check bool "different lengths expected" true false
+
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
     (p2' : string) () =
@@ -396,6 +420,31 @@ let unitary =
       `Quick,
       test_sqv_result ~inputs1:[ 0 ] ~inputs2:[ 0 ] ~outputs1:[ 0 ]
         ~outputs2:[ 0 ] Equiv.ErrorBothCircuitsHaveInits (h 1) (h 1) );
+    ( "seq init is not unitary",
+      `Quick,
+      test_sqv_result Equiv.ErrorCircuitNotUnitary (iq0 0) (h 0) );
+    ( "seq invalid gate application",
+      `Quick,
+      test_sqv_result Equiv.ErrorInvalidProgram (cx 0 0) (h 0) );
+    ( "seq empty gate target",
+      `Quick,
+      test_sqv_result Equiv.ErrorInvalidProgram
+        (Program.Apply (Gates.H, [], []))
+        (h 0) );
+    ( "seq negative u1 exponent",
+      `Quick,
+      test_sqv_result Equiv.ErrorInvalidProgram
+        (Program.Apply (Gates.U1 (Q.of_int 1, -1), [], [ 0 ]))
+        (h 0) );
+    ( "apply swap result ok",
+      `Quick,
+      test_apply_swap_result_returns_swapped_program );
+    ( "apply swap result invalid place",
+      `Quick,
+      test_apply_swap_result_reports_invalid_place );
+    ( "apply swap result different lengths",
+      `Quick,
+      test_apply_swap_result_reports_different_lengths );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );
@@ -657,6 +706,33 @@ let parallel =
       `Quick,
       test_sqv_result ~algo:Parallel ~equivalence:Equiv.FullCircuit
         Equiv.ErrorFullCircuitNotImplemented (h 0) (h 0) );
+    ( "parallel init is not unitary",
+      `Quick,
+      test_sqv_result ~algo:Parallel Equiv.ErrorCircuitNotUnitary (iq0 0) (h 0)
+    );
+    ( "parallel invalid gate application",
+      `Quick,
+      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram (cx 0 0) (h 0)
+    );
+    ( "parallel global phase target is accepted",
+      `Quick,
+      let global_phase_with_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [], [ 0 ]))
+      in
+      test_sqv_result ~algo:Parallel Equiv.SubCircuitEquivalent
+        global_phase_with_target global_phase_with_target );
+    ( "parallel controlled global phase target is accepted",
+      `Quick,
+      let controlled_global_phase_with_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [ 0 ], [ 1 ]))
+      in
+      test_sqv_result ~algo:Parallel Equiv.SubCircuitEquivalent
+        controlled_global_phase_with_target controlled_global_phase_with_target );
+    ( "parallel negative gp exponent",
+      `Quick,
+      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
+        (Program.Apply (Gates.GP (Q.of_int 1, -1), [], []))
+        (h 0) );
     ( "parallel unit vs hybrid",
       `Quick,
       test_prog_equiv ~algo:Parallel ~not_equiv:true (m 0 0) (h 0) );

@@ -280,6 +280,55 @@ non typé `Reduction_algorithm.reduction_algorithm` a aussi été supprimé :
 les appelants doivent utiliser `Reduction_algorithm.reduction_algorithm_result`
 et traiter explicitement `MalformedPathSum`.
 
+Dans `Equiv`, la construction des états initiaux passe par
+`Path_sum.ofSize_init_result`. Une largeur invalide ou un indice
+d'initialisation invalide est converti en `ErrorInvalidQubitIndex`, ce qui évite
+de laisser remonter `invalid_arg` pendant une vérification.
+
+La comparaison des qubits observables dans `compute_result` passe par
+`Qubit.equal_result`. Une erreur de comparaison indique une métadonnée de
+path-sum mal formée et devient `ErrorMalformedPathSum`; les réponses `Ok true`
+et `Ok false` gardent le comportement d'équivalence précédent.
+
+La préparation des paramètres vérifie maintenant explicitement
+`Program.unitary`. Un programme hybride ou non unitaire, par exemple un circuit
+contenant `InitQ`, retourne `ErrorCircuitNotUnitary` avant l'exécution
+symbolique.
+
+### Bonne formation des circuits pour Equiv
+
+Avant l'exécution symbolique, `Equiv` distingue trois familles de problèmes :
+paramètres d'équivalence invalides, circuits non unitaires, et programmes
+unitaires mal formés.
+
+Les listes d'entrées, de sorties et de mesures doivent désigner des qubits
+existants. Des longueurs incompatibles entre entrées et sorties retournent
+`NotEquivDiffInputs`, `NotEquivDiffOutputs` ou
+`NotEquivDiffInputsOutputs`. Un indice hors borne retourne
+`ErrorInvalidQubitIndex`.
+
+Un circuit utilisé par le vérificateur d'équivalence doit être unitaire au sens
+de `Program.unitary`. Les constructeurs hybrides ou classiques comme `Measure`,
+`InitQ`, `It` et `Not` retournent `ErrorCircuitNotUnitary` avant l'exécution
+symbolique.
+
+Les applications de portes unitaires doivent ensuite être bien formées :
+
+- les indices de contrôle et de cible doivent être dans la largeur du circuit ;
+- une porte qui agit sur une cible, comme `H`, `X` ou `U1`, doit avoir au moins
+  une cible ;
+- pour ces portes, un contrôle ne doit pas être aussi une cible ;
+- l'exposant de `GP` et `U1` doit être positif ou nul.
+
+Une violation de ces contraintes retourne `ErrorInvalidProgram`. Une phase
+globale `GP` est un cas particulier : elle peut porter des cibles,
+éventuellement avec contrôle. Ces cibles sont validées comme indices, mais elles
+n'ont pas d'effet sur l'exécution symbolique.
+
+Les programmes mal formés restent affichables pour le diagnostic :
+`Program.String.pretty` utilise une forme générique pour `GP` et `U1` quand
+l'exposant est négatif, au lieu de lever une exception pendant l'affichage.
+
 La comparaison symbolique suit maintenant le même principe. Les fonctions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
 `Path_sum.Ket.equal_result` et `Path_sum.equal_result` distinguent une vraie
@@ -289,6 +338,15 @@ de chemin incomplètes, les listes de sorties de tailles différentes et les
 indices de sorties invalides. Les anciennes fonctions `equal` restent des
 wrappers de compatibilité qui retournent `false` en cas d'erreur typée. Les tests
 unitaires couvrent chaque possibilité observable de ces retours typés.
+Dans l'algorithme séquentiel, la décision qui distingue phase nulle, phase
+globale et phase conditionnelle utilise aussi `Poly.equal_result`, afin qu'une
+comparaison mal formée remonte comme `ErrorMalformedPathSum`.
+Les vérifications de séparabilité valident aussi la largeur du ket et les
+indices de sortie avant d'extraire les variables ; une incohérence remonte comme
+`ErrorInvalidQubitIndex`.
+La préparation des permutations internes utilise `Program.Macros.apply_swap_result`
+dans `Equiv`, afin qu'une incohérence de tailles de listes ou d'option de
+placement ne remonte pas comme `failwith`.
 
 La construction initiale de path-sums suit aussi ce modèle avec
 `Path_sum.ofSize_init_result`. La fonction construit l'état initial de largeur
