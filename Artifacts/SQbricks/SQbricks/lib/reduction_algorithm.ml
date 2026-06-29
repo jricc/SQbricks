@@ -102,8 +102,3 @@ let reduction_algorithm_result ?(debug = false) input =
   match aux input with
   | Ok output -> Ok (Rename.rename output)
   | Error reduction_error -> Error reduction_error
-
-let reduction_algorithm ?(debug = false) input =
-  match reduction_algorithm_result ~debug input with
-  | Ok output -> output
-  | Error (Rules.MalformedPathSum message) -> failwith message

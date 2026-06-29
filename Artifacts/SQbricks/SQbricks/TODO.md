@@ -13,10 +13,6 @@
   corrections.
 - [ ] Continue the targeted reduction-to-equivalence audit, one issue at a
   time.
-- [ ] Remove the old untyped `Rules.HH.hh`,
-  `Rules.Variable_replacement.variable_replacement`, and
-  `Rules.Variable_replacement.poly_normalized` entry points once the typed
-  reduction results are validated, before merging.
 
 ## Done
 
@@ -48,6 +44,12 @@
   failures with explicit equivalence results.
 - [x] Stop ordered long benchmark series after timeout or memory failure while
   keeping other series running.
+- [x] Remove the old untyped `Rules.HH.hh`,
+  `Rules.Variable_replacement.variable_replacement`, and
+  `Rules.Variable_replacement.poly_normalized` entry points after validating the
+  typed reduction results.
+- [x] Remove the old untyped `Reduction_algorithm.reduction_algorithm` entry
+  point after migrating local callers to `reduction_algorithm_result`.
 
 ## Notes
 
@@ -76,10 +78,9 @@
   It is prepared for run-only CSV generation; baseline/check behavior is still
   pending.
 - The current Equiv cleanup introduces typed reduction failures so malformed
-  path sums are not confused with rules that simply do not apply. The old
-  untyped `Rules.HH.hh`, `Rules.Variable_replacement.variable_replacement`,
-  and `Rules.Variable_replacement.poly_normalized` entry points still have to be
-  removed after validation.
+  path sums are not confused with rules that simply do not apply. The reduction
+  pipeline now uses typed results directly, including the public reduction
+  entry point.
 - Watch the behavior change in `Path_sum.substitute_result`: target path
   variables are now protected. This is intended, but it may expose a bug if an
   external caller relied on the old `except_path_var=true` behavior still

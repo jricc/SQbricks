@@ -267,12 +267,14 @@ result as `ErrorMalformedPathSum`.
 The `HH` rule is the first case handled. `Variable_replacement` follows the
 same model for its main replacement step with
 `Rules.Variable_replacement.variable_replacement_result` and for normalization
-with `Rules.Variable_replacement.poly_normalized_result`. During the migration,
-the old untyped `Rules.HH.hh`,
+with `Rules.Variable_replacement.poly_normalized_result`. After validation, the
+old untyped `Rules.HH.hh`,
 `Rules.Variable_replacement.variable_replacement`, and
-`Rules.Variable_replacement.poly_normalized` entry points remain temporarily for
-compatibility. Once the typed versions are validated and used by the main
-pipeline, these old entry points must be removed before merging.
+`Rules.Variable_replacement.poly_normalized` entry points were removed. The
+reduction pipeline and tests now use typed results directly. The untyped
+`Reduction_algorithm.reduction_algorithm` wrapper was removed as well: callers
+must use `Reduction_algorithm.reduction_algorithm_result` and handle
+`MalformedPathSum` explicitly.
 
 Symbolic comparison now follows the same principle. The functions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
