@@ -64,11 +64,15 @@
   preparation with `ErrorInvalidProgram`.
 - [x] Keep `GP` targets valid in Equiv parameter preparation because they do
   not affect symbolic execution.
+- [x] Reject controlled `GP` applications whose targets overlap controls, so
+  their well-formedness constraints match other controlled gates.
 - [x] Document the well-formed circuit constraints enforced by Equiv.
 - [x] Keep malformed `GP/U1` programs printable so Equiv diagnostics can report
   `ErrorInvalidProgram`.
 - [x] Route the sequential phase classification through `Poly.equal_result` so
   malformed phase comparisons become `ErrorMalformedPathSum`.
+- [x] Route path-sum phase comparison through `Poly.equal_result` so malformed
+  phase metadata is not reported as plain inequality.
 - [x] Make Equiv separability checks validate ket width and output indices
   before extracting variables.
 - [x] Add `Program.Macros.apply_swap_result` and use it from Equiv so swap
@@ -96,6 +100,11 @@
   ordered source-scoped series after `TO` or `OutOfMemory`.
 - No intermediate benchmark is planned: it would mostly duplicate the light and
   long benchmark roles.
+- Vigilance: `Path_sum.equal_result` now has defensive phase-comparison errors
+  (`IncompatiblePhaseWidths`, `IncompletePhasePathVariableMap`). They are
+  propagated to Equiv, but they are not directly covered by a natural
+  `Path_sum.equal_result` test yet because the current ket comparison does not
+  expose the incomplete phase-mapping situation.
 - The global benchmark audit compared the long SQbricks-only runner with
   `scripts/benchmarks.sh`, checked manifests, CSV shapes, Makefile entry
   points, and light runner validation tests.

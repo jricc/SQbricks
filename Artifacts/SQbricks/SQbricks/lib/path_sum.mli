@@ -256,14 +256,22 @@ end
 
 (** {1 Comparison and Equality} *)
 
-type equality_error = DifferentOutputLengths | InvalidOutputIndex
+type equality_error =
+  | DifferentOutputLengths
+  | InvalidOutputIndex
+  | IncompatiblePhaseWidths
+  | IncompletePhasePathVariableMap
 (** Errors that can prevent a path-sum comparison from being interpreted as a
     plain equality result.
 
     - [DifferentOutputLengths] means [outputs1] and [outputs2] do not select
       the same number of output qubits.
     - [InvalidOutputIndex] means one selected output index is outside its path
-      sum. *)
+      sum.
+    - [IncompatiblePhaseWidths] means the phase comparison was given
+      incompatible ket widths.
+    - [IncompletePhasePathVariableMap] means the phase comparison needs a
+      path-variable mapping that the ket comparison did not provide. *)
 
 val equal_result :
   ?debug:bool ->
@@ -277,7 +285,8 @@ val equal_result :
     typed version of {!equal}. It returns [Ok true] or [Ok false] when the
     comparison is well formed, and [Error DifferentOutputLengths] when the
     output selections have different lengths, or [Error InvalidOutputIndex]
-    when an output selection is out of bounds. *)
+    when an output selection is out of bounds. Phase comparison metadata errors
+    are reported explicitly instead of being collapsed to [Ok false]. *)
 
 val equal :
   ?debug:bool ->

@@ -453,6 +453,14 @@ let unitary =
       test_sqv_result Equiv.ErrorInvalidProgram
         (Program.Apply (Gates.U1 (Q.of_int 1, -1), [], [ 0 ]))
         (h 0) );
+    ( "seq controlled global phase target overlap is invalid",
+      `Quick,
+      let controlled_global_phase_with_same_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [ 0 ], [ 0 ]))
+      in
+      test_sqv_result Equiv.ErrorInvalidProgram
+        controlled_global_phase_with_same_target
+        (h 0) );
     ( "apply swap result ok",
       `Quick,
       test_apply_swap_result_returns_swapped_program );
@@ -751,6 +759,14 @@ let parallel =
       in
       test_sqv_result ~algo:Parallel Equiv.SubCircuitEquivalent
         controlled_global_phase_with_target controlled_global_phase_with_target );
+    ( "parallel controlled global phase target overlap is invalid",
+      `Quick,
+      let controlled_global_phase_with_same_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [ 0 ], [ 0 ]))
+      in
+      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
+        controlled_global_phase_with_same_target
+        (h 0) );
     ( "parallel negative gp exponent",
       `Quick,
       test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram

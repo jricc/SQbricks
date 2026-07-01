@@ -314,7 +314,9 @@ Unitary gate applications must then be well formed:
 
 A violation of these constraints returns `ErrorInvalidProgram`. A global phase
 `GP` is a special case: it may carry targets, possibly with controls. These
-targets are validated as indices, but they do not affect symbolic execution.
+targets are validated as indices, but they do not affect symbolic execution. If
+`GP` carries both controls and targets, these lists must remain disjoint as for
+other gates.
 
 Malformed programs remain printable for diagnostics:
 `Program.String.pretty` uses a generic form for `GP` and `U1` when the exponent
@@ -329,6 +331,8 @@ output lists with different lengths, and invalid output indices. The old
 `equal` functions remain compatibility wrappers that return `false` on typed
 errors. Unit tests cover each observable return possibility for these typed
 results.
+`Path_sum.equal_result` also propagates typed phase-comparison errors instead of
+converting them to plain inequality.
 In the sequential algorithm, the decision that separates zero phase, global
 phase, and conditional phase also uses `Poly.equal_result`, so a malformed
 comparison is reported as `ErrorMalformedPathSum`.
