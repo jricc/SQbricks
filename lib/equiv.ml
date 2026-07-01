@@ -89,6 +89,9 @@ let path_sum_equal_for_equiv ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
   | Ok are_equal -> Ok are_equal
   | Error Path_sum.DifferentOutputLengths -> Error NotEquivDiffOutputs
   | Error Path_sum.InvalidOutputIndex -> Error ErrorInvalidQubitIndex
+  | Error Path_sum.IncompatiblePhaseWidths
+  | Error Path_sum.IncompletePhasePathVariableMap ->
+      Error ErrorMalformedPathSum
 
 (* Path-sum initialization failures come from invalid user-facing qubit indices. *)
 let initialized_path_sum_for_equiv ?(debug = false) width inits =
@@ -121,7 +124,9 @@ let program_has_valid_gate_applications width program =
   in
   let rec aux = function
     | Program.Apply (Gates.GP (_, k), controls, targets) ->
-        0 <= k && gate_indices_are_valid controls targets
+        0 <= k
+        && gate_indices_are_valid controls targets
+        && controls_are_distinct_from_targets controls targets
     | Program.Apply (Gates.U1 (_, k), controls, targets) ->
         0 <= k
         && (not (List.is_empty targets))

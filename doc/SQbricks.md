@@ -323,7 +323,9 @@ Les applications de portes unitaires doivent ensuite être bien formées :
 Une violation de ces contraintes retourne `ErrorInvalidProgram`. Une phase
 globale `GP` est un cas particulier : elle peut porter des cibles,
 éventuellement avec contrôle. Ces cibles sont validées comme indices, mais elles
-n'ont pas d'effet sur l'exécution symbolique.
+n'ont pas d'effet sur l'exécution symbolique. Si `GP` porte à la fois des
+contrôles et des cibles, ces listes doivent rester disjointes comme pour les
+autres portes.
 
 Les programmes mal formés restent affichables pour le diagnostic :
 `Program.String.pretty` utilise une forme générique pour `GP` et `U1` quand
@@ -338,6 +340,8 @@ de chemin incomplètes, les listes de sorties de tailles différentes et les
 indices de sorties invalides. Les anciennes fonctions `equal` restent des
 wrappers de compatibilité qui retournent `false` en cas d'erreur typée. Les tests
 unitaires couvrent chaque possibilité observable de ces retours typés.
+`Path_sum.equal_result` propage aussi les erreurs typées de comparaison de
+phase au lieu de les convertir en simple inégalité.
 Dans l'algorithme séquentiel, la décision qui distingue phase nulle, phase
 globale et phase conditionnelle utilise aussi `Poly.equal_result`, afin qu'une
 comparaison mal formée remonte comme `ErrorMalformedPathSum`.

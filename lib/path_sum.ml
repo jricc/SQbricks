@@ -368,11 +368,19 @@ module String = struct
   let path_var pvs w = ListBis.string_int (List.map (Int.add (Int.neg w)) pvs)
 end
 
-type equality_error = DifferentOutputLengths | InvalidOutputIndex
+type equality_error =
+  | DifferentOutputLengths
+  | InvalidOutputIndex
+  | IncompatiblePhaseWidths
+  | IncompletePhasePathVariableMap
 
 let equality_error_of_ket = function
   | Ket.DifferentOutputLengths -> DifferentOutputLengths
   | Ket.InvalidOutputIndex -> InvalidOutputIndex
+
+let equality_error_of_poly = function
+  | Poly.IncompatibleWidths -> IncompatiblePhaseWidths
+  | Poly.IncompletePathVariableMap -> IncompletePhasePathVariableMap
 
 let equal_result ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
     ?(global_phase = false) ps1 ps2 =
@@ -439,19 +447,26 @@ let equal_result ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
           let poly_output2 = extract_poly p2 var_outputs2 wq2 in
 
           (* Sub-Circuit-Partial-Equivalence *)
-          let polys_equal =
-            Poly.equal ~global_phase ~debug ~wq1 ~wq2 ~map_path_var1
+          match
+            Poly.equal_result ~global_phase ~debug ~wq1 ~wq2 ~map_path_var1
               ~map_path_var2 poly_output1 poly_output2
-          in
-          if debug then printf "Path_sum.equal, polys_equal = %b\n" polys_equal;
-          Ok polys_equal)
+          with
+          | Error error -> Error (equality_error_of_poly error)
+          | Ok polys_equal ->
+              if debug then
+                printf "Path_sum.equal, polys_equal = %b\n" polys_equal;
+              Ok polys_equal)
         else Ok false
 
 let equal ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
     ?(global_phase = false) ps1 ps2 =
   match equal_result ~debug ~outputs1 ~outputs2 ~global_phase ps1 ps2 with
   | Ok are_equal -> are_equal
-  | Error DifferentOutputLengths | Error InvalidOutputIndex -> false
+  | Error DifferentOutputLengths
+  | Error InvalidOutputIndex
+  | Error IncompatiblePhaseWidths
+  | Error IncompletePhasePathVariableMap ->
+      false
 
 let zero = Poly.zero
 

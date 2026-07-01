@@ -290,14 +290,13 @@ let execution ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
     in
 
     let error_apply co ta =
-      let condition_conflict = lazy (conflict_co_ta co ta) in
-      if
+      let invalid_indices =
         ListBis.min_int co < 0
         || width <= ListBis.max_int co
         || ListBis.min_int ta < 0
         || width <= ListBis.max_int ta
-      then false
-      else Lazy.force condition_conflict
+      in
+      invalid_indices || conflict_co_ta co ta
     in
 
     let rec aux p ps =

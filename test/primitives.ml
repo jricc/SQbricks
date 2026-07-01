@@ -746,6 +746,10 @@ let test_path_sum_equal_result_returns_true () =
       check bool "well-formed comparison expected" true false
   | Error Path_sum.InvalidOutputIndex ->
       check bool "well-formed comparison expected" true false
+  | Error Path_sum.IncompatiblePhaseWidths ->
+      check bool "well-formed comparison expected" true false
+  | Error Path_sum.IncompletePhasePathVariableMap ->
+      check bool "well-formed comparison expected" true false
 
 let test_path_sum_equal_result_returns_false () =
   let path_sum1 : Path_sum.t =
@@ -761,6 +765,10 @@ let test_path_sum_equal_result_returns_false () =
       check bool "well-formed comparison expected" true false
   | Error Path_sum.InvalidOutputIndex ->
       check bool "well-formed comparison expected" true false
+  | Error Path_sum.IncompatiblePhaseWidths ->
+      check bool "well-formed comparison expected" true false
+  | Error Path_sum.IncompletePhasePathVariableMap ->
+      check bool "well-formed comparison expected" true false
 
 let test_path_sum_equal_result_reports_different_output_lengths () =
   let path_sum : Path_sum.t =
@@ -770,6 +778,10 @@ let test_path_sum_equal_result_reports_different_output_lengths () =
   | Error Path_sum.DifferentOutputLengths ->
       check bool "different output lengths" true true
   | Error Path_sum.InvalidOutputIndex ->
+      check bool "different output lengths expected" true false
+  | Error Path_sum.IncompatiblePhaseWidths ->
+      check bool "different output lengths expected" true false
+  | Error Path_sum.IncompletePhasePathVariableMap ->
       check bool "different output lengths expected" true false
   | Ok _ -> check bool "different output lengths expected" true false
 
@@ -783,6 +795,10 @@ let test_path_sum_equal_result_reports_invalid_output_index () =
   | Error Path_sum.InvalidOutputIndex ->
       check bool "invalid output index" true true
   | Error Path_sum.DifferentOutputLengths ->
+      check bool "invalid output index expected" true false
+  | Error Path_sum.IncompatiblePhaseWidths ->
+      check bool "invalid output index expected" true false
+  | Error Path_sum.IncompletePhasePathVariableMap ->
       check bool "invalid output index expected" true false
   | Ok _ -> check bool "invalid output index expected" true false
 
