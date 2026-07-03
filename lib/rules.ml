@@ -272,7 +272,7 @@ module HH = struct
         | Ok None -> Ok None)
     | Ok None -> Ok None
 
-  let hh_result ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
+  let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
     let width = Array.length ps.ket in
     if Int.equal y0_to_remove (-1) then
@@ -566,7 +566,7 @@ module Variable_replacement = struct
     in
     substitute_in_ket None 0
 
-  let variable_replacement_result ?(debug = false) (input : Path_sum.t) :
+  let variable_replacement ?(debug = false) (input : Path_sum.t) :
       (Path_sum.t option, reduction_error) result =
     let width = Array.length input.ket in
 
@@ -583,7 +583,7 @@ module Variable_replacement = struct
     if List.exists (fun path_var -> path_var < width) ps.path_var then
       Error
         (MalformedPathSum
-           "Rules.Variable_replacement.variable_replacement_result: path variable index below ket width")
+           "Rules.Variable_replacement.variable_replacement: path variable index below ket width")
     else if List.equal Int.equal ps.path_var [] then Ok None
     else
       let new_y = ListBis.max_int ps.path_var + 1 in
@@ -823,7 +823,7 @@ module Variable_replacement = struct
     (1/2 * [x0] * [y1] + 1/2 * [y1] + 1/2 * [y2] * [y3])
     ->
     (1/2 * [x0] * [y0] + 1/2 * [y0] + 1/2 * [y1] * [y2]) *)
-  let poly_normalized_result ?(debug = false) (ps : Path_sum.t) :
+  let poly_normalized ?(debug = false) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
     if debug then
       printf "Rules.poly_normalised, input ps =\n%s\n%!" (PSS.pretty ps);
@@ -873,7 +873,7 @@ module Variable_replacement = struct
         Error
           (MalformedPathSum
              (sprintf
-                "Rules.Variable_replacement.poly_normalized_result: path \
+                "Rules.Variable_replacement.poly_normalized: path \
                  variable %d is outside [%d,%d)"
                 path_var wq (wq + nb_pvs)))
     | None ->

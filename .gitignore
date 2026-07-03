@@ -512,7 +512,6 @@ setup.log
 # Local OPAM switch
 _opam/
 
-# SQbricks test logs are versioned to keep local validation history visible.
-!test/logs/
-!test/logs/**/
-!test/logs/**/*.log
+test/logs/
+
+*.patch

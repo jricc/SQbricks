@@ -37,7 +37,7 @@ let _condition_to_continue ?(debug = false) (input : Path_sum.t)
       len_in len_out nb_of_sum_in nb_of_sum_out;
   (len_out < len_in && 0 < len_out) || nb_of_sum_out < nb_of_sum_in
 
-let reduction_algorithm_result ?(debug = false) input =
+let reduction_algorithm ?(debug = false) input =
   if debug then printf "Reduction_algorithm, input =\n%s\n\n" (PSS.pretty input);
 
   let rec aux acc =
@@ -47,7 +47,7 @@ let reduction_algorithm_result ?(debug = false) input =
     if debug then
       printf "Reduction_algorithm, state_simpl =\n%s\n\n"
         (PSS.pretty state_simpl);
-    match Rules.HH.hh_result ~debug state_simpl with
+    match Rules.HH.hh ~debug state_simpl with
     | Error reduction_error -> Error reduction_error
     | Ok state_hh ->
         if debug then
@@ -59,7 +59,7 @@ let reduction_algorithm_result ?(debug = false) input =
             (PSS.pretty state_elim);
         (* state_elim *)
         match
-          Rules.Variable_replacement.variable_replacement_result ~debug
+          Rules.Variable_replacement.variable_replacement ~debug
             state_elim
         with
         | Error reduction_error -> Error reduction_error

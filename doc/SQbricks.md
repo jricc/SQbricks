@@ -270,23 +270,20 @@ d'Equiv avec `ErrorMalformedPathSum`.
 
 La règle `HH` est le premier cas traité. `Variable_replacement` utilise le même
 modèle pour son remplacement principal avec
-`Rules.Variable_replacement.variable_replacement_result` et pour la
-normalisation avec `Rules.Variable_replacement.poly_normalized_result`. Après
-validation, les anciens points d'entrée non typés `Rules.HH.hh`,
-`Rules.Variable_replacement.variable_replacement` et
-`Rules.Variable_replacement.poly_normalized` ont été supprimés. Le pipeline de
-réduction et les tests utilisent donc directement les retours typés. Le wrapper
-non typé `Reduction_algorithm.reduction_algorithm` a aussi été supprimé :
-les appelants doivent utiliser `Reduction_algorithm.reduction_algorithm_result`
-et traiter explicitement `MalformedPathSum`.
+`Rules.Variable_replacement.variable_replacement` et pour la
+normalisation avec `Rules.Variable_replacement.poly_normalized`. Après
+validation, ces points d'entrée gardent un nom court mais retournent directement
+un résultat typé. Le pipeline de réduction et les tests propagent donc
+explicitement `MalformedPathSum` au lieu de s'appuyer sur un wrapper non typé.
+`Reduction_algorithm.reduction_algorithm` suit le même principe.
 
 Dans `Equiv`, la construction des états initiaux passe par
 `Path_sum.ofSize_init_result`. Une largeur invalide ou un indice
 d'initialisation invalide est converti en `ErrorInvalidQubitIndex`, ce qui évite
 de laisser remonter `invalid_arg` pendant une vérification.
 
-La comparaison des qubits observables dans `compute_result` passe par
-`Qubit.equal_result`. Une erreur de comparaison indique une métadonnée de
+La comparaison des qubits observables dans `compare_inputs_with_identity` passe
+par `Qubit.equal_result`. Une erreur de comparaison indique une métadonnée de
 path-sum mal formée et devient `ErrorMalformedPathSum`; les réponses `Ok true`
 et `Ok false` gardent le comportement d'équivalence précédent.
 
@@ -423,7 +420,7 @@ Les constructeurs typés validés sont :
 - portes doublement contrôlées : `ccx_result`, `ccz_result`.
 
 Les helpers internes qui dépendaient de la validation d'indices ont aussi été
-typés, notamment `normalisation_factor_result`, `q2_result` et `ccrz_result`.
+typés, notamment `normalisation_factor`, `q2` et `ccrz`.
 Ils ne sont pas exposés dans l'interface publique, mais ils permettent aux
 constructeurs publics typés de propager l'erreur au lieu de déclencher un
 échec non maîtrisé.

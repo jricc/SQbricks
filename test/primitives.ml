@@ -39,7 +39,7 @@ type monome = Monome.t
 
 let to_poly (m : monome) : poly = Poly.to_poly m
 let reduce_valid_path_sum ?(debug = false) input =
-  match Reduction_algorithm.reduction_algorithm_result ~debug input with
+  match Reduction_algorithm.reduction_algorithm ~debug input with
   | Ok output -> output
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
@@ -81,18 +81,18 @@ let p0 = Poly.zero
 let malformed_zero_width_path_sum : Path_sum.t =
   { phase = p0; ket = [||]; path_var = [ 0 ] }
 
-let test_hh_result_reports_malformed_path_sum () =
+let test_hh_reports_malformed_path_sum () =
   let malformed =
-    match Rules.HH.hh_result ~y0_to_remove:0 malformed_zero_width_path_sum with
+    match Rules.HH.hh ~y0_to_remove:0 malformed_zero_width_path_sum with
     | Error (Rules.MalformedPathSum _) -> true
     | Ok _ -> false
   in
   check bool "malformed path sum" true malformed
 
-let test_reduction_result_reports_malformed_path_sum () =
+let test_reduction_algorithm_reports_malformed_path_sum () =
   let malformed =
     match
-      Reduction_algorithm.reduction_algorithm_result malformed_zero_width_path_sum
+      Reduction_algorithm.reduction_algorithm malformed_zero_width_path_sum
     with
     | Error (Rules.MalformedPathSum _) -> true
     | Ok _ -> false
@@ -101,12 +101,12 @@ let test_reduction_result_reports_malformed_path_sum () =
 
 let hh =
   [
-    ( "hh_result reports malformed path sum",
+    ( "hh reports malformed path sum",
       `Quick,
-      test_hh_result_reports_malformed_path_sum );
-    ( "reduction_algorithm_result reports malformed path sum",
+      test_hh_reports_malformed_path_sum );
+    ( "reduction_algorithm reports malformed path sum",
       `Quick,
-      test_reduction_result_reports_malformed_path_sum );
+      test_reduction_algorithm_reports_malformed_path_sum );
   ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)
@@ -216,7 +216,7 @@ let test_poly_normalize ?(debug = true) (input : Path_sum.t)
   (* This helper is used only for valid examples; malformed path sums have
      dedicated tests for the typed error below. *)
   let input_normalised =
-    match Rules.Variable_replacement.poly_normalized_result ~debug input with
+    match Rules.Variable_replacement.poly_normalized ~debug input with
     | Ok output -> output
     | Error (Rules.MalformedPathSum message) ->
         Alcotest.fail ("unexpected malformed path sum: " ^ message)
@@ -228,7 +228,7 @@ let test_poly_normalize ?(debug = true) (input : Path_sum.t)
   let expect = true in
   check bool (sprintf "Primitives.test_normalise_path_var") expect greet
 
-let test_poly_normalized_result_reports_malformed_path_sum () =
+let test_poly_normalized_reports_malformed_path_sum () =
   let malformed_path_sum : Path_sum.t =
     {
       phase = to_poly (Qubit (Qubit.Var 2));
@@ -237,16 +237,16 @@ let test_poly_normalized_result_reports_malformed_path_sum () =
     }
   in
   match
-    Rules.Variable_replacement.poly_normalized_result malformed_path_sum
+    Rules.Variable_replacement.poly_normalized malformed_path_sum
   with
   | Error (Rules.MalformedPathSum _) -> check bool "malformed path sum" true true
   | Ok _ -> check bool "malformed path sum expected" true false
 
 let poly_normalize =
   [
-    ( "poly_normalized_result reports malformed path sum",
+    ( "poly_normalized reports malformed path sum",
       `Quick,
-      test_poly_normalized_result_reports_malformed_path_sum );
+      test_poly_normalized_reports_malformed_path_sum );
     ( "0, x0 -> 0, x0",
       `Quick,
       test_poly_normalize
@@ -1419,7 +1419,7 @@ let test_variable_replacement ?(debug = true) (input : Path_sum.t)
   (* This helper keeps the historical expectation: no replacement means the
      input path sum is unchanged. *)
   let greet_repl =
-    match Rules.Variable_replacement.variable_replacement_result ~debug input with
+    match Rules.Variable_replacement.variable_replacement ~debug input with
     | Ok (Some ps) -> ps
     | Ok None -> input
     | Error (Rules.MalformedPathSum message) ->
@@ -1443,35 +1443,35 @@ let test_variable_replacement ?(debug = true) (input : Path_sum.t)
   let expected = true in
   check bool (sprintf "test_variable_replacement") expected greeting
 
-let test_variable_replacement_result_returns_typed_replacement () =
+let test_variable_replacement_returns_typed_replacement () =
   let input : Path_sum.t =
     { phase = Poly.zero; ket = [| one ++ Var 1 |]; path_var = [ 1 ] }
   in
   let expected_output : Path_sum.t =
     { phase = Poly.zero; ket = [| Var 1 |]; path_var = [ 1 ] }
   in
-  match Rules.Variable_replacement.variable_replacement_result input with
+  match Rules.Variable_replacement.variable_replacement input with
   | Ok (Some output) ->
       check string "replacement result" (PSS.exact expected_output)
         (PSS.exact output)
   | Ok None -> check bool "replacement expected" true false
   | Error (Rules.MalformedPathSum _) -> check bool "valid path sum" true false
 
-let test_variable_replacement_result_returns_none () =
+let test_variable_replacement_returns_none () =
   let input : Path_sum.t =
     { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
   in
-  match Rules.Variable_replacement.variable_replacement_result input with
+  match Rules.Variable_replacement.variable_replacement input with
   | Ok None -> check bool "no replacement" true true
   | Ok (Some _) -> check bool "no replacement expected" true false
   | Error (Rules.MalformedPathSum _) -> check bool "valid path sum" true false
 
-let test_variable_replacement_result_reports_malformed_path_sum () =
+let test_variable_replacement_reports_malformed_path_sum () =
   let malformed_path_sum : Path_sum.t =
     { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [ 0 ] }
   in
   match
-    Rules.Variable_replacement.variable_replacement_result malformed_path_sum
+    Rules.Variable_replacement.variable_replacement malformed_path_sum
   with
   | Error (Rules.MalformedPathSum _) -> check bool "malformed path sum" true true
   | Ok _ -> check bool "malformed path sum expected" true false
@@ -1499,15 +1499,15 @@ let mdiv s = Monome.Scal s
 
 let variable_replacement =
   [
-    ( "variable_replacement_result returns typed replacement",
+    ( "variable_replacement returns typed replacement",
       `Quick,
-      test_variable_replacement_result_returns_typed_replacement );
-    ( "variable_replacement_result returns none",
+      test_variable_replacement_returns_typed_replacement );
+    ( "variable_replacement returns none",
       `Quick,
-      test_variable_replacement_result_returns_none );
-    ( "variable_replacement_result reports malformed path sum",
+      test_variable_replacement_returns_none );
+    ( "variable_replacement reports malformed path sum",
       `Quick,
-      test_variable_replacement_result_reports_malformed_path_sum );
+      test_variable_replacement_reports_malformed_path_sum );
     ( "replace_not_path_var_by_var does not mutate input",
       `Quick,
       test_replace_not_path_var_by_var_does_not_mutate_input );

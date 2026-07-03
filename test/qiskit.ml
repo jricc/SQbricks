@@ -55,7 +55,7 @@ let test_prog_equiv ?(debug = true) ?(not_equiv = false) ?(inputs1 = [])
     if debug then
       printf "Test.Qiskit.test_prog_equiv, p2_ready =\n%s\n\n"
         (ProgS.pretty p2_ready);
-    Equiv.sqv_simple_result ~algo ~not_equiv ~inputs1 ~inputs2 ~outputs1
+    Equiv.sqv_simple ~algo ~not_equiv ~inputs1 ~inputs2 ~outputs1
       ~outputs2 ~meas1 ~meas2 p1_ready p2_ready ~debug ~equivalence
   in
   let expected = true in
@@ -82,7 +82,7 @@ let test_prog_equiv_qasm ?(debug = true) ?(not_equiv = false)
 
     let p1 = Program.format p1_dm in
     let p2 = Program.format p2_dm in
-    Equiv.sqv_simple_result ~debug ~not_equiv ~equivalence ~algo ~meas1 ~meas2
+    Equiv.sqv_simple ~debug ~not_equiv ~equivalence ~algo ~meas1 ~meas2
       p1 p2
   in
   let expected = true in

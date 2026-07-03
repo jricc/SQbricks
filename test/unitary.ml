@@ -41,7 +41,7 @@ let test_prog_equiv ?(debug = true) ?(not_equiv = false)
     ?(inputs2 = []) ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = [])
     ?(meas2 = []) (p1 : Program.t) (p2 : Program.t) () =
   let greeting =
-    Equiv.sqv_simple_result ~debug ~not_equiv ~algo ~equivalence ~inputs1
+    Equiv.sqv_simple ~debug ~not_equiv ~algo ~equivalence ~inputs1
       ~inputs2 ~outputs1 ~outputs2 ~meas1 ~meas2 p1 p2
   in
   let expected = true in
@@ -116,7 +116,7 @@ let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
       current_dir;
     let p1 = Program.format (to_prog p1') in
     let p2 = Program.format (to_prog p2') in
-    Equiv.sqv_simple_result ~debug ~not_equiv ~algo ~equivalence p1 p2
+    Equiv.sqv_simple ~debug ~not_equiv ~algo ~equivalence p1 p2
   in
   let expected = true in
   check bool

@@ -117,7 +117,7 @@ val sqv :
 
     Example: [sqv (h 0) (h 0)] results [SubCircuitEquivalent] *)
 
-val sqv_simple_result :
+val sqv_simple :
   ?debug:bool ->
   ?inputs1:int list ->
   ?inputs2:int list ->
@@ -133,4 +133,4 @@ val sqv_simple_result :
   bool
 (** Simplified version of sqv that returns a boolean indicating equivalence.
 
-    Example: [sqv_simple_result (h 0) (h 0)] results [true] *)
+    Example: [sqv_simple (h 0) (h 0)] results [true] *)

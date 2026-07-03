@@ -266,22 +266,19 @@ result as `ErrorMalformedPathSum`.
 
 The `HH` rule is the first case handled. `Variable_replacement` follows the
 same model for its main replacement step with
-`Rules.Variable_replacement.variable_replacement_result` and for normalization
-with `Rules.Variable_replacement.poly_normalized_result`. After validation, the
-old untyped `Rules.HH.hh`,
-`Rules.Variable_replacement.variable_replacement`, and
-`Rules.Variable_replacement.poly_normalized` entry points were removed. The
-reduction pipeline and tests now use typed results directly. The untyped
-`Reduction_algorithm.reduction_algorithm` wrapper was removed as well: callers
-must use `Reduction_algorithm.reduction_algorithm_result` and handle
-`MalformedPathSum` explicitly.
+`Rules.Variable_replacement.variable_replacement` and for normalization
+with `Rules.Variable_replacement.poly_normalized`. After validation, these entry
+points keep short names but return typed results directly. The reduction
+pipeline and tests therefore propagate `MalformedPathSum` explicitly instead of
+going through an untyped wrapper. `Reduction_algorithm.reduction_algorithm`
+follows the same principle.
 
 In `Equiv`, initial state construction now goes through
 `Path_sum.ofSize_init_result`. An invalid width or initialization index is
 converted to `ErrorInvalidQubitIndex`, avoiding an escaping `invalid_arg` during
 verification.
 
-Observable-qubit comparison in `compute_result` now goes through
+Observable-qubit comparison in `compare_inputs_with_identity` now goes through
 `Qubit.equal_result`. A comparison error means malformed path-sum metadata and
 is returned as `ErrorMalformedPathSum`; `Ok true` and `Ok false` keep the
 previous equivalence behavior.
@@ -412,6 +409,6 @@ The validated typed constructors are:
 - double-controlled gates: `ccx_result`, `ccz_result`.
 
 The internal helpers that depended on index validation were also typed,
-including `normalisation_factor_result`, `q2_result`, and `ccrz_result`. They
+including `normalisation_factor`, `q2`, and `ccrz`. They
 are not exposed in the public interface, but they let the public typed
 constructors propagate the error instead of triggering an uncontrolled failure.

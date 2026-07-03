@@ -27,9 +27,9 @@
 
 module PSS = Path_sum.String
 
-val reduction_algorithm_result :
+val reduction_algorithm :
   ?debug:bool -> Path_sum.t -> (Path_sum.t, Rules.reduction_error) result
-(** [reduction_algorithm_result ?debug ps] applies the complete reduction
+(** [reduction_algorithm ?debug ps] applies the complete reduction
     sequence and returns an explicit error when a reduction rule receives a
     malformed path sum. The reduction process follows these steps: 1.
     Simplification: Algebraic simplification of expressions 2. HH rule:
