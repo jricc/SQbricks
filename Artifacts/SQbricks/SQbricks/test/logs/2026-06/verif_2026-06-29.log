@@ -1,0 +1,20 @@
+Testing `Symbolic execution'.
+This run has ID `Q4AJR6T3'.
+
+  [OK]          Specification          0   h.
+  [OK]          Specification          1   h wrong.
+  [OK]          Specification          2   x.
+  [OK]          Specification          3   x wrong.
+  [OK]          Specification          4   z.
+  [OK]          Specification          5   z wrong.
+  [OK]          Specification          6   cx.
+  [OK]          Specification          7   cx wrong.
+  [OK]          Specification          8   cz.
+  [OK]          Specification          9   cz wrong.
+  [OK]          Specification         10   ch.
+  [OK]          Specification         11   ch wrong.
+  [OK]          Specification         12   coin toss.
+  [OK]          Specification         13   coin toss wrong.
+
+Full test results in `/sqbricks/_build/verif/default/test/_build/_tests/Symbolic execution'.
+Test Successful in 0.003s. 14 tests run.

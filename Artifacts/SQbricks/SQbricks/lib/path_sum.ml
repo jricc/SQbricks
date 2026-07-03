@@ -29,11 +29,34 @@ module QS = Qubit.String
 
 module Ket = struct
   type t = Qubit.t array
+  type equality_error = DifferentOutputLengths | InvalidOutputIndex
 
   let copy input = Array.copy input
 
-  let equal ?(debug = false) ?(outputs1 = []) ?(outputs2 = []) (k1 : t) (k2 : t)
-      : bool * int IntMap.t * int IntMap.t =
+  (* Keep unchanged kets physically shared; allocate one copy only when at least
+     one qubit really changes. *)
+  let map_qubits_copy_on_change transform_qubit ket =
+    let rec map_qubits changed_ket qubit_index =
+      if qubit_index = Array.length ket then
+        match changed_ket with None -> ket | Some changed_ket -> changed_ket
+      else
+        let original_qubit = ket.(qubit_index) in
+        let transformed_qubit = transform_qubit original_qubit in
+        if Qubit.equal original_qubit transformed_qubit then
+          map_qubits changed_ket (qubit_index + 1)
+        else
+          let changed_ket =
+            match changed_ket with
+            | Some changed_ket -> changed_ket
+            | None -> Array.copy ket
+          in
+          changed_ket.(qubit_index) <- transformed_qubit;
+          map_qubits (Some changed_ket) (qubit_index + 1)
+    in
+    map_qubits None 0
+
+  let equal_result ?(debug = false) ?(outputs1 = []) ?(outputs2 = []) (k1 : t)
+      (k2 : t) : (bool * int IntMap.t * int IntMap.t, equality_error) result =
     if debug then
       printf "Ket.equal, outputs1 = %s\n\n%!" (ListBis.string_int outputs1);
     if debug then
@@ -42,13 +65,18 @@ module Ket = struct
     let map_path_var1 = IntMap.empty in
     let map_path_var2 = IntMap.empty in
     if List.length outputs1 <> List.length outputs2 then
-      (false, map_path_var1, map_path_var2)
+      Error DifferentOutputLengths
     else
       let wq1 = Array.length k1 in
       let wq2 = Array.length k2 in
+      if
+        not (ListBis.valid_indices wq1 outputs1)
+        || not (ListBis.valid_indices wq2 outputs2)
+      then Error InvalidOutputIndex
+      else
       (* If we don't provide a list of qubits, we check all qubits *)
       if List.is_empty outputs1 then (
-        if not (Int.equal wq1 wq2) then (false, map_path_var1, map_path_var2)
+        if not (Int.equal wq1 wq2) then Ok (false, map_path_var1, map_path_var2)
         else
           let i = ref 0 in
           let result = ref true in
@@ -56,7 +84,7 @@ module Ket = struct
             if not (Qubit.equal k1.(!i) k2.(!i)) then result := false;
             incr i
           done;
-          (!result, map_path_var1, map_path_var2))
+          Ok (!result, map_path_var1, map_path_var2))
       else
         let rec aux m1 m2 = function
           | hd1 :: tl1, hd2 :: tl2 ->
@@ -86,7 +114,15 @@ module Ket = struct
           printf "Ket.equal.IntMap, out_m1 = %s, out_m2 = %s\n%!"
             (Common.to_string_int_map out_m1)
             (Common.to_string_int_map out_m2);
-        (result, out_m1, out_m2)
+        Ok (result, out_m1, out_m2)
+
+  let equal ?(debug = false) ?(outputs1 = []) ?(outputs2 = []) (k1 : t) (k2 : t)
+      : bool * int IntMap.t * int IntMap.t =
+    let empty_map = IntMap.empty in
+    match equal_result ~debug ~outputs1 ~outputs2 k1 k2 with
+    | Ok result -> result
+    | Error DifferentOutputLengths | Error InvalidOutputIndex ->
+        (false, empty_map, empty_map)
 
   (* if \( v \in k \) then `true` else `false` *)
   (* Don't look in `k.(except)`. *)
@@ -165,60 +201,93 @@ module Ket = struct
       !s ^ "|]"
   end
 
+  let substitute_variables_in_qubit ?(debug = false) qubit_substitutions =
+    let substitution_map =
+      List.fold_left
+        (fun substitution_map (variable_to_replace, replacement_qubit) ->
+          IntMap.add variable_to_replace replacement_qubit substitution_map)
+        IntMap.empty qubit_substitutions
+    in
+    let rec substitute_in_qubit (qubit : Qubit.t) : Qubit.t =
+      if debug then
+        printf "Path_sum.Ket.substitute_in_qubit, qubit = %s\n"
+          (QS.exact qubit);
+      match qubit with
+      | Qubit.SumMod2 (left_qubit, right_qubit) ->
+          Qubit.SumMod2
+            (substitute_in_qubit left_qubit, substitute_in_qubit right_qubit)
+      | Qubit.Prod (left_qubit, right_qubit) ->
+          Qubit.Prod
+            (substitute_in_qubit left_qubit, substitute_in_qubit right_qubit)
+      | Qubit.Var variable_to_replace -> (
+          match IntMap.find_opt variable_to_replace substitution_map with
+          | Some replacement_qubit -> replacement_qubit
+          | None -> qubit)
+      | _ -> qubit
+    in
+    fun qubit -> Qubit.simplify (substitute_in_qubit qubit)
+
   (* ket[variable_indice <- qubit_to_substitute] *)
-  let substitute ?(debug = false) (input : t) (variable_indice : int)
-      qubit_to_substitute =
-    let rec aux (q : Qubit.t) : Qubit.t =
-      if debug then printf "Path_sum.Ket.substitute.aux, q = %s\n" (QS.exact q);
-      match q with
-      | Qubit.SumMod2 (q1', q2') -> Qubit.SumMod2 (aux q1', aux q2')
-      | Qubit.Prod (q1', q2') -> Qubit.Prod (aux q1', aux q2')
-      | Qubit.Var variable_indice'
-        when Int.equal variable_indice variable_indice' ->
-          qubit_to_substitute
-      | _ -> q
+  let substitute ?(debug = false) (ket : t) (variable_to_replace : int)
+      replacement_qubit =
+    if debug then
+      printf "Path_sum.Ket.substitute, ket = %s\n" (String.pretty ket);
+    let substituted_ket =
+      map_qubits_copy_on_change
+        (substitute_variables_in_qubit ~debug
+           [ (variable_to_replace, replacement_qubit) ])
+        ket
     in
     if debug then
-      printf "Path_sum.Ket.substitute, input = %s\n" (String.pretty input);
-    for i = 0 to Array.length input - 1 do
-      if debug then printf "Path_sum.Ket.substitute, i = %d\n" i;
-      input.(i) <- Qubit.simplify (aux input.(i))
-    done;
+      printf "Path_sum.Ket.substitute.end, substituted_ket = %s\n\n"
+        (String.pretty substituted_ket);
+    substituted_ket
+
+  let substitute_many ?(debug = false) ket qubit_substitutions =
     if debug then
-      printf "Path_sum.Ket.substitute.end, input = %s\n\n" (String.pretty input);
-    input
+      printf "Path_sum.Ket.substitute_many, ket = %s\n" (String.pretty ket);
+    let substituted_ket =
+      if List.is_empty qubit_substitutions then ket
+      else
+        map_qubits_copy_on_change
+          (substitute_variables_in_qubit ~debug qubit_substitutions)
+          ket
+    in
+    if debug then
+      printf "Path_sum.Ket.substitute_many.end, substituted_ket = %s\n\n"
+        (String.pretty substituted_ket);
+    substituted_ket
 
   (* 
 Need to have an input "Renamed" 
 Return (tmp_array_pvs * final_array_pvs) 
 Compute the ordering of path variables in a given ket.
 *)
-  let path_var_order ?(debug = false) (ket : Qubit.t array) (nb_pvs : int) :
-      int array * int array =
-    let wq = Array.length ket in
+  type path_var_order_error = InvalidPathVariableCount | InvalidPathVariableIndex
 
-    (* Initialization *)
-    let pvs = Array.make nb_pvs Int.min_int in
-    let tmp_pvs = Array.make nb_pvs Int.max_int in
+  let path_var_order_result ?(debug = false) (ket : Qubit.t array)
+      (nb_pvs : int) : (int array * int array, path_var_order_error) result =
+    if nb_pvs < 0 then Error InvalidPathVariableCount
+    else (
+      let wq = Array.length ket in
+      (* Initialization *)
+      let pvs = Array.make nb_pvs Int.min_int in
+      let tmp_pvs = Array.make nb_pvs Int.max_int in
 
-    if debug then (
-      printf "Path_sum.path_var_order, nb_pvs = %d\n%!" nb_pvs;
-      printf "Path_sum.path_var_order, path_vars = %s\n%!"
-        (ArrayBis.string_int pvs);
-      printf "Path_sum.path_var_order, tmp_path_vars = %s\n%!"
-        (ArrayBis.string_int tmp_pvs));
+      if debug then (
+        printf "Path_sum.path_var_order, nb_pvs = %d\n%!" nb_pvs;
+        printf "Path_sum.path_var_order, path_vars = %s\n%!"
+          (ArrayBis.string_int pvs);
+        printf "Path_sum.path_var_order, tmp_path_vars = %s\n%!"
+          (ArrayBis.string_int tmp_pvs));
 
-    if nb_pvs = 0 then (pvs, tmp_pvs)
-    else
       (* Update the path-variable order given a list of variable indices. *)
       let rec update_pvs pv_curr tmp_pvs pvs = function
-        | [] -> (pv_curr, tmp_pvs, pvs)
+        | [] -> Ok (pv_curr, tmp_pvs, pvs)
         | hd :: tl ->
             let i = hd - wq in
-            if i < 0 || i >= nb_pvs then
-              failwith "Path_sum.path_var_order.update: path var index overflow";
-
-            if pvs.(i) = Int.min_int && tmp_pvs.(i) = Int.max_int then (
+            if i < 0 || i >= nb_pvs then Error InvalidPathVariableIndex
+            else if pvs.(i) = Int.min_int && tmp_pvs.(i) = Int.max_int then (
               pvs.(i) <- pv_curr;
               tmp_pvs.(i) <- -pv_curr;
               update_pvs (pv_curr + 1) tmp_pvs pvs tl)
@@ -227,23 +296,33 @@ Compute the ordering of path variables in a given ket.
 
       (* Traverse all qubits and accumulate variable ordering. *)
       let rec traverse pv_curr i tmp_pvs pvs =
-        if i >= wq then (tmp_pvs, pvs)
+        if i >= wq then Ok (tmp_pvs, pvs)
         else
           let path_vars = Qubit.extract_path_var ket.(i) (wq - 1) in
-          let pv_curr, tmp_pvs, pvs =
-            update_pvs pv_curr tmp_pvs pvs path_vars
-          in
-          traverse pv_curr (i + 1) tmp_pvs pvs
+          match update_pvs pv_curr tmp_pvs pvs path_vars with
+          | Error error -> Error error
+          | Ok (pv_curr, tmp_pvs, pvs) ->
+              traverse pv_curr (i + 1) tmp_pvs pvs
       in
 
-      let tmp_pvs, pvs = traverse wq 0 tmp_pvs pvs in
+      match traverse wq 0 tmp_pvs pvs with
+      | Error error -> Error error
+      | Ok (tmp_pvs, pvs) ->
+          if debug then
+            printf "Path_sum.path_var_order, tmp_pvs = %s, pvs = %s\n\n%!"
+              (ArrayBis.string_int tmp_pvs)
+              (ArrayBis.string_int pvs);
 
-      if debug then
-        printf "Path_sum.path_var_order, tmp_pvs = %s, pvs = %s\n\n%!"
-          (ArrayBis.string_int tmp_pvs)
-          (ArrayBis.string_int pvs);
+          Ok (tmp_pvs, pvs))
 
-      (tmp_pvs, pvs)
+  let path_var_order ?(debug = false) (ket : Qubit.t array) (nb_pvs : int) :
+      int array * int array =
+    match path_var_order_result ~debug ket nb_pvs with
+    | Ok order -> order
+    | Error InvalidPathVariableCount ->
+        invalid_arg "Path_sum.Ket.path_var_order: negative path-variable count"
+    | Error InvalidPathVariableIndex ->
+        invalid_arg "Path_sum.Ket.path_var_order: path-variable index overflow"
 
   let list_of_qubits_to_ket list =
     let ket = Array.make (List.length list) Qubit.Zero in
@@ -289,78 +368,105 @@ module String = struct
   let path_var pvs w = ListBis.string_int (List.map (Int.add (Int.neg w)) pvs)
 end
 
-let equal ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
+type equality_error =
+  | DifferentOutputLengths
+  | InvalidOutputIndex
+  | IncompatiblePhaseWidths
+  | IncompletePhasePathVariableMap
+
+let equality_error_of_ket = function
+  | Ket.DifferentOutputLengths -> DifferentOutputLengths
+  | Ket.InvalidOutputIndex -> InvalidOutputIndex
+
+let equality_error_of_poly = function
+  | Poly.IncompatibleWidths -> IncompatiblePhaseWidths
+  | Poly.IncompletePathVariableMap -> IncompletePhasePathVariableMap
+
+let equal_result ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
     ?(global_phase = false) ps1 ps2 =
   let wq1, wq2 = (Array.length ps1.ket, Array.length ps2.ket) in
   let width_outputs1 = List.length outputs1 in
   let width_outputs2 = List.length outputs2 in
-  if width_outputs1 <> width_outputs2 then
-    failwith "Path_sum.equal, width_outputs1 <> width_outputs2";
+  if width_outputs1 <> width_outputs2 then Error DifferentOutputLengths
+  else
+    let p1 = ps1.phase in
+    let p2 = ps2.phase in
 
-  let p1 = ps1.phase in
-  let p2 = ps2.phase in
+    if debug then printf "Path_sum.equal, ps1 =\n%s\n%!" (String.pretty ps1);
+    if debug then printf "Path_sum.equal, ps2 =\n%s\n\n%!" (String.pretty ps2);
 
-  if debug then printf "Path_sum.equal, ps1 =\n%s\n%!" (String.pretty ps1);
-  if debug then printf "Path_sum.equal, ps2 =\n%s\n\n%!" (String.pretty ps2);
+    let outputs1, outputs2 =
+      let tmp = if width_outputs1 = 0 then ListBis.range 0 wq1 else [] in
+      if debug then
+        printf "Path_sum.equal, tmp = %s\n\n%!" (ListBis.string_int tmp);
+      if List.is_empty tmp then (outputs1, outputs2) else (tmp, tmp)
+    in
 
-  let outputs1, outputs2 =
-    let tmp = if width_outputs1 = 0 then ListBis.range 0 wq1 else [] in
     if debug then
-      printf "Path_sum.equal, tmp = %s\n\n%!" (ListBis.string_int tmp);
-    if List.is_empty tmp then (outputs1, outputs2) else (tmp, tmp)
-  in
+      printf "Path_sum.equal, outputs1 = %s\n\n%!" (ListBis.string_int outputs1);
+    if debug then
+      printf "Path_sum.equal, outputs2 = %s\n\n%!" (ListBis.string_int outputs2);
 
-  if debug then
-    printf "Path_sum.equal, outputs1 = %s\n\n%!" (ListBis.string_int outputs1);
-  if debug then
-    printf "Path_sum.equal, outputs2 = %s\n\n%!" (ListBis.string_int outputs2);
+    match Ket.equal_result ~debug ~outputs1 ~outputs2 ps1.ket ps2.ket with
+    | Error error -> Error (equality_error_of_ket error)
+    | Ok (kets_equal, map_path_var1, map_path_var2) ->
+        if debug then
+          printf
+            "Path_sum.equal.IntMap, map_path_var1 = %s, map_path_var2 = %s\n%!"
+            (Common.to_string_int_map map_path_var1)
+            (Common.to_string_int_map map_path_var2);
 
-  let kets_equal, map_path_var1, map_path_var2 =
-    Ket.equal ~debug ~outputs1 ~outputs2 ps1.ket ps2.ket
-  in
+        if debug then printf "Path_sum.equal, kets_equals = %b\n" kets_equal;
 
-  if debug then
-    printf "Path_sum.equal.IntMap, map_path_var1 = %s, map_path_var2 = %s\n%!"
-      (Common.to_string_int_map map_path_var1)
-      (Common.to_string_int_map map_path_var2);
+        if kets_equal then (
+          let var_outputs1 =
+            List.sort_uniq Int.compare (Ket.extract_var ps1.ket outputs1)
+          in
+          let var_outputs2 =
+            List.sort_uniq Int.compare (Ket.extract_var ps2.ket outputs2)
+          in
 
-  if debug then printf "Path_sum.equal, kets_equals = %b\n" kets_equal;
+          if debug then printf "Path_sum.equal, p1 = %s\n%!" (PS.pretty p1 wq1);
+          if debug then printf "Path_sum.equal, p2 = %s\n%!" (PS.pretty p2 wq2);
 
-  if kets_equal then (
-    let var_outputs1 =
-      List.sort_uniq Int.compare (Ket.extract_var ps1.ket outputs1)
-    in
-    let var_outputs2 =
-      List.sort_uniq Int.compare (Ket.extract_var ps2.ket outputs2)
-    in
+          let extract_poly p var_outputs wq =
+            if Poly.is_constant_superior_zero p then p
+            else
+              let m = Poly.find p in
+              let p =
+                Poly.extract p
+                  (List.sort_uniq Int.compare
+                     (var_outputs @ ListBis.range 0 wq))
+              in
+              match m with
+              | Poly.Monome.Scal x when not (Q.equal x Q.zero) -> Poly.insert m p
+              | _ -> p
+          in
 
-    if debug then printf "Path_sum.equal, p1 = %s\n%!" (PS.pretty p1 wq1);
-    if debug then printf "Path_sum.equal, p2 = %s\n%!" (PS.pretty p2 wq2);
+          let poly_output1 = extract_poly p1 var_outputs1 wq1 in
+          let poly_output2 = extract_poly p2 var_outputs2 wq2 in
 
-    let extract_poly p var_outputs wq =
-      if Poly.is_constant_superior_zero p then p
-      else
-        let m = Poly.find p in
-        let p =
-          Poly.extract p
-            (List.sort_uniq Int.compare (var_outputs @ ListBis.range 0 wq))
-        in
-        match m with
-        | Poly.Monome.Scal x when not (Q.equal x Q.zero) -> Poly.insert m p
-        | _ -> p
-    in
+          (* Sub-Circuit-Partial-Equivalence *)
+          match
+            Poly.equal_result ~global_phase ~debug ~wq1 ~wq2 ~map_path_var1
+              ~map_path_var2 poly_output1 poly_output2
+          with
+          | Error error -> Error (equality_error_of_poly error)
+          | Ok polys_equal ->
+              if debug then
+                printf "Path_sum.equal, polys_equal = %b\n" polys_equal;
+              Ok polys_equal)
+        else Ok false
 
-    let poly_output1 = extract_poly p1 var_outputs1 wq1 in
-    let poly_output2 = extract_poly p2 var_outputs2 wq2 in
-
-    (* Sub-Circuit-Partial-Equivalence *)
-    let polys_equal =
-      Poly.equal ~global_phase ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2
-        poly_output1 poly_output2
-    in
-    if debug then printf "Path_sum.equal, polys_equal = %b\n" polys_equal;
-    polys_equal)
-  else false
+let equal ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
+    ?(global_phase = false) ps1 ps2 =
+  match equal_result ~debug ~outputs1 ~outputs2 ~global_phase ps1 ps2 with
+  | Ok are_equal -> are_equal
+  | Error DifferentOutputLengths
+  | Error InvalidOutputIndex
+  | Error IncompatiblePhaseWidths
+  | Error IncompletePhasePathVariableMap ->
+      false
 
 let zero = Poly.zero
 
@@ -371,7 +477,32 @@ let ofSize w : t =
   done;
   { phase = zero; ket = k; path_var = [] }
 
-let ofSize_init ?(debug = false) width inits_0 =
+type initialization_error = InvalidWidth | InvalidInitIndex
+
+let ofSize_init_result ?(debug = false) width inits_0 =
+  if width < 0 then Error InvalidWidth
+  else if not (ListBis.valid_indices width inits_0) then Error InvalidInitIndex
+  else
+    let set_zero_inits ket =
+      List.iter
+        (fun target ->
+          if debug then
+            printf "Path_sum.ofSize_init_result, zero init target = %d\n\n"
+              target;
+          ket.(target) <- Qubit.Zero)
+        inits_0
+    in
+    let set_symbolic_inputs ket inputs =
+      List.iteri
+        (fun input_value target ->
+          if debug then
+            printf
+              "Path_sum.ofSize_init_result, symbolic input target = %d\n\n"
+              target;
+          ket.(target) <- Var input_value)
+        inputs
+    in
+
   if debug then
     printf "Path_sum.ofSize_init, width = %d, inits_0 = %s\n\n" width
       (ListBis.string_int inits_0);
@@ -380,27 +511,11 @@ let ofSize_init ?(debug = false) width inits_0 =
   let ket = ps.ket in
 
   let inputs = ListBis.missing_in_range inits_0 width in
-  let inputs_value_curr = ref 0 in
 
-  let aux value_to_init l =
-    let rec aux' = function
-      | ta :: l' ->
-          if debug then printf "Path_sum.ofSize_init.aux, ta =\n%d\n\n" ta;
-          if Int.equal value_to_init 0 then ket.(ta) <- Qubit.Zero
-          else if Int.equal value_to_init 1 then ket.(ta) <- Qubit.One
-          else if Int.equal value_to_init (-1) then (
-            ket.(ta) <- Var !inputs_value_curr;
-            inputs_value_curr := !inputs_value_curr + 1)
-          else failwith "Path_sum.ofSize_init, value_to_init forbidden";
-          aux' l'
-      | [] -> ()
-    in
-    aux' l
-  in
   (* Initialization by 0 *)
-  aux 0 inits_0;
+  set_zero_inits ket;
   (* Normalization of inputs variables *)
-  aux (-1) inputs;
+  set_symbolic_inputs ket inputs;
 
   if debug then printf "Path_sum.ofSize_init, ket = %s\n\n" (KS.pretty ket);
 
@@ -409,38 +524,48 @@ let ofSize_init ?(debug = false) width inits_0 =
   if debug then
     printf "Path_sum.ofSize_init, output =\n%s\n\n" (String.pretty output);
 
-  output
+  Ok output
+
+let ofSize_init ?(debug = false) width inits_0 =
+  match ofSize_init_result ~debug width inits_0 with
+  | Ok path_sum -> path_sum
+  | Error InvalidWidth -> invalid_arg "Path_sum.ofSize_init: invalid width"
+  | Error InvalidInitIndex ->
+      invalid_arg "Path_sum.ofSize_init: invalid initialization index"
 
 let remove_path_var ps y =
   { phase = ps.phase; ket = ps.ket; path_var = ListBis.remove y ps.path_var }
 
+type substitution_error = CannotSubstitutePathVariable
+
+let substitute_result ?(debug = false) ?(except_path_var = false) path_sum
+    indice_to_subst qubit_to_subst =
+  if ListBis.member indice_to_subst path_sum.path_var Int.equal then
+    if except_path_var then Ok path_sum else Error CannotSubstitutePathVariable
+  else
+    let new_phase =
+      Poly.substitute ~debug indice_to_subst path_sum.phase qubit_to_subst
+    in
+    let new_ket =
+      Ket.substitute ~debug path_sum.ket indice_to_subst qubit_to_subst
+    in
+
+    let output : t =
+      { phase = new_phase; ket = new_ket; path_var = path_sum.path_var }
+    in
+    if debug then
+      printf "Path_sum.substitute, output =\n%s\n\n" (String.pretty output);
+    Ok output
+
 let substitute ?(debug = false) ?(except_path_var = false) path_sum
     indice_to_subst qubit_to_subst =
-  let new_path_var =
-    if except_path_var then path_sum.path_var
-    else
-      match qubit_to_subst with
-      | Var v -> ListBis.substitute path_sum.path_var indice_to_subst v
-      | _ -> failwith "Path_sum.substitute, qubit_to_subst must be a variable"
-  in
-
-  if debug then
-    printf "Path_sum.substitute, new_path_var = %s\n"
-      (ListBis.string_int new_path_var);
-
-  let new_phase =
-    Poly.substitute ~debug indice_to_subst path_sum.phase qubit_to_subst
-  in
-  let new_ket =
-    Ket.substitute ~debug path_sum.ket indice_to_subst qubit_to_subst
-  in
-
-  let output : t =
-    { phase = new_phase; ket = new_ket; path_var = new_path_var }
-  in
-  if debug then
-    printf "Path_sum.substitute, output =\n%s\n\n" (String.pretty output);
-  output
+  match
+    substitute_result ~debug ~except_path_var path_sum indice_to_subst
+      qubit_to_subst
+  with
+  | Ok path_sum -> path_sum
+  | Error CannotSubstitutePathVariable ->
+      invalid_arg "Path_sum.substitute: cannot substitute a path variable"
 
 module Path_sum_library = struct
   (*
@@ -452,194 +577,392 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let ( ++ ) = Poly.( ++ )
   let empty = Poly.empty
 
-  let xx ta w : Qubit.t =
-    if ta < w then Var ta
-    else failwith (sprintf "Path_sum.Library.xx, w = %d < ta = %d\n" w ta)
+  type gate_error = TargetIndexOutOfWidth
+
+  let xx ta w : (Qubit.t, gate_error) result =
+    if ta < w then Ok (Var ta) else Error TargetIndexOutOfWidth
+
+  let invalid_target_failure ta w =
+    failwith (sprintf "Path_sum.Library.xx, w = %d < ta = %d\n" w ta)
+
+  (* Keep the old left-to-right validation order for wrapper failures. *)
+  let rec invalid_targets_failure targets w =
+    match targets with
+    | target :: _ when not (target < w) -> invalid_target_failure target w
+    | _ :: remaining_targets -> invalid_targets_failure remaining_targets w
+    | [] -> invalid_target_failure w w
+
+  let targets2 target1 target2 w =
+    match xx target1 w with
+    | Error error -> Error error
+    | Ok qubit1 -> (
+        match xx target2 w with
+        | Error error -> Error error
+        | Ok qubit2 -> Ok (qubit1, qubit2))
+
+  let targets3 target1 target2 target3 w =
+    match targets2 target1 target2 w with
+    | Error error -> Error error
+    | Ok (qubit1, qubit2) -> (
+        match xx target3 w with
+        | Error error -> Error error
+        | Ok qubit3 -> Ok (qubit1, qubit2, qubit3))
 
   let yy n w : Qubit.t = Var (n + w)
 
   (* \( 1 / \sqrt{2} \sum_{y_0 \in \{0,1\}} e^{2 \pi i (x_0 y_0) / 2} \ket{y_0} \) *)
+  let h_result ta w =
+    match xx ta w with
+    | Error error -> Error error
+    | Ok target ->
+        Ok
+          {
+            phase =
+              Prod (Scal div2, Prod (Qubit target, Qubit (yy 0 w))) ++ empty;
+            ket = [| yy 0 w |];
+            path_var = [ w ];
+          }
+
   let h ta w =
-    {
-      phase = Prod (Scal div2, Prod (Qubit (xx ta w), Qubit (yy 0 w))) ++ empty;
-      ket = [| yy 0 w |];
-      path_var = [ w ];
-    }
+    match h_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+
+  let x_result ta w =
+    match xx ta w with
+    | Error error -> Error error
+    | Ok target ->
+        Ok
+          {
+            phase = Scal Q.zero ++ empty;
+            ket = [| SumMod2 (One, target) |];
+            path_var = [];
+          }
 
   let x ta w =
-    {
-      phase = Scal Q.zero ++ empty;
-      ket = [| SumMod2 (One, xx ta w) |];
-      path_var = [];
-    }
+    match x_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
 
   let apply_angle sQ k = if sQ < Q.zero then Q.add (pow2Q k) sQ else sQ
 
   (* \( u1 s k  : |x0> -> e^{2.pi.i. x0.s / 2^k} \) |x0> *)
-  let u1 ?(s = 1) k ta w =
-    let p =
-      if s = 0 || k = 0 then Scal Q.zero ++ empty
-      else
-        Prod (Scal (Q.div_2exp (apply_angle (Q.of_int s) k) k), Qubit (xx ta w))
-        ++ empty
-    in
-    { phase = p; ket = [| xx ta w |]; path_var = [] }
+  let u1_result ?(s = 1) k ta w =
+    match xx ta w with
+    | Error error -> Error error
+    | Ok target ->
+        let p =
+          if s = 0 || k = 0 then Scal Q.zero ++ empty
+          else
+            Prod
+              ( Scal (Q.div_2exp (apply_angle (Q.of_int s) k) k),
+                Qubit target )
+            ++ empty
+        in
+        Ok { phase = p; ket = [| target |]; path_var = [] }
 
-  let z ta w = u1 1 ta w
-  let s ta w = u1 2 ta w
-  let t ta w = u1 3 ta w
-  let zinv ta w = u1 ~s:(-1) 1 ta w
-  let sinv ta w = u1 ~s:(-1) 2 ta w
-  let tinv ta w = u1 ~s:(-1) 3 ta w
+  let u1 ?(s = 1) k ta w =
+    match u1_result ~s k ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+
+  let z_result ta w = u1_result 1 ta w
+
+  let z ta w =
+    match z_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+
+  let s_result ta w = u1_result 2 ta w
+
+  let s ta w =
+    match s_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+
+  let t_result ta w = u1_result 3 ta w
+
+  let t ta w =
+    match t_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+
+  let zinv_result ta w = u1_result ~s:(-1) 1 ta w
+
+  let zinv ta w =
+    match zinv_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+
+  let sinv_result ta w = u1_result ~s:(-1) 2 ta w
+
+  let sinv ta w =
+    match sinv_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+
+  let tinv_result ta w = u1_result ~s:(-1) 3 ta w
+
+  let tinv ta w =
+    match tinv_result ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
 
   (* \( rz s k  : |x0> -> e^{2.pi.i. (x0.s/2^k - s/2^{k+1})} |x0> \) *)
+  let rz_result ?(s = 1) k ta w =
+    match xx ta w with
+    | Error error -> Error error
+    | Ok target ->
+        let sQ = Q.of_int s in
+        let p =
+          if sQ = Q.zero then Scal Q.zero ++ empty
+            (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
+          else
+            Scal (Q.div_2exp (apply_angle (Q.neg sQ) (k + 1)) (k + 1))
+            ++ (Prod (Scal (Q.div_2exp (apply_angle sQ k) k), Qubit target)
+               ++ empty)
+        in
+        Ok { phase = p; ket = [| target |]; path_var = [] }
+
   let rz ?(s = 1) k ta w =
-    let sQ = Q.of_int s in
-    let p =
-      if sQ = Q.zero then Scal Q.zero ++ empty
-        (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
-      else
-        Scal (Q.div_2exp (apply_angle (Q.neg sQ) (k + 1)) (k + 1))
-        ++ (Prod (Scal (Q.div_2exp (apply_angle sQ k) k), Qubit (xx ta w))
-           ++ empty)
-    in
-    { phase = p; ket = [| xx ta w |]; path_var = [] }
+    match rz_result ~s k ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
 
   (* \( rx s k : |x0> -> e^{2.pi.i. (x0.y0/2 + s.y0/2^k - s/2^{k+1} + y0.y1/2)} |y1> \) *)
-  let rx ?(s = 1) k ta w =
-    let sQ = Q.of_int s in
-    let p =
-      if sQ = Q.zero then Scal Q.zero ++ empty
-        (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
-      else if Q.zero < sQ then
-        let pow2kp1 = pow2Q (k + 1) in
-        Prod (Scal div2, Prod (Qubit (xx ta w), Qubit (yy 0 w)))
-        ++ (Prod (Scal (Q.div_2exp sQ k), Qubit (yy 0 w))
-           ++ (Scal (Q.div (Q.sub pow2kp1 sQ) pow2kp1)
-              ++ (Prod (Scal div2, Prod (Qubit (yy 0 w), Qubit (yy 1 w)))
-                 ++ empty)))
-      else
-        let pow2k = pow2Q k in
-        Prod (Scal div2, Prod (Qubit (xx ta w), Qubit (yy 0 w)))
-        ++ (Prod (Scal (Q.div (Q.sub pow2k (Q.neg sQ)) pow2k), Qubit (yy 0 w))
-           ++ (Scal (Q.div_2exp (Q.neg sQ) (k + 1))
-              ++ (Prod (Scal div2, Prod (Qubit (yy 0 w), Qubit (yy 1 w)))
-                 ++ empty)))
-    in
+  let rx_result ?(s = 1) k ta w =
+    match xx ta w with
+    | Error error -> Error error
+    | Ok target ->
+        let sQ = Q.of_int s in
+        let p =
+          if sQ = Q.zero then Scal Q.zero ++ empty
+            (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
+          else if Q.zero < sQ then
+            let pow2kp1 = pow2Q (k + 1) in
+            Prod (Scal div2, Prod (Qubit target, Qubit (yy 0 w)))
+            ++ (Prod (Scal (Q.div_2exp sQ k), Qubit (yy 0 w))
+               ++ (Scal (Q.div (Q.sub pow2kp1 sQ) pow2kp1)
+                  ++ (Prod (Scal div2, Prod (Qubit (yy 0 w), Qubit (yy 1 w)))
+                     ++ empty)))
+          else
+            let pow2k = pow2Q k in
+            Prod (Scal div2, Prod (Qubit target, Qubit (yy 0 w)))
+            ++ (Prod
+                  ( Scal (Q.div (Q.sub pow2k (Q.neg sQ)) pow2k),
+                    Qubit (yy 0 w) )
+               ++ (Scal (Q.div_2exp (Q.neg sQ) (k + 1))
+                  ++ (Prod (Scal div2, Prod (Qubit (yy 0 w), Qubit (yy 1 w)))
+                     ++ empty)))
+        in
 
-    let q = if sQ = Q.zero || k = 0 then xx ta w else yy 1 w in
-    let pv = if sQ = Q.zero then [] else [ 1; 2 ] in
-    { phase = p; ket = [| q |]; path_var = pv }
+        let q = if sQ = Q.zero || k = 0 then target else yy 1 w in
+        let pv = if sQ = Q.zero then [] else [ 1; 2 ] in
+        Ok { phase = p; ket = [| q |]; path_var = pv }
+
+  let rx ?(s = 1) k ta w =
+    match rx_result ~s k ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
 
   (* \( ry s k : |x0> -> e^{2.pi.i.
      (-x0/4 + y0/2 - x0.y0/2 + s.y0/2^k - s/2^{k+1} + y0.y1/2 + y1/2)}
      |y1> \) *)
+  let ry_result ?(s = 1) k ta w =
+    match xx ta w with
+    | Error error -> Error error
+    | Ok target ->
+        let sQ = Q.of_int s in
+        let p =
+          if sQ = Q.zero then Scal Q.zero ++ empty
+            (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
+          else if Q.zero < sQ then
+            let pow2kp1 = pow2Q (k + 1) in
+            Scal (7 /// 4)
+            ++ (Prod (Scal div4, Qubit target)
+               ++ (Prod (Scal div2, Qubit (yy 0 w))
+                  ++ (Prod (Scal (3 /// 2), Prod (Qubit target, Qubit (yy 0 w)))
+                     ++ (Prod (Scal (Q.div_2exp sQ k), Qubit (yy 0 w))
+                        ++ (Scal (Q.div (Q.sub pow2kp1 sQ) pow2kp1)
+                           ++ (Prod
+                                 ( Scal div2,
+                                   Prod (Qubit (yy 0 w), Qubit (yy 1 w)) )
+                              ++ (Prod (Scal div4, Qubit (yy 1 w)) ++ empty)))))))
+          else
+            let pow2k = pow2Q k in
+            Scal (7 /// 4)
+            ++ (Prod (Scal div4, Qubit target)
+               ++ (Prod (Scal div2, Qubit (yy 0 w))
+                  ++ (Prod (Scal (3 /// 2), Prod (Qubit target, Qubit (yy 0 w)))
+                     ++ (Prod
+                           ( Scal (Q.div (Q.sub pow2k (Q.neg sQ)) pow2k),
+                             Qubit (yy 0 w) )
+                        ++ (Scal (Q.div_2exp (Q.neg sQ) (k + 1))
+                           ++ (Prod
+                                 ( Scal div2,
+                                   Prod (Qubit (yy 0 w), Qubit (yy 1 w)) )
+                              ++ (Prod (Scal div4, Qubit (yy 1 w)) ++ empty)))))))
+        in
+
+        let q =
+          if sQ = Q.zero || k = 0 then target else SumMod2 (One, yy 1 w)
+        in
+        let pv = if sQ = Q.zero then [] else [ 1; 2 ] in
+        Ok { phase = p; ket = [| q |]; path_var = pv }
+
   let ry ?(s = 1) k ta w =
-    let sQ = Q.of_int s in
-    let p =
-      if sQ = Q.zero then Scal Q.zero ++ empty
-        (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
-      else if Q.zero < sQ then
-        let pow2kp1 = pow2Q (k + 1) in
-        Scal (7 /// 4)
-        ++ (Prod (Scal div4, Qubit (xx ta w))
-           ++ (Prod (Scal div2, Qubit (yy 0 w))
-              ++ (Prod (Scal (3 /// 2), Prod (Qubit (xx ta w), Qubit (yy 0 w)))
-                 ++ (Prod (Scal (Q.div_2exp sQ k), Qubit (yy 0 w))
-                    ++ (Scal (Q.div (Q.sub pow2kp1 sQ) pow2kp1)
-                       ++ (Prod
-                             (Scal div2, Prod (Qubit (yy 0 w), Qubit (yy 1 w)))
-                          ++ (Prod (Scal div4, Qubit (yy 1 w)) ++ empty)))))))
-      else
-        let pow2k = pow2Q k in
-        Scal (7 /// 4)
-        ++ (Prod (Scal div4, Qubit (xx ta w))
-           ++ (Prod (Scal div2, Qubit (yy 0 w))
-              ++ (Prod (Scal (3 /// 2), Prod (Qubit (xx ta w), Qubit (yy 0 w)))
-                 ++ (Prod
-                       ( Scal (Q.div (Q.sub pow2k (Q.neg sQ)) pow2k),
-                         Qubit (yy 0 w) )
-                    ++ (Scal (Q.div_2exp (Q.neg sQ) (k + 1))
-                       ++ (Prod
-                             (Scal div2, Prod (Qubit (yy 0 w), Qubit (yy 1 w)))
-                          ++ (Prod (Scal div4, Qubit (yy 1 w)) ++ empty)))))))
-    in
-
-    let q = if sQ = Q.zero || k = 0 then xx ta w else SumMod2 (One, yy 1 w) in
-    let pv = if sQ = Q.zero then [] else [ 1; 2 ] in
-    { phase = p; ket = [| q |]; path_var = pv }
-
-  (* let xxb ta w : Qubit.t = SumMod2 (One, xx ta w) *)
+    match ry_result ~s k ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
 
   (* \( (1 ++ x_0) (1 - 2 y_0) / 8 =
         (1 - x_0) (1 - 2 y_0) / 8 =
         ( 1     -   x_0     + 2 x_0 y_0     - 2 y_0) / 8 =
           1 / 8 -   x_0 / 8 +   x_0 y_0 / 4 -   y_0 / 4  =
           1 / 8 + 7 x_0 / 8 +   x_0 y_0 / 4 + 3 y_0 / 4\) *)
-  let normalisation_factor co w : Poly.t =
-    Scal div8
-    ++ (Prod (Scal divm8, Qubit (xx co w))
-       ++ (Prod (Scal div4, Prod (Qubit (xx co w), Qubit (yy 0 w)))
-          ++ (Prod (Scal divm4, Qubit (yy 0 w)) ++ empty)))
+  let normalisation_factor co w : (Poly.t, gate_error) result =
+    match xx co w with
+    | Error error -> Error error
+    | Ok control ->
+        Ok
+          (Scal div8
+          ++ (Prod (Scal divm8, Qubit control)
+             ++ (Prod (Scal div4, Prod (Qubit control, Qubit (yy 0 w)))
+                ++ (Prod (Scal divm4, Qubit (yy 0 w)) ++ empty))))
 
   (* \( x_0 y_0 ++ (1 ++ x_0) x_1 = x_0 x_1 ++ x_0 y_0 ++ x_1} \) *)
-  let q2 co ta w : Qubit.t =
-    SumMod2 (Prod (xx co w, xx ta w), SumMod2 (Prod (xx co w, yy 0 w), xx ta w))
+  let q2 co ta w : (Qubit.t, gate_error) result =
+    match targets2 co ta w with
+    | Error error -> Error error
+    | Ok (control, target) ->
+        Ok
+          (SumMod2
+             ( Prod (control, target),
+               SumMod2 (Prod (control, yy 0 w), target) ))
 
   (* \( 1 / \sqrt{2}
      \sum_{y_0 \in \{0,1\}}
      e^{2 \pi i ((x_0 x_1 y_0) / 2 + ((1 ++ x_0) (1 - 2 y_0)) / 8)}
      \ket{x_0, x_0 y_0 ++ (1 ++ x_0) x_1} \) *)
+  let ch_result co ta w =
+    match targets2 co ta w with
+    | Error error -> Error error
+    | Ok (control, target) -> (
+        match normalisation_factor co w with
+        | Error error -> Error error
+        | Ok normalisation -> (
+            match q2 co ta w with
+            | Error error -> Error error
+            | Ok target_qubit ->
+                Ok
+                  {
+                    phase =
+                      Poly.simplify
+                        (Prod
+                           ( Scal div2,
+                             Prod (Qubit control, Prod (Qubit target, Qubit (yy 0 w)))
+                           )
+                        ++ normalisation);
+                    ket = Ket.simplify [| control; target_qubit |];
+                    path_var = [ w ];
+                  }))
+
   let ch co ta w =
-    {
-      phase =
-        Poly.simplify
-          (Prod
-             ( Scal div2,
-               Prod (Qubit (xx co w), Prod (Qubit (xx ta w), Qubit (yy 0 w))) )
-          ++ normalisation_factor co w);
-      ket = Ket.simplify [| xx co w; q2 co ta w |];
-      path_var = [ w ];
-    }
+    match ch_result co ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+
+  let cx_result co ta w =
+    match targets2 co ta w with
+    | Error error -> Error error
+    | Ok (control, target) ->
+        Ok
+          {
+            phase = Scal Q.zero ++ empty;
+            ket = [| control; SumMod2 (control, target) |];
+            path_var = [];
+          }
 
   let cx co ta w =
-    {
-      phase = Scal Q.zero ++ empty;
-      ket = [| xx co w; SumMod2 (xx co w, xx ta w) |];
-      path_var = [];
-    }
+    match cx_result co ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+
+  let crz_result k co ta w =
+    match targets2 co ta w with
+    | Error error -> Error error
+    | Ok (control, target) ->
+        Ok
+          {
+            phase =
+              Prod (Scal (divk k), Prod (Qubit control, Qubit target)) ++ empty;
+            ket = [| control; target |];
+            path_var = [];
+          }
 
   let crz k co ta w =
-    {
-      phase =
-        Prod (Scal (divk k), Prod (Qubit (xx co w), Qubit (xx ta w))) ++ empty;
-      ket = [| xx co w; xx ta w |];
-      path_var = [];
-    }
+    match crz_result k co ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
 
-  let cz co ta w = crz 1 co ta w
-  let cs co ta w = crz 2 co ta w
-  let ct co ta w = crz 3 co ta w
+  let cz_result co ta w = crz_result 1 co ta w
+
+  let cz co ta w =
+    match cz_result co ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+
+  let cs_result co ta w = crz_result 2 co ta w
+
+  let cs co ta w =
+    match cs_result co ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+
+  let ct_result co ta w = crz_result 3 co ta w
+
+  let ct co ta w =
+    match ct_result co ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+
+  let ccx_result co1 co2 ta w =
+    match targets3 co1 co2 ta w with
+    | Error error -> Error error
+    | Ok (control1, control2, target) ->
+        Ok
+          {
+            phase = Scal Q.zero ++ empty;
+            ket =
+              [| control1; control2; SumMod2 (Prod (control1, control2), target) |];
+            path_var = [];
+          }
 
   let ccx co1 co2 ta w =
-    {
-      phase = Scal Q.zero ++ empty;
-      ket =
-        [| xx co1 w; xx co2 w; SumMod2 (Prod (xx co1 w, xx co2 w), xx ta w) |];
-      path_var = [];
-    }
+    match ccx_result co1 co2 ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co1; co2; ta ] w
 
   let ccrz k co1 co2 ta w =
-    {
-      phase =
-        Prod
-          ( Scal (divk k),
-            Prod (Qubit (xx co1 w), Prod (Qubit (xx co2 w), Qubit (xx ta w))) )
-        ++ empty;
-      ket = [| xx co1 w; xx co2 w; xx ta w |];
-      path_var = [];
-    }
+    match targets3 co1 co2 ta w with
+    | Error error -> Error error
+    | Ok (control1, control2, target) ->
+        Ok
+          {
+            phase =
+              Prod
+                ( Scal (divk k),
+                  Prod (Qubit control1, Prod (Qubit control2, Qubit target)) )
+              ++ empty;
+            ket = [| control1; control2; target |];
+            path_var = [];
+          }
 
-  let ccz co1 co2 ta w = ccrz 1 co1 co2 ta w
+  let ccz_result co1 co2 ta w = ccrz 1 co1 co2 ta w
+
+  let ccz co1 co2 ta w =
+    match ccz_result co1 co2 ta w with
+    | Ok path_sum -> path_sum
+    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co1; co2; ta ] w
   let sh3 = { phase = Scal div8 ++ empty; ket = [| Var 0 |]; path_var = [] }
 end

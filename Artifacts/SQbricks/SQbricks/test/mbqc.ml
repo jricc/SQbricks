@@ -45,7 +45,7 @@ let test_owm ?(debug = true) ?(algo = Equiv.Sequence)
       To_deferred_measurement.to_deferred_measurements by_meas
     in
     let result =
-      Equiv.sqv_simple_result ~debug ~algo ~equivalence ~inputs1 ~outputs1
+      Equiv.sqv_simple ~debug ~algo ~equivalence ~inputs1 ~outputs1
         ~meas1 ~inputs2 ~outputs2 by_meas_dm p
     in
     result
@@ -602,7 +602,7 @@ let test_teleportation ?(not_equiv = false) ?(false_teleportation = false)
     let by_meas_dm, _, meas1 =
       To_deferred_measurement.to_deferred_measurements by_meas
     in
-    Equiv.sqv_simple_result ~debug ~algo ~equivalence ~not_equiv ~inputs1
+    Equiv.sqv_simple ~debug ~algo ~equivalence ~not_equiv ~inputs1
       ~outputs1 ~meas1 ~inputs2 ~outputs2 by_meas_dm p
   in
   let expected = true in
@@ -1296,7 +1296,7 @@ let test_owm_teleportation ?(not_equiv = false) ?(debug = true)
     let owm, owm_inputs, owm_outputs = Owm.to_owm p ~debug in
     let tele_dm, _, _ = To_deferred_measurement.to_deferred_measurements tele in
     let owm_dm, _, _ = To_deferred_measurement.to_deferred_measurements owm in
-    Equiv.sqv_simple_result ~debug ~equivalence ~algo:Parallel ~not_equiv
+    Equiv.sqv_simple ~debug ~equivalence ~algo:Parallel ~not_equiv
       ~inputs1:tele_inputs ~inputs2:owm_inputs ~outputs1:tele_outputs
       ~outputs2:owm_outputs tele_dm owm_dm
   in

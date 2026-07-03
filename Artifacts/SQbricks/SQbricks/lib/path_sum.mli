@@ -57,6 +57,28 @@ module Ket : sig
   (** [copy ket] creates a fresh copy of [ket] (see
       {{:https://ocaml.org/manual/5.4/api/Array.html#VALcopy} Array.copy}). *)
 
+  type equality_error = DifferentOutputLengths | InvalidOutputIndex
+  (** Errors that can prevent a ket comparison from being interpreted as a plain
+      equality result.
+
+      - [DifferentOutputLengths] means [outputs1] and [outputs2] do not select
+        the same number of qubits.
+      - [InvalidOutputIndex] means one selected output index is outside its
+        ket. *)
+
+  val equal_result :
+    ?debug:bool ->
+    ?outputs1:int list ->
+    ?outputs2:int list ->
+    t ->
+    t ->
+    (bool * int IntMap.t * int IntMap.t, equality_error) result
+  (** [equal_result ?debug ?outputs1 ?outputs2 k1 k2] is the typed version of
+      {!equal}. It returns [Ok (eq, map1, map2)] when the comparison is well
+      formed, [Error DifferentOutputLengths] when the output selections have
+      different lengths, and [Error InvalidOutputIndex] when an output selection
+      is out of bounds. *)
+
   val equal :
     ?debug:bool ->
     ?outputs1:int list ->
@@ -93,7 +115,9 @@ module Ket : sig
       ]}
 
       If the number of qubits or output indices differ,
-      [(false, IntMap.empty, IntMap.empty)] is returned. *)
+      [(false, IntMap.empty, IntMap.empty)] is returned. Use {!equal_result}
+      when the caller needs to distinguish inequality from malformed comparison
+      parameters. *)
 
   val member : ?except:int -> int -> t -> bool
   (** [member ?except var state] checks if variable [var] is present in the
@@ -125,9 +149,28 @@ module Ket : sig
       - [extract_var [|Var 1; Var 2|] [0;1]] returns [[1; 2]]
       - [extract_var [|Var 1; Var 2|] [0]] returns [[1]] *)
 
-  (** Need to have an input "Renamed" ([Rules.Rename.single])*)
+  type path_var_order_error = InvalidPathVariableCount | InvalidPathVariableIndex
+  (** Errors that can prevent path-variable ordering.
+
+      - [InvalidPathVariableCount] means the declared number of path variables
+        is negative.
+      - [InvalidPathVariableIndex] means a path variable found in the ket is
+        outside the declared range. *)
+
+  val path_var_order_result :
+    ?debug:bool ->
+    t ->
+    int ->
+    (int array * int array, path_var_order_error) result
+  (** [path_var_order_result ?debug ket count] is the typed version of
+      {!path_var_order}. It computes the ordering arrays for a renamed ket, or
+      reports malformed path-variable metadata. *)
+
+  (** Need to have an input "Renamed" ([Rules.Rename.single]) *)
   val path_var_order : ?debug:bool -> t -> int -> int array * int array
-  (** Compute the ordering of path variables in a given ket. *)
+  (** Compute the ordering of path variables in a given ket. Use
+      {!path_var_order_result} when the caller needs to distinguish malformed
+      path-variable metadata from a valid ordering. *)
 
   val list_of_qubits_to_ket : Qubit.t list -> t
   (** [list_of_qubits_to_ket qubits] converts a list of qubits into a quantum
@@ -163,10 +206,20 @@ module Ket : sig
 
   val substitute : ?debug:bool -> t -> int -> Qubit.t -> t
   (** [substitute ?debug state var expr] substitutes occurrences of variable
-      [var] in the ket [state] with qubit expression [expr].
+      [var] in the ket [state] with qubit expression [expr], without mutating
+      [state].
 
       Example(s):
       - [substitute [|Var 1|] 1 (Var 2)] returns [[|Var 2|]] *)
+
+  val substitute_many : ?debug:bool -> t -> (int * Qubit.t) list -> t
+  (** [substitute_many ?debug state substitutions] applies all variable
+      substitutions in one traversal of [state], without mutating [state].
+      Replacement expressions are not substituted again by the same call.
+
+      Example(s):
+      - [substitute_many [|Var 1; Var 2|] [(1, Var 3); (2, One)]] returns
+        [[|Var 3; One|]] *)
 end
 
 (** {1 Path Sum Representation} *)
@@ -203,6 +256,38 @@ end
 
 (** {1 Comparison and Equality} *)
 
+type equality_error =
+  | DifferentOutputLengths
+  | InvalidOutputIndex
+  | IncompatiblePhaseWidths
+  | IncompletePhasePathVariableMap
+(** Errors that can prevent a path-sum comparison from being interpreted as a
+    plain equality result.
+
+    - [DifferentOutputLengths] means [outputs1] and [outputs2] do not select
+      the same number of output qubits.
+    - [InvalidOutputIndex] means one selected output index is outside its path
+      sum.
+    - [IncompatiblePhaseWidths] means the phase comparison was given
+      incompatible ket widths.
+    - [IncompletePhasePathVariableMap] means the phase comparison needs a
+      path-variable mapping that the ket comparison did not provide. *)
+
+val equal_result :
+  ?debug:bool ->
+  ?outputs1:int list ->
+  ?outputs2:int list ->
+  ?global_phase:bool ->
+  t ->
+  t ->
+  (bool, equality_error) result
+(** [equal_result ?debug ?outputs1 ?outputs2 ?global_phase ps1 ps2] is the
+    typed version of {!equal}. It returns [Ok true] or [Ok false] when the
+    comparison is well formed, and [Error DifferentOutputLengths] when the
+    output selections have different lengths, or [Error InvalidOutputIndex]
+    when an output selection is out of bounds. Phase comparison metadata errors
+    are reported explicitly instead of being collapsed to [Ok false]. *)
+
 val equal :
   ?debug:bool ->
   ?outputs1:int list ->
@@ -213,7 +298,9 @@ val equal :
   bool
 (** [equal ?debug ?outputs1 ?outputs2 ?global_phase ps1 ps2] checks whether two
     path sums [ps1] and [ps2] are equivalent up to qubits mapping, optionally
-    ignoring global phase and restricting comparison to output qubits. *)
+    ignoring global phase and restricting comparison to output qubits. Use
+    {!equal_result} when the caller needs to distinguish inequality from
+    malformed comparison parameters. *)
 
 (** {1 Construction and Initialization} *)
 
@@ -224,28 +311,66 @@ val ofSize : int -> t
     Example(s):
     - [ofSize 2] returns a path sum with qubits [[|Var 0; Var 1|]]. *)
 
+type initialization_error = InvalidWidth | InvalidInitIndex
+(** Errors that can prevent initial path-sum construction.
+
+    - [InvalidWidth] means the requested width is negative.
+    - [InvalidInitIndex] means one initialized qubit index is outside
+      [0, width). *)
+
+val ofSize_init_result :
+  ?debug:bool -> int -> int list -> (t, initialization_error) result
+(** [ofSize_init_result ?debug width init_values] is the typed version of
+    {!ofSize_init}. It returns [Error InvalidWidth] for a negative width and
+    [Error InvalidInitIndex] when an initialization index is out of bounds. *)
+
 val ofSize_init : ?debug:bool -> int -> int list -> t
 (** [ofSize_init ?debug width init_values] creates an initial path sum with
     given width and initialization values.
 
     Example(s):
-    - [ofSize_init 2 [0; Var 0]] initializes the first qubit to 0 and the second
-      as a variable. *)
+    - [ofSize_init 2 [0]] initializes the first qubit to 0 and the second as a
+      variable. *)
 
 val remove_path_var : t -> int -> t
 (** [remove_path_var ps var] removes the path variable [var] from the path sum.
 *)
 
+type substitution_error = CannotSubstitutePathVariable
+(** Errors that can prevent path-sum substitution.
+
+    [CannotSubstitutePathVariable] means the target variable is declared in
+    [ps.path_var]. *)
+
+val substitute_result :
+  ?debug:bool ->
+  ?except_path_var:bool ->
+  t ->
+  int ->
+  Qubit.t ->
+  (t, substitution_error) result
+(** [substitute_result ?debug ?except_path_var ps var expr] is the typed version
+    of {!substitute}. It returns [Error CannotSubstitutePathVariable] when
+    [var] is declared in [ps.path_var]. If [except_path_var] is [true], such a
+    variable is protected and [ps] is returned unchanged. *)
+
 val substitute :
   ?debug:bool -> ?except_path_var:bool -> t -> int -> Qubit.t -> t
 (** [substitute ?debug ?except_path_var ps var expr] substitutes occurrences of
-    variable [var] in the path sum [ps] with qubit expression [expr]. If
-    [except_path_var] is [true], path variables are not substituted. *)
+    variable [var] in the path sum [ps] with qubit expression [expr], without
+    mutating [ps]. Path variables are protected: if [except_path_var] is [true],
+    substituting one returns [ps] unchanged; otherwise it is rejected. *)
 
 (** {1 Path Sum Library} *)
 
 module Path_sum_library : sig
   (** Quantum gate constructors as path sums. *)
+
+  type gate_error = TargetIndexOutOfWidth
+  (** Errors that can prevent a gate path sum from being constructed.
+
+      [TargetIndexOutOfWidth] means the requested target index is not inside
+      the declared circuit width. *)
 
   val h : int -> int -> t
   (** [h target width] creates a Hadamard gate:
@@ -254,17 +379,29 @@ module Path_sum_library : sig
       Example(s):
       - [h 0 1] creates a Hadamard gate on qubit 0 with width 1. *)
 
+  val h_result : int -> int -> (t, gate_error) result
+  (** [h_result target width] is the typed version of {!h}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
+
   val x : int -> int -> t
   (** [x target width] creates a Pauli-X (bit-flip) gate.
 
       Example(s):
       - [x 0 1] creates an X gate on qubit 0 with width 1. *)
 
+  val x_result : int -> int -> (t, gate_error) result
+  (** [x_result target width] is the typed version of {!x}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
+
   val u1 : ?s:int -> int -> int -> int -> t
-  (** [u1 ?s target k width] creates a phase gate: {b e^(2πi s·x / 2^k) |x⟩}.
+  (** [u1 ?s k target width] creates a phase gate: {b e^(2πi s·x / 2^k) |x⟩}.
 
       Example(s):
-      - [u1 0 1 1] creates a U1 gate with s=1, k=1 on qubit 0. *)
+      - [u1 1 0 1] creates a U1 gate with s=1, k=1 on qubit 0. *)
+
+  val u1_result : ?s:int -> int -> int -> int -> (t, gate_error) result
+  (** [u1_result ?s k target width] is the typed version of {!u1}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
 
   val z : int -> int -> t
   (** [z target width] creates a Pauli-Z gate.
@@ -272,11 +409,19 @@ module Path_sum_library : sig
       Example(s):
       - [z 0 1] creates a Z gate on qubit 0 with width 1. *)
 
+  val z_result : int -> int -> (t, gate_error) result
+  (** [z_result target width] is the typed version of {!z}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
+
   val s : int -> int -> t
   (** [s target width] creates an S gate (π/2 phase gate).
 
       Example(s):
       - [s 0 1] creates an S gate on qubit 0. *)
+
+  val s_result : int -> int -> (t, gate_error) result
+  (** [s_result target width] is the typed version of {!s}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
 
   val t : int -> int -> t
   (** [t target width] creates a T gate (π/4 phase gate).
@@ -284,49 +429,117 @@ module Path_sum_library : sig
       Example(s):
       - [t 0 1] creates a T gate on qubit 0. *)
 
+  val t_result : int -> int -> (t, gate_error) result
+  (** [t_result target width] is the typed version of {!t}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
+
   val zinv : int -> int -> t
   (** [zinv target width] creates an inverse Z gate. *)
+
+  val zinv_result : int -> int -> (t, gate_error) result
+  (** [zinv_result target width] is the typed version of {!zinv}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
 
   val sinv : int -> int -> t
   (** [sinv target width] creates an inverse S gate. *)
 
+  val sinv_result : int -> int -> (t, gate_error) result
+  (** [sinv_result target width] is the typed version of {!sinv}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
+
   val tinv : int -> int -> t
   (** [tinv target width] creates an inverse T gate. *)
 
+  val tinv_result : int -> int -> (t, gate_error) result
+  (** [tinv_result target width] is the typed version of {!tinv}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
+
   val rz : ?s:int -> int -> int -> int -> t
-  (** [rz ?s target k width] creates a Z-rotation gate:
+  (** [rz ?s k target width] creates a Z-rotation gate:
       {b e^(2πi (s·x / 2^k - s / 2^(k+1))) |x⟩}. *)
 
+  val rz_result : ?s:int -> int -> int -> int -> (t, gate_error) result
+  (** [rz_result ?s k target width] is the typed version of {!rz}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
+
   val rx : ?s:int -> int -> int -> int -> t
-  (** [rx ?s target k width] creates an X-rotation gate. *)
+  (** [rx ?s k target width] creates an X-rotation gate. *)
+
+  val rx_result : ?s:int -> int -> int -> int -> (t, gate_error) result
+  (** [rx_result ?s k target width] is the typed version of {!rx}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
 
   val ry : ?s:int -> int -> int -> int -> t
-  (** [ry ?s target k width] creates a Y-rotation gate. *)
+  (** [ry ?s k target width] creates a Y-rotation gate. *)
+
+  val ry_result : ?s:int -> int -> int -> int -> (t, gate_error) result
+  (** [ry_result ?s k target width] is the typed version of {!ry}. It returns
+      [Error TargetIndexOutOfWidth] when [target] is outside [width]. *)
 
   val ch : int -> int -> int -> t
   (** [ch control target width] creates a controlled-Hadamard gate. *)
 
+  val ch_result : int -> int -> int -> (t, gate_error) result
+  (** [ch_result control target width] is the typed version of {!ch}. It
+      returns [Error TargetIndexOutOfWidth] when [control] or [target] is
+      outside [width]. *)
+
   val cx : int -> int -> int -> t
   (** [cx control target width] creates a CNOT gate. *)
 
+  val cx_result : int -> int -> int -> (t, gate_error) result
+  (** [cx_result control target width] is the typed version of {!cx}. It
+      returns [Error TargetIndexOutOfWidth] when [control] or [target] is
+      outside [width]. *)
+
   val crz : int -> int -> int -> int -> t
-  (** [crz s control target width] creates a controlled-RZ gate. *)
+  (** [crz k control target width] creates a controlled-RZ gate. *)
+
+  val crz_result : int -> int -> int -> int -> (t, gate_error) result
+  (** [crz_result k control target width] is the typed version of {!crz}. It
+      returns [Error TargetIndexOutOfWidth] when [control] or [target] is
+      outside [width]. *)
 
   val cz : int -> int -> int -> t
   (** [cz control target width] creates a controlled-Z gate. *)
 
+  val cz_result : int -> int -> int -> (t, gate_error) result
+  (** [cz_result control target width] is the typed version of {!cz}. It
+      returns [Error TargetIndexOutOfWidth] when [control] or [target] is
+      outside [width]. *)
+
   val cs : int -> int -> int -> t
   (** [cs control target width] creates a controlled-S gate. *)
+
+  val cs_result : int -> int -> int -> (t, gate_error) result
+  (** [cs_result control target width] is the typed version of {!cs}. It
+      returns [Error TargetIndexOutOfWidth] when [control] or [target] is
+      outside [width]. *)
 
   val ct : int -> int -> int -> t
   (** [ct control target width] creates a controlled-T gate. *)
 
+  val ct_result : int -> int -> int -> (t, gate_error) result
+  (** [ct_result control target width] is the typed version of {!ct}. It
+      returns [Error TargetIndexOutOfWidth] when [control] or [target] is
+      outside [width]. *)
+
   val ccx : int -> int -> int -> int -> t
   (** [ccx control1 control2 target width] creates a Toffoli (CCX) gate. *)
+
+  val ccx_result : int -> int -> int -> int -> (t, gate_error) result
+  (** [ccx_result control1 control2 target width] is the typed version of
+      {!ccx}. It returns [Error TargetIndexOutOfWidth] when one selected index
+      is outside [width]. *)
 
   val ccz : int -> int -> int -> int -> t
   (** [ccz control1 control2 target width] creates a double-controlled Z gate.
   *)
+
+  val ccz_result : int -> int -> int -> int -> (t, gate_error) result
+  (** [ccz_result control1 control2 target width] is the typed version of
+      {!ccz}. It returns [Error TargetIndexOutOfWidth] when one selected index
+      is outside [width]. *)
 
   val sh3 : t
   (** [sh3] predefined state for testing and demonstration purposes. *)

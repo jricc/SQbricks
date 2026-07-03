@@ -24,71 +24,75 @@ open Printf
 
 type t = Zero | One | Var of int | Prod of t * t | SumMod2 of t * t
 
+type equality_error = IncompatibleWidths | IncompletePathVariableMap
+
+let equal_result ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
+    ?(map_path_var1 = IntMap.empty) ?(map_path_var2 = IntMap.empty) (q1 : t)
+    (q2 : t) =
+  let widths_are_incompatible =
+    (wq1 = 0 && wq2 = 1) || (wq1 = 1 && wq2 = 0)
+  in
+  if widths_are_incompatible then Error IncompatibleWidths
+  else (
+    if debug then
+      printf
+        "Qubit.equal.compare.IntMap, map_path_var1 = %s, map_path_var2 = %s\n%!"
+        (Common.to_string_int_map map_path_var1)
+        (Common.to_string_int_map map_path_var2);
+
+    let compare_vars v1 v2 =
+      (* If free variable *)
+      if v1 < wq1 && v2 < wq2 then (
+        if debug then printf "Qubit.equal, v1 = %d, v2 = %d\n\n%!" v1 v2;
+        Ok (Int.equal v1 v2))
+      else if
+        (* If path variables *)
+        wq1 <= v1 && wq2 <= v2
+      then
+        let path_var_indices =
+          if IntMap.is_empty map_path_var1 && IntMap.is_empty map_path_var2 then
+            Ok (v1 - wq1, v2 - wq2)
+          else
+            match
+              ( IntMap.find_opt v1 map_path_var1,
+                IntMap.find_opt v2 map_path_var2 )
+            with
+            | Some val1, Some val2 -> Ok (val1, val2)
+            | _ -> Error IncompletePathVariableMap
+        in
+        match path_var_indices with
+        | Ok (y1, y2) ->
+            if debug then (
+              printf "Qubit.equal, v1 = %d, v2 = %d, wq1 = %d, wq2 = %d\n\n%!"
+                v1 v2 wq1 wq2;
+              printf "Qubit.equal, y1 = %d, y2 = %d\n\n%!" y1 y2);
+            Ok (Int.equal y1 y2)
+        | Error error -> Error error
+      else Ok false
+    in
+
+    let rec aux q1 q2 =
+      match (q1, q2) with
+      | Zero, Zero | One, One -> Ok true
+      | Var v1, Var v2 ->
+          if debug then printf "Qubit.equal.aux, v1 = %d, v2 = %d\n\n%!" v1 v2;
+          compare_vars v1 v2
+      | Prod (q1, q2), Prod (q3, q4) | SumMod2 (q1, q2), SumMod2 (q3, q4) ->
+          (match aux q1 q3 with
+          | Error error -> Error error
+          | Ok false -> Ok false
+          | Ok true -> aux q2 q4)
+      | _ -> Ok false
+    in
+    aux q1 q2)
+
 let equal ?(debug = false) ?(wq1 = 0) ?(wq2 = 0) ?(map_path_var1 = IntMap.empty)
     ?(map_path_var2 = IntMap.empty) (q1 : t) (q2 : t) =
-  if (wq1 = 0 && wq2 = 1) || (wq1 = 1 && wq2 = 0) then
-    failwith "Qubit.equal, wq1 and wq2 aren't in the same state";
-
-  if debug then
-    printf
-      "Qubit.equal.compare.IntMap, map_path_var1 = %s, map_path_var2 = %s\n%!"
-      (Common.to_string_int_map map_path_var1)
-      (Common.to_string_int_map map_path_var2);
-
-  let compare_vars v1 v2 =
-    (* If free variable *)
-    if v1 < wq1 && v2 < wq2 then (
-      if debug then printf "Qubit.equal, v1 = %d, v2 = %d\n\n%!" v1 v2;
-      Int.equal v1 v2)
-    else if
-      (* If path variables *)
-      wq1 <= v1 && wq2 <= v2
-    then (
-      let y1, y2 =
-        if IntMap.is_empty map_path_var1 then
-          if IntMap.is_empty map_path_var2 then (
-            let y1, y2 = (v1 - wq1, v2 - wq2) in
-            if debug then
-              printf "Qubit.equal.compare, y1 = %d, y2 = %d\n%!" y1 y2;
-            (y1, y2))
-          else
-            failwith
-              "Qubit.equal.compare, IntMap.is_empty map_path_var1 but not \
-               map_path_var2"
-        else if IntMap.is_empty map_path_var2 then
-          failwith
-            "Qubit.equal.compare, IntMap.is_empty map_path_var2 but not \
-             map_path_var1"
-        else
-          let key1, key2 = (v1, v2) in
-          if debug then
-            printf "Qubit.equal.compare.IntMap, key1 = %d, key2 = %d\n%!" key1
-              key2;
-          let val1 = IntMap.find key1 map_path_var1 in
-          if debug then printf "Qubit.equal.compare.IntMap, val1 = %d\n%!" val1;
-          let val2 = IntMap.find key2 map_path_var2 in
-          if debug then printf "Qubit.equal.compare.IntMap, val2 = %d\n%!" val2;
-          (val1, val2)
-      in
-      if debug then (
-        printf "Qubit.equal, v1 = %d, v2 = %d, wq1 = %d, wq2 = %d\n\n%!" v1 v2
-          wq1 wq2;
-        printf "Qubit.equal, y1 = %d, y2 = %d\n\n%!" y1 y2);
-      Int.equal y1 y2)
-    else false
-  in
-
-  let rec aux q1 q2 =
-    match (q1, q2) with
-    | Zero, Zero | One, One -> true
-    | Var v1, Var v2 ->
-        if debug then printf "Qubit.equal.aux, v1 = %d, v2 = %d\n\n%!" v1 v2;
-        compare_vars v1 v2
-    | Prod (q1, q2), Prod (q3, q4) | SumMod2 (q1, q2), SumMod2 (q3, q4) ->
-        aux q1 q3 && aux q2 q4
-    | _ -> false
-  in
-  aux q1 q2
+  match
+    equal_result ~debug ~wq1 ~wq2 ~map_path_var1 ~map_path_var2 q1 q2
+  with
+  | Ok are_equal -> are_equal
+  | Error _ -> false
 
 let ( ++ ) q1 q2 : t = SumMod2 (q1, q2)
 
@@ -227,11 +231,13 @@ let rec member v q =
   | Var v' -> v = v'
   | _ -> false
 
-let remove v q =
+type remove_error = CannotRemoveFromSum
+
+let remove_result v q =
   let v_removed = ref false in
   let rec aux v q =
     match q with
-    | SumMod2 _ -> failwith "Qubit.remove"
+    | SumMod2 _ -> Error CannotRemoveFromSum
     | Prod (Var v1, q2) when v1 = v ->
         v_removed := true;
         aux v q2
@@ -240,11 +246,17 @@ let remove v q =
         aux v q1
     | Var v1 when v = v1 ->
         v_removed := true;
-        One
-    | _ -> q
+        Ok One
+    | _ -> Ok q
   in
-  let q_output = aux v q in
-  if !v_removed then Some q_output else None
+  match aux v q with
+  | Error error -> Error error
+  | Ok q_output -> Ok (if !v_removed then Some q_output else None)
+
+let remove v q =
+  match remove_result v q with
+  | Ok output -> output
+  | Error CannotRemoveFromSum -> None
 
 let substitute v original_qubit qubit_to_substitute =
   let rec aux q =

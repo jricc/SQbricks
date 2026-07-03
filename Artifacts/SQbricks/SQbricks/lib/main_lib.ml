@@ -426,9 +426,13 @@ let run () =
     To_openqasm.print_to_file_oq_free_folder output_file_by_meas by_meas)
   else if !qasm_to_ps then (
     let p = parse_prog (List.nth !input_files 0) in
-    let ps = Reduction_algorithm.reduction_algorithm (Program.execution p) in
-    printf "p =\n%s\n\n" (ProgS.pretty p);
-    printf "ps =\n%s\n\n" (PSS.pretty ps))
+    match Reduction_algorithm.reduction_algorithm (Program.execution p) with
+    | Ok ps ->
+        printf "p =\n%s\n\n" (ProgS.pretty p);
+        printf "ps =\n%s\n\n" (PSS.pretty ps)
+    | Error (Rules.MalformedPathSum message) ->
+        eprintf "Malformed path sum during reduction: %s\n%!" message;
+        exit 1)
   else if !nb_gates_csv then (
     let debug = false in
     let prog1 = parse_prog (List.nth !input_files 0) in
