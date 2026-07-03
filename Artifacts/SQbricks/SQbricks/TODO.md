@@ -44,17 +44,14 @@
   failures with explicit equivalence results.
 - [x] Stop ordered long benchmark series after timeout or memory failure while
   keeping other series running.
-- [x] Remove the old untyped `Rules.HH.hh`,
-  `Rules.Variable_replacement.variable_replacement`, and
-  `Rules.Variable_replacement.poly_normalized` entry points after validating the
-  typed reduction results.
-- [x] Remove the old untyped `Reduction_algorithm.reduction_algorithm` entry
-  point after migrating local callers to `reduction_algorithm_result`.
+- [x] Keep the reduction entry-point names short after validating the typed
+  reduction results.
 - [x] Route Equiv initial-state construction through
   `Path_sum.ofSize_init_result` so invalid initialization data becomes
   `ErrorInvalidQubitIndex`.
-- [x] Route observable-qubit comparison in `Equiv.compute_result` through
-  `Qubit.equal_result` so malformed comparison metadata becomes
+- [x] Route observable-qubit comparison in
+  `Equiv.compare_inputs_with_identity` through `Qubit.equal_result` so malformed
+  comparison metadata becomes
   `ErrorMalformedPathSum`.
 - [x] Reject non-unitary `Program` constructs such as `InitQ` during Equiv
   parameter preparation before symbolic execution.

@@ -426,7 +426,7 @@ let run () =
     To_openqasm.print_to_file_oq_free_folder output_file_by_meas by_meas)
   else if !qasm_to_ps then (
     let p = parse_prog (List.nth !input_files 0) in
-    match Reduction_algorithm.reduction_algorithm_result (Program.execution p) with
+    match Reduction_algorithm.reduction_algorithm (Program.execution p) with
     | Ok ps ->
         printf "p =\n%s\n\n" (ProgS.pretty p);
         printf "ps =\n%s\n\n" (PSS.pretty ps)

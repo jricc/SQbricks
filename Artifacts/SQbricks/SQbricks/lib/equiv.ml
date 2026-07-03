@@ -77,7 +77,7 @@ let result_to_string = function
 type equivalence = SubCircuit | FullCircuit | GlobalPhase
 
 let reduction_for_equiv ?(debug = false) state =
-  match Reduction_algorithm.reduction_algorithm_result ~debug state with
+  match Reduction_algorithm.reduction_algorithm ~debug state with
   | Ok reduced_state -> Ok reduced_state
   | Error (Rules.MalformedPathSum _) -> Error ErrorMalformedPathSum
 
@@ -143,8 +143,8 @@ let program_has_valid_gate_applications width program =
   in
   aux program
 
-let compute_result ?(debug = false) inputs (output_state : Path_sum.t)
-    (identity_state : Path_sum.t) =
+let compare_inputs_with_identity ?(debug = false) inputs
+    (output_state : Path_sum.t) (identity_state : Path_sum.t) =
   if List.is_empty inputs then
     path_sum_equal_for_equiv ~debug output_state identity_state
   else
@@ -161,10 +161,14 @@ let compute_result ?(debug = false) inputs (output_state : Path_sum.t)
             let q_expect = identity_state.ket.(input) in
             let q_greet = output_state.ket.(input) in
             if debug then
-              printf "Equiv.compute_result, q_expect = %s, q_greet = %s\n\n%!"
+              printf
+                "Equiv.compare_inputs_with_identity, q_expect = %s, q_greet = \
+                 %s\n\n\
+                 %!"
                 (QS.pretty q_expect width) (QS.pretty q_greet width);
 
-            (* A qubit comparison error means the reduced path-sum metadata is malformed. *)
+            (* A qubit comparison error means the reduced path-sum metadata is
+               malformed. *)
             match Qubit.equal_result ~debug q_greet q_expect with
             | Error Qubit.IncompatibleWidths
             | Error Qubit.IncompletePathVariableMap ->
@@ -552,7 +556,7 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                               match condition_zero_phase with
                                               | SubCircuitEquality -> (
                                                   match
-                                                    compute_result ~debug
+                                                    compare_inputs_with_identity ~debug
                                                       inputs1
                                                       output_state_reduced
                                                       identity_state
@@ -564,7 +568,7 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                                       SubCircuitInconclusive)
                                               | GlobalPhaseEquality -> (
                                                   match
-                                                    compute_result ~debug
+                                                    compare_inputs_with_identity ~debug
                                                       inputs1
                                                       output_state_reduced
                                                       identity_state
@@ -635,13 +639,13 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                     | Error result -> result
                     | Ok output_state_reduced2 ->
                 match
-                  Rules.Variable_replacement.poly_normalized_result
+                  Rules.Variable_replacement.poly_normalized
                     ~debug output_state_reduced1
                 with
                 | Error (Rules.MalformedPathSum _) -> ErrorMalformedPathSum
                 | Ok output_path_var_norm1 -> (
                     match
-                      Rules.Variable_replacement.poly_normalized_result
+                      Rules.Variable_replacement.poly_normalized
                         ~debug output_state_reduced2
                     with
                     | Error (Rules.MalformedPathSum _) -> ErrorMalformedPathSum
@@ -727,7 +731,7 @@ let sqv ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
   in
   result
 
-let sqv_simple_result ?(debug = false) ?(inputs1 = []) ?(inputs2 = [])
+let sqv_simple ?(debug = false) ?(inputs1 = []) ?(inputs2 = [])
     ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = []) ?(meas2 = [])
     ?(algo = Sequence) ?(equivalence = SubCircuit) ?(not_equiv = false) p1 p2 =
   let is_equivalent =

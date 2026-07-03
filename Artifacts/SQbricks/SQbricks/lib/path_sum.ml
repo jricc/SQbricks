@@ -579,7 +579,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   type gate_error = TargetIndexOutOfWidth
 
-  let xx_result ta w : (Qubit.t, gate_error) result =
+  let xx ta w : (Qubit.t, gate_error) result =
     if ta < w then Ok (Var ta) else Error TargetIndexOutOfWidth
 
   let invalid_target_failure ta w =
@@ -592,19 +592,19 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | _ :: remaining_targets -> invalid_targets_failure remaining_targets w
     | [] -> invalid_target_failure w w
 
-  let targets2_result target1 target2 w =
-    match xx_result target1 w with
+  let targets2 target1 target2 w =
+    match xx target1 w with
     | Error error -> Error error
     | Ok qubit1 -> (
-        match xx_result target2 w with
+        match xx target2 w with
         | Error error -> Error error
         | Ok qubit2 -> Ok (qubit1, qubit2))
 
-  let targets3_result target1 target2 target3 w =
-    match targets2_result target1 target2 w with
+  let targets3 target1 target2 target3 w =
+    match targets2 target1 target2 w with
     | Error error -> Error error
     | Ok (qubit1, qubit2) -> (
-        match xx_result target3 w with
+        match xx target3 w with
         | Error error -> Error error
         | Ok qubit3 -> Ok (qubit1, qubit2, qubit3))
 
@@ -612,7 +612,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   (* \( 1 / \sqrt{2} \sum_{y_0 \in \{0,1\}} e^{2 \pi i (x_0 y_0) / 2} \ket{y_0} \) *)
   let h_result ta w =
-    match xx_result ta w with
+    match xx ta w with
     | Error error -> Error error
     | Ok target ->
         Ok
@@ -629,7 +629,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
 
   let x_result ta w =
-    match xx_result ta w with
+    match xx ta w with
     | Error error -> Error error
     | Ok target ->
         Ok
@@ -648,7 +648,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   (* \( u1 s k  : |x0> -> e^{2.pi.i. x0.s / 2^k} \) |x0> *)
   let u1_result ?(s = 1) k ta w =
-    match xx_result ta w with
+    match xx ta w with
     | Error error -> Error error
     | Ok target ->
         let p =
@@ -710,7 +710,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   (* \( rz s k  : |x0> -> e^{2.pi.i. (x0.s/2^k - s/2^{k+1})} |x0> \) *)
   let rz_result ?(s = 1) k ta w =
-    match xx_result ta w with
+    match xx ta w with
     | Error error -> Error error
     | Ok target ->
         let sQ = Q.of_int s in
@@ -731,7 +731,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   (* \( rx s k : |x0> -> e^{2.pi.i. (x0.y0/2 + s.y0/2^k - s/2^{k+1} + y0.y1/2)} |y1> \) *)
   let rx_result ?(s = 1) k ta w =
-    match xx_result ta w with
+    match xx ta w with
     | Error error -> Error error
     | Ok target ->
         let sQ = Q.of_int s in
@@ -769,7 +769,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
      (-x0/4 + y0/2 - x0.y0/2 + s.y0/2^k - s/2^{k+1} + y0.y1/2 + y1/2)}
      |y1> \) *)
   let ry_result ?(s = 1) k ta w =
-    match xx_result ta w with
+    match xx ta w with
     | Error error -> Error error
     | Ok target ->
         let sQ = Q.of_int s in
@@ -815,15 +815,13 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Ok path_sum -> path_sum
     | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
 
-  (* let xxb ta w : Qubit.t = SumMod2 (One, xx ta w) *)
-
   (* \( (1 ++ x_0) (1 - 2 y_0) / 8 =
         (1 - x_0) (1 - 2 y_0) / 8 =
         ( 1     -   x_0     + 2 x_0 y_0     - 2 y_0) / 8 =
           1 / 8 -   x_0 / 8 +   x_0 y_0 / 4 -   y_0 / 4  =
           1 / 8 + 7 x_0 / 8 +   x_0 y_0 / 4 + 3 y_0 / 4\) *)
-  let normalisation_factor_result co w : (Poly.t, gate_error) result =
-    match xx_result co w with
+  let normalisation_factor co w : (Poly.t, gate_error) result =
+    match xx co w with
     | Error error -> Error error
     | Ok control ->
         Ok
@@ -833,8 +831,8 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
                 ++ (Prod (Scal divm4, Qubit (yy 0 w)) ++ empty))))
 
   (* \( x_0 y_0 ++ (1 ++ x_0) x_1 = x_0 x_1 ++ x_0 y_0 ++ x_1} \) *)
-  let q2_result co ta w : (Qubit.t, gate_error) result =
-    match targets2_result co ta w with
+  let q2 co ta w : (Qubit.t, gate_error) result =
+    match targets2 co ta w with
     | Error error -> Error error
     | Ok (control, target) ->
         Ok
@@ -847,13 +845,13 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
      e^{2 \pi i ((x_0 x_1 y_0) / 2 + ((1 ++ x_0) (1 - 2 y_0)) / 8)}
      \ket{x_0, x_0 y_0 ++ (1 ++ x_0) x_1} \) *)
   let ch_result co ta w =
-    match targets2_result co ta w with
+    match targets2 co ta w with
     | Error error -> Error error
     | Ok (control, target) -> (
-        match normalisation_factor_result co w with
+        match normalisation_factor co w with
         | Error error -> Error error
         | Ok normalisation -> (
-            match q2_result co ta w with
+            match q2 co ta w with
             | Error error -> Error error
             | Ok target_qubit ->
                 Ok
@@ -875,7 +873,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
 
   let cx_result co ta w =
-    match targets2_result co ta w with
+    match targets2 co ta w with
     | Error error -> Error error
     | Ok (control, target) ->
         Ok
@@ -891,7 +889,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
 
   let crz_result k co ta w =
-    match targets2_result co ta w with
+    match targets2 co ta w with
     | Error error -> Error error
     | Ok (control, target) ->
         Ok
@@ -929,7 +927,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
 
   let ccx_result co1 co2 ta w =
-    match targets3_result co1 co2 ta w with
+    match targets3 co1 co2 ta w with
     | Error error -> Error error
     | Ok (control1, control2, target) ->
         Ok
@@ -945,8 +943,8 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Ok path_sum -> path_sum
     | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co1; co2; ta ] w
 
-  let ccrz_result k co1 co2 ta w =
-    match targets3_result co1 co2 ta w with
+  let ccrz k co1 co2 ta w =
+    match targets3 co1 co2 ta w with
     | Error error -> Error error
     | Ok (control1, control2, target) ->
         Ok
@@ -960,7 +958,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
             path_var = [];
           }
 
-  let ccz_result co1 co2 ta w = ccrz_result 1 co1 co2 ta w
+  let ccz_result co1 co2 ta w = ccrz 1 co1 co2 ta w
 
   let ccz co1 co2 ta w =
     match ccz_result co1 co2 ta w with

@@ -99,6 +99,11 @@ If a more generic design is possible, mention it only as an alternative, but do 
 - Use explicit types when they improve readability or documentation.
 - Use small functions and clear pattern matching.
 - Avoid unnecessary mutation.
+- Be very careful with dedicated equality functions such as `Qubit.equal`,
+  `Poly.equal`, and `Path_sum.equal`: in SQbricks they usually express a
+  semantic/domain equality, not just structural OCaml equality. Do not replace
+  them with `=` unless the code is explicitly checking physical/structural
+  identity of an implementation value and this is justified in a comment.
 - Use `.mli` files for public signatures when appropriate.
 - Use odoc-compatible documentation comments.
 - Use `(** ... *)` comments for public functions, modules, types, and values.
