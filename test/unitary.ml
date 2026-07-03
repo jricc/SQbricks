@@ -105,6 +105,78 @@ let test_inverse_result_reports_non_reversible_program () =
       check bool "non reversible program" true true
   | Ok _ -> check bool "non reversible program expected" true false
 
+let test_widths_returns_classical_and_quantum_extents () =
+  (* Widths are max-index extents, not a full Program.t well-formedness check. *)
+  let empty_wc, empty_wq = Program.widths Program.E in
+  let wc, wq = Program.widths (h 2 -- m 2 3 -- notC 4) in
+  check int "empty classical width" 0 empty_wc;
+  check int "empty quantum width" 0 empty_wq;
+  check int "classical width" 5 wc;
+  check int "quantum width" 3 wq
+
+let test_nb_gate_decomposition_counts_ccz_in_total () =
+  (* CCZ is both a specialized gate category and one physical gate in total. *)
+  let _, _, _, nb_ccz, _, _, nb_total =
+    Program.nb_gate_and_gates_decomposition (ccz 0 1 2)
+  in
+  check int "ccz count" 1 nb_ccz;
+  check int "total gate count" 1 nb_total
+
+let test_execution_ignores_global_phase_targets () =
+  (* GP is targetless; a target list is tolerated but does not affect execution. *)
+  match
+    ( Program.execution_result (gp 1),
+      Program.execution_result (Program.Apply (Gates.GP (Q.of_int 1, 1), [], [ 0 ]))
+    )
+  with
+  | Ok without_target, Ok with_target ->
+      check string "global phase target ignored" (PSS.exact without_target)
+        (PSS.exact with_target)
+  | _ -> check bool "global phase target accepted" true false
+
+let test_execution_result_reports_empty_gate_targets () =
+  (* H/X/U1 are target gates; only GP is targetless. *)
+  let check_rejected name program =
+    match Program.execution_result program with
+    | Error (Program.EmptyTargetList _) -> check bool name true true
+    | _ -> check bool name true false
+  in
+  check_rejected "h empty target" (Program.Apply (Gates.H, [], []));
+  check_rejected "x empty target" (Program.Apply (Gates.X, [], []));
+  check_rejected "u1 empty target"
+    (Program.Apply (Gates.U1 (Q.of_int 1, 1), [], []))
+
+let test_execution_result_reports_other_errors () =
+  (* execution_result classifies the other direct execution failures explicitly. *)
+  let check_invalid_gate () =
+    match Program.execution_result (cx 0 0) with
+    | Error (Program.InvalidGateApplication _) ->
+        check bool "invalid gate application" true true
+    | _ -> check bool "invalid gate application" true false
+  in
+  let check_hybrid_program () =
+    match Program.execution_result (iq0 0) with
+    | Error (Program.HybridProgram _) -> check bool "hybrid program" true true
+    | _ -> check bool "hybrid program" true false
+  in
+  let check_negative_rotation () =
+    match
+      Program.execution_result (Program.Apply (Gates.U1 (Q.of_int 1, -1), [], [ 0 ]))
+    with
+    | Error (Program.NegativeRotationExponent _) ->
+        check bool "negative rotation exponent" true true
+    | _ -> check bool "negative rotation exponent" true false
+  in
+  check_invalid_gate ();
+  check_hybrid_program ();
+  check_negative_rotation ()
+
+let test_unitary_is_only_a_hybrid_syntax_check () =
+  (* Program.unitary does not validate malformed gate applications. *)
+  check bool "hybrid operation rejected" false (Program.unitary (iq0 0));
+  check bool "malformed unitary-shaped gate accepted" true
+    (Program.unitary (Program.Apply (Gates.H, [], [])))
+
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
     (p2' : string) () =
@@ -476,6 +548,24 @@ let unitary =
     ( "inverse result non reversible",
       `Quick,
       test_inverse_result_reports_non_reversible_program );
+    ( "widths returns classical and quantum extents",
+      `Quick,
+      test_widths_returns_classical_and_quantum_extents );
+    ( "nb_gate_and_gates_decomposition counts ccz in total",
+      `Quick,
+      test_nb_gate_decomposition_counts_ccz_in_total );
+    ( "execution ignores global phase targets",
+      `Quick,
+      test_execution_ignores_global_phase_targets );
+    ( "execution_result reports empty gate targets",
+      `Quick,
+      test_execution_result_reports_empty_gate_targets );
+    ( "execution_result reports other execution errors",
+      `Quick,
+      test_execution_result_reports_other_errors );
+    ( "unitary is only a hybrid syntax check",
+      `Quick,
+      test_unitary_is_only_a_hybrid_syntax_check );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );

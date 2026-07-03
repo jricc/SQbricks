@@ -2293,6 +2293,11 @@ let check_gate_invalid_target = function
       check bool "invalid target rejected" true true
   | Ok _ -> check bool "invalid target expected" true false
 
+let test_path_sum_library_result_reports_negative_target () =
+  (* Public typed gate constructors reject negative indices before building Vars. *)
+  check_gate_invalid_target (Path_sum_library.h_result (-1) 1);
+  check_gate_invalid_target (Path_sum_library.cx_result (-1) 0 2)
+
 let one_qubit_phase_path_sum scalar : Path_sum.t =
   {
     phase =
@@ -2363,6 +2368,18 @@ let test_path_sum_library_ry_result_returns_path_sum () =
 let test_path_sum_library_ry_result_reports_invalid_target () =
   (* ry_result still validates the target even when s=0 makes the phase trivial. *)
   check_gate_invalid_target (Path_sum_library.ry_result ~s:0 1 1 1)
+
+let test_path_sum_library_rotation_path_vars_are_width_offset () =
+  (* RX/RY introduce y0 and y1, represented as Var width and Var (width + 1). *)
+  let check_path_vars name = function
+    | Ok path_sum ->
+        check string name (ListBis.string_int [ 3; 4 ])
+          (ListBis.string_int path_sum.path_var)
+    | Error Path_sum_library.TargetIndexOutOfWidth ->
+        check bool "valid target expected" true false
+  in
+  check_path_vars "rx path vars" (Path_sum_library.rx_result 1 2 3);
+  check_path_vars "ry path vars" (Path_sum_library.ry_result 1 2 3)
 
 let test_path_sum_library_ch_result_returns_path_sum () =
   (* CH introduces one path variable y0 = Var 2 for width 2. The phase is the
@@ -2545,6 +2562,9 @@ let gates_apply =
     ( "h_result reports invalid target",
       `Quick,
       test_path_sum_library_h_result_reports_invalid_target );
+    ( "gate results report negative target",
+      `Quick,
+      test_path_sum_library_result_reports_negative_target );
     ( "x_result returns path sum",
       `Quick,
       test_path_sum_library_x_result_returns_path_sum );
@@ -2611,6 +2631,9 @@ let gates_apply =
     ( "ry_result reports invalid target",
       `Quick,
       test_path_sum_library_ry_result_reports_invalid_target );
+    ( "rotation path vars are width-offset",
+      `Quick,
+      test_path_sum_library_rotation_path_vars_are_width_offset );
     ( "ch_result returns path sum",
       `Quick,
       test_path_sum_library_ch_result_returns_path_sum );
