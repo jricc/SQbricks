@@ -77,6 +77,12 @@ val execution : ?debug:bool -> ?input_state:Path_sum.t -> t -> Path_sum.t
 (** [execution ?debug ?input_state prog] runs [prog] on the optional
     [input_state] path-sum or an initialized path sum. *)
 
+type inverse_error = NonReversibleProgram of t
+
+val inverse_result : ?debug:bool -> t -> (t, inverse_error) result
+(** [inverse_result ?debug prog] computes the inverse of [prog] or reports the
+    first non-reversible subprogram. *)
+
 val inverse : ?debug:bool -> t -> t
 (** [inverse ?debug prog] computes the inverse of the quantum program.
 
@@ -335,6 +341,13 @@ module Macros : sig
 
   val apply_measure : t -> int list -> int -> t
   (** [apply_measure prog qubits register] Adds measurements. *)
+
+  type apply_swap_error = InvalidSwapPlace | DifferentSwapLengths
+
+  val apply_swap_result :
+    ?place:string -> t -> int list -> int list -> (t, apply_swap_error) result
+  (** [apply_swap_result ?place prog a b] adds swap operations or reports why
+      they cannot be added. *)
 
   val apply_swap : ?place:string -> t -> int list -> int list -> t
   (** [apply_swap ?place prog a b] Adds swap operations. *)

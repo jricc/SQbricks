@@ -510,3 +510,7 @@ setup.log
 
 # Local OPAM switch
 _opam/
+
+test/logs/
+
+*.patch

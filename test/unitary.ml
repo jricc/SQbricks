@@ -41,7 +41,7 @@ let test_prog_equiv ?(debug = true) ?(not_equiv = false)
     ?(inputs2 = []) ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = [])
     ?(meas2 = []) (p1 : Program.t) (p2 : Program.t) () =
   let greeting =
-    Equiv.sqv_simple_result ~debug ~not_equiv ~algo ~equivalence ~inputs1
+    Equiv.sqv_simple ~debug ~not_equiv ~algo ~equivalence ~inputs1
       ~inputs2 ~outputs1 ~outputs2 ~meas1 ~meas2 p1 p2
   in
   let expected = true in
@@ -49,6 +49,61 @@ let test_prog_equiv ?(debug = true) ?(not_equiv = false)
     (sprintf "Test.test_prog_equiv\np1 =\n%s\np2 =\n%s\n" (ProgS.pretty p1)
        (ProgS.pretty p2))
     expected greeting
+
+let test_sqv_result ?(debug = true) ?(algo = Equiv.Sequence)
+    ?(equivalence = Equiv.SubCircuit) ?(inputs1 = []) ?(inputs2 = [])
+    ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = []) ?(meas2 = [])
+    (expected : Equiv.result) (p1 : Program.t) (p2 : Program.t) () =
+  let greeting =
+    Equiv.sqv ~debug ~algo ~equivalence ~inputs1 ~inputs2 ~outputs1 ~outputs2
+      ~meas1 ~meas2 p1 p2
+  in
+  check string
+    (sprintf "Test.test_sqv_result\np1 =\n%s\np2 =\n%s\n"
+       (ProgS.pretty p1) (ProgS.pretty p2))
+    (Equiv.result_to_string expected)
+    (Equiv.result_to_string greeting)
+
+let test_apply_swap_result_returns_swapped_program () =
+  (* Different target orders require one explicit swap after the program. *)
+  let input = h 0 in
+  let expected_output = h 0 -- swap 0 1 in
+  match apply_swap_result input [ 0 ] [ 1 ] with
+  | Ok output ->
+      check string "swapped program" (ProgS.exact expected_output)
+        (ProgS.exact output)
+  | Error _ -> check bool "swapped program expected" true false
+
+let test_apply_swap_result_reports_invalid_place () =
+  (* Only before/after insertion is supported. *)
+  match apply_swap_result ~place:"middle" (h 0) [ 0 ] [ 1 ] with
+  | Error InvalidSwapPlace -> check bool "invalid place" true true
+  | Ok _ | Error DifferentSwapLengths ->
+      check bool "invalid place expected" true false
+
+let test_apply_swap_result_reports_different_lengths () =
+  (* The two target lists describe a pairwise permutation and must align. *)
+  match apply_swap_result (h 0) [ 0 ] [ 1; 2 ] with
+  | Error DifferentSwapLengths -> check bool "different lengths" true true
+  | Ok _ | Error InvalidSwapPlace ->
+      check bool "different lengths expected" true false
+
+let test_inverse_result_returns_inverse_program () =
+  (* Inversion reverses the sequence and negates phase-like gates. *)
+  let input = h 0 -- u1 1 0 in
+  let expected_output = u1 ~s:(-1) 1 0 -- h 0 in
+  match Program.inverse_result input with
+  | Ok output ->
+      check string "inverse program" (ProgS.exact expected_output)
+        (ProgS.exact output)
+  | Error _ -> check bool "inverse program expected" true false
+
+let test_inverse_result_reports_non_reversible_program () =
+  (* Hybrid operations are not reversible unitary programs. *)
+  match Program.inverse_result (iq0 0) with
+  | Error (Program.NonReversibleProgram _) ->
+      check bool "non reversible program" true true
+  | Ok _ -> check bool "non reversible program expected" true false
 
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
@@ -61,7 +116,7 @@ let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
       current_dir;
     let p1 = Program.format (to_prog p1') in
     let p2 = Program.format (to_prog p2') in
-    Equiv.sqv_simple_result ~debug ~not_equiv ~algo ~equivalence p1 p2
+    Equiv.sqv_simple ~debug ~not_equiv ~algo ~equivalence p1 p2
   in
   let expected = true in
   check bool
@@ -353,16 +408,74 @@ let unitary =
     ("h <> x -- h", `Quick, test_prog_equiv ~not_equiv:true (h 0) (x 0 -- h 0));
     ( "seq diff inputs",
       `Quick,
-      test_prog_equiv ~not_equiv:true ~inputs1:[ 0 ] ~inputs2:[ 0; 1 ] (h 0)
-        (h 0) );
+      test_sqv_result ~inputs1:[ 0 ] ~inputs2:[ 0; 1 ] ~outputs1:[ 0 ]
+        ~outputs2:[ 0 ] Equiv.NotEquivDiffInputs (h 0) (h 0) );
     ( "seq diff outputs",
       `Quick,
-      test_prog_equiv ~not_equiv:true ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ]
-        (h 0) (h 0) );
+      test_sqv_result ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ] ~inputs1:[ 0 ]
+        ~inputs2:[ 0 ] Equiv.NotEquivDiffOutputs (h 0) (h 0) );
     ( "seq diff inputs outputs",
       `Quick,
-      test_prog_equiv ~not_equiv:true ~inputs1:[ 0; 1 ] ~inputs2:[ 0; 1 ]
-        ~outputs1:[ 0 ] ~outputs2:[ 0 ] (h 0) (h 0) );
+      test_sqv_result ~inputs1:[ 0; 1 ] ~inputs2:[ 0; 1 ] ~outputs1:[ 0 ]
+        ~outputs2:[ 0 ] Equiv.NotEquivDiffInputsOutputs (h 0) (h 0) );
+    ( "seq invalid input index",
+      `Quick,
+      test_sqv_result ~inputs1:[ -1 ] Equiv.ErrorInvalidQubitIndex (h 0) (h 0)
+    );
+    ( "seq invalid output index",
+      `Quick,
+      test_sqv_result ~outputs1:[ 1 ] Equiv.ErrorInvalidQubitIndex (h 0) (h 0)
+    );
+    ( "seq invalid measurement index",
+      `Quick,
+      test_sqv_result ~meas1:[ 1 ] Equiv.ErrorInvalidQubitIndex (h 0) (h 0) );
+    ( "seq full circuit not implemented",
+      `Quick,
+      test_sqv_result ~equivalence:Equiv.FullCircuit
+        Equiv.ErrorFullCircuitNotImplemented (h 0) (h 0) );
+    ( "seq both circuits have inits",
+      `Quick,
+      test_sqv_result ~inputs1:[ 0 ] ~inputs2:[ 0 ] ~outputs1:[ 0 ]
+        ~outputs2:[ 0 ] Equiv.ErrorBothCircuitsHaveInits (h 1) (h 1) );
+    ( "seq init is not unitary",
+      `Quick,
+      test_sqv_result Equiv.ErrorCircuitNotUnitary (iq0 0) (h 0) );
+    ( "seq invalid gate application",
+      `Quick,
+      test_sqv_result Equiv.ErrorInvalidProgram (cx 0 0) (h 0) );
+    ( "seq empty gate target",
+      `Quick,
+      test_sqv_result Equiv.ErrorInvalidProgram
+        (Program.Apply (Gates.H, [], []))
+        (h 0) );
+    ( "seq negative u1 exponent",
+      `Quick,
+      test_sqv_result Equiv.ErrorInvalidProgram
+        (Program.Apply (Gates.U1 (Q.of_int 1, -1), [], [ 0 ]))
+        (h 0) );
+    ( "seq controlled global phase target overlap is invalid",
+      `Quick,
+      let controlled_global_phase_with_same_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [ 0 ], [ 0 ]))
+      in
+      test_sqv_result Equiv.ErrorInvalidProgram
+        controlled_global_phase_with_same_target
+        (h 0) );
+    ( "apply swap result ok",
+      `Quick,
+      test_apply_swap_result_returns_swapped_program );
+    ( "apply swap result invalid place",
+      `Quick,
+      test_apply_swap_result_reports_invalid_place );
+    ( "apply swap result different lengths",
+      `Quick,
+      test_apply_swap_result_reports_different_lengths );
+    ( "inverse result ok",
+      `Quick,
+      test_inverse_result_returns_inverse_program );
+    ( "inverse result non reversible",
+      `Quick,
+      test_inverse_result_reports_non_reversible_program );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );
@@ -596,16 +709,69 @@ let parallel =
       test_prog_equiv ~algo:Parallel ~not_equiv:true (h 0) (x 0 -- h 0) );
     ( "parallel diff inputs",
       `Quick,
-      test_prog_equiv ~algo:Parallel ~not_equiv:true ~inputs1:[ 0 ]
-        ~inputs2:[ 0; 1 ] (h 0) (h 0) );
+      test_sqv_result ~algo:Parallel ~inputs1:[ 0 ] ~inputs2:[ 0; 1 ]
+        ~outputs1:[ 0 ] ~outputs2:[ 0 ] Equiv.NotEquivDiffInputs (h 0)
+        (h 0) );
     ( "parallel diff outputs",
       `Quick,
-      test_prog_equiv ~algo:Parallel ~not_equiv:true ~outputs1:[ 0 ]
-        ~outputs2:[ 0; 1 ] (h 0) (h 0) );
+      test_sqv_result ~algo:Parallel ~outputs1:[ 0 ] ~outputs2:[ 0; 1 ]
+        ~inputs1:[ 0 ] ~inputs2:[ 0 ] Equiv.NotEquivDiffOutputs (h 0) (h 0) );
     ( "parallel diff inputs outputs",
       `Quick,
-      test_prog_equiv ~algo:Parallel ~not_equiv:true ~inputs1:[ 0; 1 ]
-        ~inputs2:[ 0; 1 ] ~outputs1:[ 0 ] ~outputs2:[ 0 ] (h 0) (h 0) );
+      test_sqv_result ~algo:Parallel ~inputs1:[ 0; 1 ] ~inputs2:[ 0; 1 ]
+        ~outputs1:[ 0 ] ~outputs2:[ 0 ] Equiv.NotEquivDiffInputsOutputs
+        (h 0) (h 0) );
+    ( "parallel invalid input index",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~inputs1:[ -1 ]
+        Equiv.ErrorInvalidQubitIndex (h 0) (h 0) );
+    ( "parallel invalid output index",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~outputs1:[ 1 ]
+        Equiv.ErrorInvalidQubitIndex (h 0) (h 0) );
+    ( "parallel invalid measurement index",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~meas1:[ 1 ] Equiv.ErrorInvalidQubitIndex
+        (h 0) (h 0) );
+    ( "parallel full circuit not implemented",
+      `Quick,
+      test_sqv_result ~algo:Parallel ~equivalence:Equiv.FullCircuit
+        Equiv.ErrorFullCircuitNotImplemented (h 0) (h 0) );
+    ( "parallel init is not unitary",
+      `Quick,
+      test_sqv_result ~algo:Parallel Equiv.ErrorCircuitNotUnitary (iq0 0) (h 0)
+    );
+    ( "parallel invalid gate application",
+      `Quick,
+      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram (cx 0 0) (h 0)
+    );
+    ( "parallel global phase target is accepted",
+      `Quick,
+      let global_phase_with_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [], [ 0 ]))
+      in
+      test_sqv_result ~algo:Parallel Equiv.SubCircuitEquivalent
+        global_phase_with_target global_phase_with_target );
+    ( "parallel controlled global phase target is accepted",
+      `Quick,
+      let controlled_global_phase_with_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [ 0 ], [ 1 ]))
+      in
+      test_sqv_result ~algo:Parallel Equiv.SubCircuitEquivalent
+        controlled_global_phase_with_target controlled_global_phase_with_target );
+    ( "parallel controlled global phase target overlap is invalid",
+      `Quick,
+      let controlled_global_phase_with_same_target =
+        (Program.Apply (Gates.GP (Q.of_int 1, 1), [ 0 ], [ 0 ]))
+      in
+      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
+        controlled_global_phase_with_same_target
+        (h 0) );
+    ( "parallel negative gp exponent",
+      `Quick,
+      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
+        (Program.Apply (Gates.GP (Q.of_int 1, -1), [], []))
+        (h 0) );
     ( "parallel unit vs hybrid",
       `Quick,
       test_prog_equiv ~algo:Parallel ~not_equiv:true (m 0 0) (h 0) );

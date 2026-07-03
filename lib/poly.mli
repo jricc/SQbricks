@@ -42,6 +42,25 @@ module Monome : sig
 
   (** {2 Comparison and Equality} *)
 
+  type equality_error = IncompatibleWidths | IncompletePathVariableMap
+  (** Errors that can prevent a monomial comparison from being interpreted as a
+      plain equality result. They are propagated from qubit comparison when a
+      monomial contains qubit variables. *)
+
+  val equal_result :
+    ?debug:bool ->
+    ?wq1:int ->
+    ?wq2:int ->
+    ?map_path_var1:int IntMap.t ->
+    ?map_path_var2:int IntMap.t ->
+    t ->
+    t ->
+    (bool, equality_error) result
+  (** [equal_result ?debug ?wq1 ?wq2 ?map_path_var1 ?map_path_var2 m1 m2] is
+      the typed version of {!equal}. It returns [Ok true] or [Ok false] when the
+      comparison is well formed, and [Error _] when path-variable comparison
+      parameters are malformed. *)
+
   val equal :
     ?debug:bool ->
     ?wq1:int ->
@@ -84,6 +103,18 @@ module Monome : sig
       - [member 1 (Qubit (Var 1))] returns [true]
       - [member 2 (Qubit (Var 1))] returns [false] *)
 
+  type remove_error = CannotRemoveQubitSum
+  (** Errors that can prevent variable removal from a monomial.
+
+      [CannotRemoveQubitSum] means the variable removal reached a qubit
+      [SumMod2] expression where the variable cannot be isolated by this
+      helper. *)
+
+  val remove_result : int -> t -> (t option, remove_error) result
+  (** [remove_result v m] is the typed version of {!remove}. It returns
+      [Ok (Some m')] when [v] was removed, [Ok None] when [v] is absent, and
+      [Error CannotRemoveQubitSum] when a nested qubit sum prevents removal. *)
+
   val remove : int -> t -> t option
   (** [remove v m] removes variable [v] from monomial [m]. Returns [None] if
       variable not present.
@@ -110,6 +141,17 @@ module Monome : sig
 
   (** {2 Conversions} *)
 
+  type of_qubit_error = CannotConvertSumMod2
+  (** Errors that can prevent direct conversion from a qubit expression to a
+      monomial.
+
+      [CannotConvertSumMod2] means the input contains [Qubit.SumMod2], which
+      must be lifted into a polynomial instead of a monomial. *)
+
+  val of_qubit_to_result : Qubit.t -> (t, of_qubit_error) result
+  (** [of_qubit_to_result q] is the typed version of {!of_qubit_to}. It returns
+      [Error CannotConvertSumMod2] when [q] contains a sum modulo 2. *)
+
   val of_qubit_to : Qubit.t -> t
   (** [of_qubit_to q] converts the qubit [q] into a monomial. This is a direct
       type conversion with no semantic transformation. In particular, it does
@@ -119,6 +161,17 @@ module Monome : sig
       Example(s):
       - [of_qubit_to (Var 1)] returns [Qubit (Var 1)]
       - [of_qubit_to (SumMod(_,_))] raises [Failure]. *)
+
+  type to_qubit_error = CannotConvertScalarToQubit of Q.t
+  (** Errors that can prevent conversion from a monomial to a qubit expression.
+
+      [CannotConvertScalarToQubit s] means scalar [s] is neither [0] nor [1],
+      so it has no direct qubit-expression representation. *)
+
+  val to_qubit_result : ?debug:bool -> t -> (Qubit.t, to_qubit_error) result
+  (** [to_qubit_result ?debug m] is the typed version of {!to_qubit}. It returns
+      [Error (CannotConvertScalarToQubit s)] when a scalar cannot be represented
+      as a qubit expression. *)
 
   val to_qubit : ?debug:bool -> t -> Qubit.t
   (** [to_qubit ~debug m] converts the monomial [m] into a qubit. Scalars (other
@@ -269,6 +322,25 @@ val to_poly : Monome.t -> t
 
 (** {2 Comparison and Equality} *)
 
+type equality_error = IncompatibleWidths | IncompletePathVariableMap
+(** Errors that can prevent a polynomial comparison from being interpreted as a
+    plain equality result. They are propagated from monomial comparison. *)
+
+val equal_result :
+  ?global_phase:bool ->
+  ?debug:bool ->
+  ?wq1:int ->
+  ?wq2:int ->
+  ?map_path_var1:int IntMap.t ->
+  ?map_path_var2:int IntMap.t ->
+  t ->
+  t ->
+  (bool, equality_error) result
+(** [equal_result ?global_phase ?debug ?wq1 ?wq2 ?map_path_var1
+    ?map_path_var2 p1 p2] is the typed version of {!equal}. It returns
+    [Ok true] or [Ok false] when the comparison is well formed, and [Error _]
+    when path-variable comparison parameters are malformed. *)
+
 val equal :
   ?global_phase:bool ->
   ?debug:bool ->
@@ -322,6 +394,19 @@ val simplify : ?debug:bool -> t -> t
     - [simplify [|Scal Q.one; Scal Q.one|]] returns [[|Scal Q.zero|]] *)
 
 (** {2 Algebraic Operations} *)
+
+type distribution_error = UnformattedDistributionMonome
+(** Errors that can prevent monomial distribution over a polynomial.
+
+    [UnformattedDistributionMonome] means the right polynomial contains a
+    monomial of the form [Prod (_, Scal _)]. Distribution expects scalar
+    coefficients to be normalized on the left. *)
+
+val distribution_result :
+  ?debug:bool -> ?s1:Q.t -> Monome.t -> t -> (t, distribution_error) result
+(** [distribution_result ?debug ?s1 m p] is the typed version of
+    {!distribution}. It returns [Error UnformattedDistributionMonome] when a
+    monomial of [p] is not in the expected normalized form. *)
 
 val distribution : ?debug:bool -> ?s1:Q.t -> Monome.t -> t -> t
 (** [distribution m p] distributes monomial [m] over polynomial [p]. Optional
@@ -380,6 +465,17 @@ val substitute_poly : ?debug:bool -> t -> int -> t -> t
 
 (** {2 Conversions} *)
 
+type of_qubit_error = UnformattedQubitSum
+(** Errors that can prevent lifting a qubit expression into a polynomial.
+
+    [UnformattedQubitSum] means the qubit expression contains a sum shape that
+    this function expects to be normalized first. *)
+
+val of_qubit_result :
+  ?debug:bool -> Qubit.t -> Q.t -> (t, of_qubit_error) result
+(** [of_qubit_result ?debug q s] is the typed version of {!of_qubit}. It returns
+    [Error UnformattedQubitSum] when [q] is not in the expected sum format. *)
+
 val of_qubit : ?debug:bool -> Qubit.t -> Q.t -> t
 (** [of_qubit q s] converts qubit [q] to a polynomial with scalar [s].
 
@@ -387,6 +483,11 @@ val of_qubit : ?debug:bool -> Qubit.t -> Q.t -> t
     - [of_qubit (Var 1) Q.one] returns [[|Qubit (Var 1)|]]
     - [of_qubit SumMod2(q1,q2) Q.one] returns
       [[|(Qubit q1); (Qubit q2); Prod(Scal (-2), Prod(q1,q2))|]] *)
+
+val of_qubit_2_pi_result : ?debug:bool -> Qubit.t -> (t, of_qubit_error) result
+(** [of_qubit_2_pi_result ?debug q] is the typed version of {!of_qubit_2_pi}.
+    It returns [Error UnformattedQubitSum] when [q] is not in the expected sum
+    format. *)
 
 val of_qubit_2_pi : ?debug:bool -> Qubit.t -> t
 (** [of_qubit_2_pi q] simplified version of [of_qubit] for scalar [1/2]. Indeed,
@@ -396,6 +497,17 @@ val of_qubit_2_pi : ?debug:bool -> Qubit.t -> t
     Example(s):
     - [of_qubit_2_pi (Var 1)] returns [[|Qubit (Var 1)|]]
     - [of_qubit SumMod2(q1,q2) Q.one] returns [[|(Qubit q1); (Qubit q2)|]] *)
+
+type to_qubit_error = CannotConvertScalarMonomeToQubit of Q.t
+(** Errors that can prevent conversion from a polynomial to a qubit expression.
+
+    [CannotConvertScalarMonomeToQubit s] means one monomial contains scalar [s],
+    which cannot be represented as a qubit expression. *)
+
+val to_qubit_result : t -> (Qubit.t, to_qubit_error) result
+(** [to_qubit_result p] is the typed version of {!to_qubit}. It returns
+    [Error (CannotConvertScalarMonomeToQubit s)] when one monomial cannot be
+    converted to a qubit expression. *)
 
 val to_qubit : t -> Qubit.t
 (** [to_qubit p] converts polynomial [p] to a qubit.

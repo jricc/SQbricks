@@ -41,6 +41,10 @@
 * Prefer direct, readable code over generic code.
 * A small duplicated expression is acceptable if abstraction would make the code harder to understand.
 * Add a helper function only when it removes real duplication or clarifies the logic.
+* Before adding a helper, look for an existing function that already expresses
+  the same idea.
+* Put broadly reusable helper functions in `Common` instead of keeping local
+  copies in feature modules.
 * If a task can be solved with a simple function, use a simple function.
 * Do not build a class or framework for a simple operation.
 * Do not add extra features.
@@ -73,14 +77,33 @@ If a more generic design is possible, mention it only as an alternative, but do 
   The user handles Git operations manually.
 - Document important choices, limitations, and edge cases.
 - Avoid comments that merely repeat the code.
+- Use descriptive variable and function names. Avoid generic names such as
+  `f`, `input`, `output`, or `aux` when a domain-specific name would make the
+  code easier to read.
+- If a helper is reusable across several modules, put it in `Common` instead of
+  keeping a local copy.
+- Add minimal comments for non-obvious implementation choices, especially when
+  two similar data structures must be handled differently.
+- As soon as code or tests are even slightly non-trivial, add a short comment
+  explaining the intention, invariant, or reason for the case.
 
 ## OCaml-specific rules
 
 - Prefer a functional style.
 - Prefer pure functions when possible.
+- Prefer existing infix notations when they make the code more readable; for
+  example, in tests, prefer the local `+++` notation over direct `Poly.insert`
+  calls.
+- When a `Poly.t` can be built directly and readably, avoid wrapping a single
+  monome with `to_poly`; for example, prefer `monome +++ Poly.empty` in tests.
 - Use explicit types when they improve readability or documentation.
 - Use small functions and clear pattern matching.
 - Avoid unnecessary mutation.
+- Be very careful with dedicated equality functions such as `Qubit.equal`,
+  `Poly.equal`, and `Path_sum.equal`: in SQbricks they usually express a
+  semantic/domain equality, not just structural OCaml equality. Do not replace
+  them with `=` unless the code is explicitly checking physical/structural
+  identity of an implementation value and this is justified in a comment.
 - Use `.mli` files for public signatures when appropriate.
 - Use odoc-compatible documentation comments.
 - Use `(** ... *)` comments for public functions, modules, types, and values.
@@ -294,6 +317,10 @@ Use the full quality process for non-trivial changes.
 ## Testing rules
 
 - Prefer small, deterministic tests.
+- Keep tests minimal: use the smallest circuit and input data that isolate the
+  behavior being checked.
+- For typed returns such as `result`, `option`, or a custom variant, add minimal
+  tests for each observable return possibility.
 - Avoid brittle tests.
 - Avoid over-mocking.
 - Tests should document the intended behavior.

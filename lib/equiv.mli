@@ -41,6 +41,15 @@ type result =
   | FullCircuitInconclusiveAmp
   | FullCircuitInconclusiveKet
   | ErrorCircuitNotUnitary  (** Error: circuit is not unitary *)
+  | ErrorInvalidQubitIndex  (** Error: input, output, or measurement index is invalid *)
+  | ErrorInvalidProgram
+      (** Error: the program has an invalid gate application *)
+  | ErrorFullCircuitNotImplemented
+      (** Error: full-circuit equivalence is not implemented *)
+  | ErrorBothCircuitsHaveInits
+      (** Error: sequential equivalence cannot handle initializations on both circuits *)
+  | ErrorMalformedPathSum
+      (** Error: reduction received a malformed path sum *)
 
 val result_to_string : result -> string
 (** Converts an equivalence result to a string representation.
@@ -108,7 +117,7 @@ val sqv :
 
     Example: [sqv (h 0) (h 0)] results [SubCircuitEquivalent] *)
 
-val sqv_simple_result :
+val sqv_simple :
   ?debug:bool ->
   ?inputs1:int list ->
   ?inputs2:int list ->
@@ -124,4 +133,4 @@ val sqv_simple_result :
   bool
 (** Simplified version of sqv that returns a boolean indicating equivalence.
 
-    Example: [sqv_simple_result (h 0) (h 0)] results [true] *)
+    Example: [sqv_simple (h 0) (h 0)] results [true] *)

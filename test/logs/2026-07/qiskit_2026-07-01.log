@@ -1,0 +1,80 @@
+Testing `Symbolic execution'.
+This run has ID `048D0QE0'.
+
+  [OK]          Sub-Circuit-Hybrid-Equivalence           0   h -- m <> h.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           1   h -- m <> h.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           2   cx -- m -- h <> cx -- h.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           3   cx -- m -- h <> cx -- h.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           4   swap -- swap = id.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           5   cx -- cx = id.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           6   ccx -- ccx = id.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           7   check separation condition.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           8   dqc_qft_2.
+  [OK]          Sub-Circuit-Hybrid-Equivalence           9   dqc_qft_2.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          10   FALSE angle dqc_qft_2.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          11   FALSE indice dqc_qft_2.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          12   FALSE gate dqc_qft_2.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          13   dqc_qft_10.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          14   dqc_qft_11.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          15   FALSE gate dqc_qft_11.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          16   FALSE angle dqc_qft_11.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          17   FALSE indice dqc_qft_11.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          18   dqc_pe_2.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          19   dqc_pe_20.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          20   FALSE gate dqc_pe_20.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          21   FALSE angle dqc_pe_20.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          22   FALSE indice dqc_pe_20.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          23   bitflip_correction.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          24   FALSE gate bitflip_correction.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          25   FALSE indice bitflip_correction.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          26   FALSE angle bitflip_correction.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          27   dqc_state_injection_S.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          28   FALSE gate dqc_state_injection_S.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          29   FALSE indice dqc_state_injection_S.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          30   FALSE angle dqc_state_injection_S.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          31   dqc_state_injection_T.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          32   FALSE dqc_state_injection_T.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          33   teleportation.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          34   FALSE angle teleportation.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          35   FALSE gate teleportation.
+  [OK]          Sub-Circuit-Hybrid-Equivalence          36   FALSE indice teleportation.
+  [OK]          Global-Phase-Hybrid-Equivalence          0   h -- m <> h.
+  [OK]          Global-Phase-Hybrid-Equivalence          1   h -- m <> h.
+  [OK]          Global-Phase-Hybrid-Equivalence          2   cx -- m -- h <> cx -- h.
+  [OK]          Global-Phase-Hybrid-Equivalence          3   cx -- m -- h <> cx -- h.
+  [OK]          Global-Phase-Hybrid-Equivalence          4   swap -- swap = id.
+  [OK]          Global-Phase-Hybrid-Equivalence          5   cx -- cx = id.
+  [OK]          Global-Phase-Hybrid-Equivalence          6   ccx -- ccx = id.
+  [OK]          Global-Phase-Hybrid-Equivalence          7   check separation condition.
+  [OK]          Global-Phase-Hybrid-Equivalence          8   dqc_qft_2.
+  [OK]          Global-Phase-Hybrid-Equivalence          9   dqc_qft_2.
+  [OK]          Global-Phase-Hybrid-Equivalence         10   FALSE angle dqc_qft_2.
+  [OK]          Global-Phase-Hybrid-Equivalence         11   FALSE indice dqc_qft_2.
+  [OK]          Global-Phase-Hybrid-Equivalence         12   FALSE gate dqc_qft_2.
+  [OK]          Global-Phase-Hybrid-Equivalence         13   dqc_qft_10.
+  [OK]          Global-Phase-Hybrid-Equivalence         14   dqc_qft_11.
+  [OK]          Global-Phase-Hybrid-Equivalence         15   FALSE gate dqc_qft_11.
+  [OK]          Global-Phase-Hybrid-Equivalence         16   FALSE angle dqc_qft_11.
+  [OK]          Global-Phase-Hybrid-Equivalence         17   FALSE indice dqc_qft_11.
+  [OK]          Global-Phase-Hybrid-Equivalence         18   dqc_pe_2.
+  [OK]          Global-Phase-Hybrid-Equivalence         19   dqc_pe_20.
+  [OK]          Global-Phase-Hybrid-Equivalence         20   FALSE gate dqc_pe_20.
+  [OK]          Global-Phase-Hybrid-Equivalence         21   FALSE angle dqc_pe_20.
+  [OK]          Global-Phase-Hybrid-Equivalence         22   FALSE indice dqc_pe_20.
+  [OK]          Global-Phase-Hybrid-Equivalence         23   bitflip_correction.
+  [OK]          Global-Phase-Hybrid-Equivalence         24   FALSE gate bitflip_correction.
+  [OK]          Global-Phase-Hybrid-Equivalence         25   FALSE indice bitflip_correction.
+  [OK]          Global-Phase-Hybrid-Equivalence         26   FALSE angle bitflip_correction.
+  [OK]          Global-Phase-Hybrid-Equivalence         27   dqc_state_injection_S.
+  [OK]          Global-Phase-Hybrid-Equivalence         28   FALSE gate dqc_state_injection_S.
+  [OK]          Global-Phase-Hybrid-Equivalence         29   FALSE indice dqc_state_injection_S.
+  [OK]          Global-Phase-Hybrid-Equivalence         30   FALSE angle dqc_state_injection_S.
+  [OK]          Global-Phase-Hybrid-Equivalence         31   dqc_state_injection_T.
+  [OK]          Global-Phase-Hybrid-Equivalence         32   FALSE dqc_state_injection_T.
+  [OK]          Global-Phase-Hybrid-Equivalence         33   teleportation.
+  [OK]          Global-Phase-Hybrid-Equivalence         34   FALSE angle teleportation.
+  [OK]          Global-Phase-Hybrid-Equivalence         35   FALSE gate teleportation.
+  [OK]          Global-Phase-Hybrid-Equivalence         36   FALSE indice teleportation.
+
+Full test results in `/sqbricks/_build/qiskit/default/test/_build/_tests/Symbolic execution'.
+Test Successful in 32.843s. 74 tests run.

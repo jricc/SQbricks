@@ -27,9 +27,11 @@
 
 module PSS = Path_sum.String
 
-val reduction_algorithm : ?debug:bool -> Path_sum.t -> Path_sum.t
-(** [reduction_algorithm ?debug ps] applies a complete sequence of reduction
-    rules to simplify a path sum. The reduction process follows these steps: 1.
+val reduction_algorithm :
+  ?debug:bool -> Path_sum.t -> (Path_sum.t, Rules.reduction_error) result
+(** [reduction_algorithm ?debug ps] applies the complete reduction
+    sequence and returns an explicit error when a reduction rule receives a
+    malformed path sum. The reduction process follows these steps: 1.
     Simplification: Algebraic simplification of expressions 2. HH rule:
     Elimination of certain path variables 3. Variable replacement:
     Simplification of XOR expressions 4. Factorization: Reduction of phase terms

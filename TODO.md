@@ -49,6 +49,38 @@
 - [x] Stop ordered long benchmark series after timeout or memory failure while
   keeping other series running.
 - [x] Add baseline/check behavior to the selected large regression workflow.
+- [x] Keep the reduction entry-point names short after validating the typed
+  reduction results.
+- [x] Route Equiv initial-state construction through
+  `Path_sum.ofSize_init_result` so invalid initialization data becomes
+  `ErrorInvalidQubitIndex`.
+- [x] Route observable-qubit comparison in
+  `Equiv.compare_inputs_with_identity` through `Qubit.equal_result` so malformed
+  comparison metadata becomes
+  `ErrorMalformedPathSum`.
+- [x] Reject non-unitary `Program` constructs such as `InitQ` during Equiv
+  parameter preparation before symbolic execution.
+- [x] Reject malformed unitary gate applications in Equiv parameter preparation
+  with `ErrorInvalidProgram`.
+- [x] Reject empty targets for gates that need one in Equiv parameter
+  preparation with `ErrorInvalidProgram`.
+- [x] Keep `GP` targets valid in Equiv parameter preparation because they do
+  not affect symbolic execution.
+- [x] Reject controlled `GP` applications whose targets overlap controls, so
+  their well-formedness constraints match other controlled gates.
+- [x] Document the well-formed circuit constraints enforced by Equiv.
+- [x] Keep malformed `GP/U1` programs printable so Equiv diagnostics can report
+  `ErrorInvalidProgram`.
+- [x] Route the sequential phase classification through `Poly.equal_result` so
+  malformed phase comparisons become `ErrorMalformedPathSum`.
+- [x] Route path-sum phase comparison through `Poly.equal_result` so malformed
+  phase metadata is not reported as plain inequality.
+- [x] Make Equiv separability checks validate ket width and output indices
+  before extracting variables.
+- [x] Add `Program.Macros.apply_swap_result` and use it from Equiv so swap
+  preparation errors do not escape as `failwith`.
+- [x] Add `Program.inverse_result` and use it from Equiv so non-reversible
+  programs are reported explicitly.
 
 ## Notes
 
@@ -70,6 +102,11 @@
   ordered source-scoped series after `TO` or `OutOfMemory`.
 - SQbricks-only benchmark levels are now split into light, selected large
   regression, and full long benchmark.
+- Vigilance: `Path_sum.equal_result` now has defensive phase-comparison errors
+  (`IncompatiblePhaseWidths`, `IncompletePhasePathVariableMap`). They are
+  propagated to Equiv, but they are not directly covered by a natural
+  `Path_sum.equal_result` test yet because the current ket comparison does not
+  expose the incomplete phase-mapping situation.
 - The global benchmark audit compared the long SQbricks-only runner with
   `scripts/benchmarks.sh`, checked manifests, CSV shapes, Makefile entry
   points, and light runner validation tests.
@@ -78,3 +115,21 @@
   and check targets separate from the light benchmark.
 - Size-ordered families in the large regression keep up to the three largest
   representatives, plus isolated watchlist cases.
+- The current Equiv cleanup introduces typed reduction failures so malformed
+  path sums are not confused with rules that simply do not apply. The reduction
+  pipeline now uses typed results directly, including the public reduction
+  entry point.
+- Watch the behavior change in `Path_sum.substitute_result`: target path
+  variables are now protected. This is intended, but it may expose a bug if an
+  external caller relied on the old `except_path_var=true` behavior still
+  substituting inside `phase` or `ket`.
+- Watch the stricter `Ket.path_var_order_result` behavior: a ket containing
+  path variables while the declared path-variable count is zero now reports
+  malformed metadata instead of silently returning empty ordering arrays.
+- Watch the recent direct `Poly.t` construction in tests: replacing local
+  `to_poly` uses with `+++ Poly.empty` should be equivalent, but it may expose a
+  hidden ordering or duplicate-insertion assumption in polynomial tests.
+- Watch the new typed `Path_sum_library` gate constructors: the non-typed
+  wrappers should preserve the old path sums and failure order, but this broad
+  mechanical pass may expose a mismatch in one gate formula or target-index
+  validation path.
