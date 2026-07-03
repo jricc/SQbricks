@@ -2,10 +2,8 @@
 
 ## Next
 
-- [ ] Create or switch to a dedicated branch before continuing the Equiv
-  corrections.
-- [ ] Finish the remaining phase 3 audit targets: parser, AST, deferred
-  measurement, and path-sum generation.
+- [ ] Continue the remaining phase 3 audit targets after `Program`:
+  parser, deferred measurement, and path-sum generation.
 - [ ] Fix the `Equiv.parallel` behavior behind
   `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
   `SubCircuitInconclusive` instead of a timed equivalence result.
@@ -84,6 +82,26 @@
   preparation errors do not escape as `failwith`.
 - [x] Add `Program.inverse_result` and use it from Equiv so non-reversible
   programs are reported explicitly.
+- [x] Document and test that `Program.widths` computes classical and quantum
+  index extents without validating full program well-formedness.
+- [x] Count `CCZ` and `CCZinv` in the total gate count reported by
+  `Program.nb_gate_and_gates_decomposition`.
+- [x] Document and test that `Program.execution` tolerates `GP` targets but
+  ignores them because `GP` is semantically targetless.
+- [x] Add `Program.execution_result` with typed execution errors, and keep
+  `Program.execution` as a compatibility wrapper.
+- [x] Reject empty targets in direct `Program.execution_result` calls for
+  target gates (`H`, `X`, and `U1`) so malformed programs do not execute as
+  silent no-ops.
+- [x] Document and test that `Program.unitary` is only a hybrid syntax check,
+  not a full well-formedness validator.
+- [x] Route Equiv symbolic execution through `Program.execution_result` so
+  execution failures are converted to `Equiv.result` instead of escaping as
+  `Failure`.
+- [x] Reject negative indices in typed `Path_sum_library` gate constructors
+  before they can become invalid `Var (-n)` path-sum nodes.
+- [x] Fix `Path_sum_library.rx_result` and `ry_result` path-variable metadata
+  so introduced variables are offset by the circuit width.
 
 ## Notes
 

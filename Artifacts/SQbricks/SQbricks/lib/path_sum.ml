@@ -579,16 +579,20 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   type gate_error = TargetIndexOutOfWidth
 
+  let target_is_valid target width = 0 <= target && target < width
+
   let xx ta w : (Qubit.t, gate_error) result =
-    if ta < w then Ok (Var ta) else Error TargetIndexOutOfWidth
+    if target_is_valid ta w then Ok (Var ta) else Error TargetIndexOutOfWidth
 
   let invalid_target_failure ta w =
-    failwith (sprintf "Path_sum.Library.xx, w = %d < ta = %d\n" w ta)
+    failwith
+      (sprintf "Path_sum.Library.xx, target %d outside width %d\n" ta w)
 
   (* Keep the old left-to-right validation order for wrapper failures. *)
   let rec invalid_targets_failure targets w =
     match targets with
-    | target :: _ when not (target < w) -> invalid_target_failure target w
+    | target :: _ when not (target_is_valid target w) ->
+        invalid_target_failure target w
     | _ :: remaining_targets -> invalid_targets_failure remaining_targets w
     | [] -> invalid_target_failure w w
 
@@ -757,7 +761,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
         in
 
         let q = if sQ = Q.zero || k = 0 then target else yy 1 w in
-        let pv = if sQ = Q.zero then [] else [ 1; 2 ] in
+        let pv = if sQ = Q.zero then [] else [ w; w + 1 ] in
         Ok { phase = p; ket = [| q |]; path_var = pv }
 
   let rx ?(s = 1) k ta w =
@@ -807,7 +811,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
         let q =
           if sQ = Q.zero || k = 0 then target else SumMod2 (One, yy 1 w)
         in
-        let pv = if sQ = Q.zero then [] else [ 1; 2 ] in
+        let pv = if sQ = Q.zero then [] else [ w; w + 1 ] in
         Ok { phase = p; ket = [| q |]; path_var = pv }
 
   let ry ?(s = 1) k ta w =
