@@ -2,21 +2,15 @@
 
 ## Next
 
-- [ ] Regenerate the local light baseline after the switch from median timing
-  to best-observed timing.
-- [ ] Run `make regression-light-check` and validate the new result.
-- [ ] Generate the selected large regression baseline with
-  `make regression-large-baseline`, then run `make regression-large-check`
-  with the three-largest-cases-per-family selection.
+- [ ] Create or switch to a dedicated branch before continuing the Equiv
+  corrections.
+- [ ] Finish the remaining phase 3 audit targets: parser, AST, deferred
+  measurement, and path-sum generation.
 - [ ] Fix the `Equiv.parallel` behavior behind
   `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
   `SubCircuitInconclusive` instead of a timed equivalence result.
-- [ ] Rerun the long SQbricks-only benchmark with ordered-series cutoff and
-  inspect the skipped rows.
-- [ ] Create or switch to a dedicated branch before continuing the Equiv
-  corrections.
-- [ ] Continue the targeted reduction-to-equivalence audit, one issue at a
-  time.
+- [ ] Start phase 4 bug fixes one issue at a time, with focused regression
+  tests before or with each fix.
 
 ## Done
 
@@ -39,6 +33,7 @@
   cases.
 - [x] Run the light non-regression check successfully in a complete SQbricks
   development environment.
+- [x] Complete roadmap phase 1: minimal regression benchmark.
 - [x] Add long SQbricks-only benchmarks without external verification tools.
 - [x] Make the light performance check less sensitive to local load spikes by
   using the best observed timing across three rounds.
@@ -49,6 +44,14 @@
 - [x] Stop ordered long benchmark series after timeout or memory failure while
   keeping other series running.
 - [x] Add baseline/check behavior to the selected large regression workflow.
+- [x] Rerun and inspect the long SQbricks-only benchmark with ordered-series
+  cutoff.
+- [x] Complete roadmap phase 2: safe long benchmark runner.
+- [x] Audit the phase 3 reduction target.
+- [x] Audit the phase 3 equivalence-checking target.
+- [x] Audit the phase 3 separation target.
+- [x] Audit the phase 3 projection target.
+- [x] Audit the phase 3 benchmark-scripts target.
 - [x] Keep the reduction entry-point names short after validating the typed
   reduction results.
 - [x] Route Equiv initial-state construction through

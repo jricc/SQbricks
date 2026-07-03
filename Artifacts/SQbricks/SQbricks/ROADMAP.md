@@ -19,22 +19,22 @@ Avoid large feature additions before the benchmark and regression setup are reli
 
 ## Current checkpoint
 
-As of 2026-06-27:
+As of 2026-07-03:
 
 - the light non-regression benchmark exists and checks both functional status
   and tracked performance;
 - light performance comparison uses three rounds and the best observed timing
   to reduce false positives from local machine load;
-- the local light baseline must be regenerated after timing policy changes;
 - the SQbricks-only long benchmark runner exists;
 - the long runner stops source-scoped ordered-size series after timeout or
   memory failure, while continuing other series;
 - the large regression path selection exists and has a separate baseline/check
   workflow;
-- the targeted reduction-to-equivalence audit has started with Equiv parameter
-  validation.
+- phases 1 and 2 are done;
+- phase 3 has covered reduction, equivalence checking, separation, projection,
+  and benchmark scripts.
 
-## Phase 1 — Minimal regression benchmark
+## ~~Phase 1 — Minimal regression benchmark~~
 
 Goal: create a short benchmark that detects regressions and measures capability improvements.
 
@@ -62,7 +62,7 @@ Expected output:
 - clear result format;
 - documented expected status for each case.
 
-## Phase 2 — Safe long benchmark runner
+## ~~Phase 2 — Safe long benchmark runner~~
 
 Goal: make the long benchmark robust and usable.
 
@@ -93,11 +93,11 @@ Audit targets:
 - AST;
 - deferred measurement;
 - path-sum generation;
-- reduction;
-- equivalence checking;
-- separation;
-- projection;
-- benchmark scripts.
+- ~~reduction~~;
+- ~~equivalence checking~~;
+- ~~separation~~;
+- ~~projection~~;
+- ~~benchmark scripts~~.
 
 Look especially for:
 
