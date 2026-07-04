@@ -216,7 +216,47 @@ Process:
 4. measure before/after;
 5. integrate only if useful.
 
-## Phase 9 — Query-driven symbolic simulation
+## Phase 9 — Interactive inspection workflow
+
+Goal: make SQbricks easier to run, inspect, and explain without changing the
+core verification algorithms.
+
+User workflow:
+
+- load two QASM files;
+- load or enter the metadata needed for partial equivalence;
+- provide a full-auto mode that derives the available metadata and runs the
+  standard equivalence workflow;
+- provide a manual mode where inputs, outputs, measurements, and equivalence
+  options can be edited explicitly;
+- show the generated intermediate artifacts that explain what SQbricks is
+  actually comparing.
+
+Export workflow:
+
+- export circuits to LaTeX using Quantikz2;
+- cite the appropriate Quantikz2 reference or paper in the documentation once
+  the exact package/reference is selected;
+- export path-sums to LaTeX, both before and after reduction when useful;
+- keep exports deterministic so they can be used in papers, reports, and bug
+  reports.
+
+Expected output:
+
+- a small inspection interface;
+- clear auto/manual modes;
+- documented metadata format;
+- LaTeX circuit export;
+- LaTeX path-sum export;
+- examples showing the full workflow on small circuits.
+
+Non-goals at this stage:
+
+- replacing the CLI;
+- replacing the benchmark runners;
+- building a large IDE before the core workflows are stable.
+
+## Phase 10 — Query-driven symbolic simulation
 
 Goal: prototype simulation as a query-driven symbolic process, not as a general statevector simulator.
 
@@ -245,7 +285,7 @@ Expected output:
 - comparison with known results or external simulator on tiny circuits;
 - documented limitations.
 
-## Phase 10 — OpenQASM 2 cleanup
+## Phase 11 — OpenQASM 2 cleanup
 
 Goal: make OpenQASM 2 support clearer and safer.
 
@@ -273,7 +313,7 @@ Expected output:
 - explicit unsupported-feature errors;
 - cleaner conversion path.
 
-## Phase 11 — Useful OpenQASM 3 subset
+## Phase 12 — Useful OpenQASM 3 subset
 
 Goal: prototype only the OpenQASM 3 features useful for SQbricks.
 
@@ -294,7 +334,7 @@ Non-goals at this stage:
 
 For loops, start with unrolling when bounds are concrete.
 
-## Phase 12 — Bounded repeat-until-success
+## Phase 13 — Bounded repeat-until-success
 
 Goal: explore bounded RUS examples before unbounded semantics.
 
