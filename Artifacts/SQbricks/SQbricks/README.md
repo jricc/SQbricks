@@ -77,7 +77,7 @@ Two verification algorithms are available:
 - Supports input in **OpenQASM 2.0** format.
 - Packaged as a **Docker container** with all necessary dependencies.
 - Provides a prototype inspection workflow for comparing two QASM files and
-  exporting path-sums to text, LaTeX, and PDF.
+  exporting circuits and path-sums to text, LaTeX, and PDF.
 
 ---
 
@@ -141,14 +141,23 @@ files include:
 - `sqv.stdout`: full SQV trace;
 - `pathsum-left.stdout` and `pathsum-right.stdout`: input path-sums;
 - `final-path-sums.txt`: final path-sums extracted from SQV;
+- `circuit-left.tex`, `circuit-right.tex`, `circuits.tex`, and `circuits.pdf`:
+  prototype Quantikz2 circuit export when circuits are small enough;
 - `path-sums.tex` and `path-sums.pdf`: prototype LaTeX/PDF export.
 
-The LaTeX export size threshold can be tuned with:
+The LaTeX export size thresholds can be tuned with:
 
 ```bash
 SQBRICKS_INSPECT_LATEX_MAX_CHARS=30000 bash scripts/inspect-sqbricks.sh \
   --mode auto left.qasm right.qasm
 ```
+
+For circuit drawings, the prototype uses Quantikz2 and skips circuits above
+`SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS` or
+`SQBRICKS_INSPECT_CIRCUIT_MAX_GATES`.
+It does not expand custom gate definitions.
+The Docker image installs the Quantikz2 TikZ library from
+`Quantum-Software-Development/Quantikz-and-QuerasAWS`.
 
 ### SQbricks-Lift
 

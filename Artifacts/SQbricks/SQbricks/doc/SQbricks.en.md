@@ -444,6 +444,9 @@ files are:
 - `pathsum-left.stdout` and `pathsum-right.stdout`: path-sums for the two
   inputs;
 - `final-path-sums.txt`: final path-sums extracted from SQV;
+- `circuit-left.tex`, `circuit-right.tex`, `circuits.tex`, and
+  `circuits.pdf`: prototype Quantikz2 circuit export when circuits are small
+  enough;
 - `pathsum-left.tex`, `pathsum-right.tex`, `final-path-sums.tex`, and
   `path-sums.tex`: prototype LaTeX export;
 - `path-sums.pdf`: compiled PDF when `pdflatex` is available.
@@ -457,6 +460,16 @@ The LaTeX export separates each path-sum into three parts:
 Very large path-sums can be skipped from LaTeX export to avoid overloading
 LaTeX. The threshold is controlled by `SQBRICKS_INSPECT_LATEX_MAX_CHARS` and
 defaults to `30000` characters.
+
+Circuit export is intentionally limited. It reads simple OpenQASM 2 circuits,
+produces Quantikz2 LaTeX, and skips the drawing when the number of qubits or
+gates exceeds `SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS` or
+`SQBRICKS_INSPECT_CIRCUIT_MAX_GATES`. This keeps inspection PDFs readable and
+avoids overloading LaTeX.
+Custom gate definitions are not expanded; the script ignores their bodies and
+simplifies calls it cannot draw precisely.
+The Docker image installs the Quantikz2 TikZ library from
+`Quantum-Software-Development/Quantikz-and-QuerasAWS`.
 
 The planned next step for this phase is a graphical interface to load two QASM
 files, edit metadata, choose auto/manual mode, run SQV, and browse generated

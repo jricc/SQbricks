@@ -47,6 +47,10 @@ Options:
 Environment:
   SQBRICKS_INSPECT_LATEX_MAX_CHARS
       Maximum source text size for prototype LaTeX export. Default: 30000.
+  SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS
+      Maximum qubit count for prototype Quantikz2 circuit export. Default: 16.
+  SQBRICKS_INSPECT_CIRCUIT_MAX_GATES
+      Maximum gate count for prototype Quantikz2 circuit export. Default: 80.
 
 Examples:
   bash scripts/inspect-sqbricks.sh --mode auto a.qasm b.qasm
@@ -68,6 +72,8 @@ meas1="[]"
 meas2="[]"
 out_dir=""
 latex_max_chars="${SQBRICKS_INSPECT_LATEX_MAX_CHARS:-30000}"
+circuit_max_qubits="${SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS:-16}"
+circuit_max_gates="${SQBRICKS_INSPECT_CIRCUIT_MAX_GATES:-80}"
 declare -a qasm_files
 
 while [[ $# -gt 0 ]]; do
@@ -161,6 +167,20 @@ esac
 case "$latex_max_chars" in
 "" | *[!0-9]*)
 	echo "SQBRICKS_INSPECT_LATEX_MAX_CHARS must be a non-negative integer." >&2
+	exit 1
+	;;
+esac
+
+case "$circuit_max_qubits" in
+"" | *[!0-9]*)
+	echo "SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS must be a non-negative integer." >&2
+	exit 1
+	;;
+esac
+
+case "$circuit_max_gates" in
+"" | *[!0-9]*)
+	echo "SQBRICKS_INSPECT_CIRCUIT_MAX_GATES must be a non-negative integer." >&2
 	exit 1
 	;;
 esac
@@ -518,6 +538,318 @@ write_path_sums_latex_document() {
 	} >"$target_file"
 }
 
+write_circuit_latex() {
+	local qasm_file="$1"
+	local target_file="$2"
+
+	# Small inspection renderer only: it handles simple OpenQASM 2 and does not
+	# try to replace a complete QASM parser.
+	awk \
+		-v qasm_file="$qasm_file" \
+		-v max_qubits="$circuit_max_qubits" \
+		-v max_gates="$circuit_max_gates" '
+		function trim(s) {
+			gsub(/\r/, "", s)
+			gsub(/^[[:space:]]+/, "", s)
+			gsub(/[[:space:]]+$/, "", s)
+			return s
+		}
+
+		function count_char(s, c, i, n) {
+			n = 0
+			for (i = 1; i <= length(s); i++) {
+				if (substr(s, i, 1) == c) {
+					n++
+				}
+			}
+			return n
+		}
+
+		function tex_text(s) {
+			gsub(/\\/, "\\\\textbackslash{}", s)
+			gsub(/_/, "\\\\_", s)
+			gsub(/\^/, "\\\\^{}", s)
+			return s
+		}
+
+		function tex_param(s) {
+			s = trim(s)
+			gsub(/pi/, "\\\\pi", s)
+			gsub(/PI/, "\\\\pi", s)
+			gsub(/\*/, "", s)
+			return s
+		}
+
+		function gate_label(base, params, conditional, label) {
+			if (base == "h") label = "H"
+			else if (base == "x") label = "X"
+			else if (base == "y") label = "Y"
+			else if (base == "z") label = "Z"
+			else if (base == "s") label = "S"
+			else if (base == "sdg" || base == "sinv") label = "S^{\\dagger}"
+			else if (base == "t") label = "T"
+			else if (base == "tdg" || base == "tinv") label = "T^{\\dagger}"
+			else if (base == "u1") label = "U_1"
+			else if (base == "u2") label = "U_2"
+			else if (base == "u3" || base == "u") label = "U"
+			else if (base == "rz") label = "R_z"
+			else if (base == "rx") label = "R_x"
+			else if (base == "ry") label = "R_y"
+			else if (base == "reset") label = "\\lvert0\\rangle"
+			else label = "\\mathrm{" tex_text(base) "}"
+
+			if (params != "") {
+				label = label "(" tex_param(params) ")"
+			}
+			if (conditional) {
+				label = "\\mathrm{if}\\;" label
+			}
+			return label
+		}
+
+		function qasm_arg_index(arg, name, index_text) {
+			arg = trim(arg)
+			gsub(/[[:space:]]/, "", arg)
+			if (arg !~ /^[A-Za-z_][A-Za-z0-9_]*\[[0-9]+\]$/) {
+				return -1
+			}
+			name = arg
+			sub(/\[.*/, "", name)
+			index_text = arg
+			sub(/^.*\[/, "", index_text)
+			sub(/\].*$/, "", index_text)
+			if (!(name in qoffset)) {
+				return -1
+			}
+			return qoffset[name] + index_text
+		}
+
+		function record_gate(line, conditional, raw, gate_part, arg_text, base, params, n, args, i, idx) {
+			raw = line
+			sub(/;$/, "", raw)
+			gate_part = raw
+			sub(/[[:space:]].*$/, "", gate_part)
+			arg_text = raw
+			sub(/^[^[:space:]]+[[:space:]]*/, "", arg_text)
+
+			base = tolower(gate_part)
+			sub(/\(.*/, "", base)
+			params = ""
+			if (gate_part ~ /\(/) {
+				params = gate_part
+				sub(/^[^(]*\(/, "", params)
+				sub(/\).*$/, "", params)
+			}
+
+			gate_count++
+			gate_name[gate_count] = base
+			gate_params[gate_count] = params
+			gate_raw[gate_count] = raw
+			gate_conditional[gate_count] = conditional
+			gate_arity[gate_count] = 0
+
+			n = split(arg_text, args, ",")
+			for (i = 1; i <= n; i++) {
+				idx = qasm_arg_index(args[i])
+				if (idx >= 0) {
+					gate_arity[gate_count]++
+					gate_arg[gate_count, gate_arity[gate_count]] = idx
+					if (idx > max_seen_qubit) {
+						max_seen_qubit = idx
+					}
+				}
+			}
+
+			if (gate_arity[gate_count] == 0) {
+				simplified_count++
+			}
+		}
+
+		function set_single_gate(col, label, target) {
+			target = gate_arg[col, 1]
+			if (target >= 0) {
+				cell[target, col] = "\\gate{" label "}"
+			}
+		}
+
+		function set_controlled_gate(col, label, control, target) {
+			control = gate_arg[col, 1]
+			target = gate_arg[col, 2]
+			cell[control, col] = "\\ctrl{" target - control "}"
+			cell[target, col] = "\\gate{" label "}"
+		}
+
+		function render_gate(col, base, label, controlled_base, control1, control2, target) {
+			base = gate_name[col]
+			label = gate_label(base, gate_params[col], gate_conditional[col])
+
+			if ((base == "cx" || base == "cnot") && gate_arity[col] == 2) {
+				control1 = gate_arg[col, 1]
+				target = gate_arg[col, 2]
+				cell[control1, col] = "\\ctrl{" target - control1 "}"
+				cell[target, col] = "\\targ{}"
+			} else if (base == "ccx" && gate_arity[col] == 3) {
+				control1 = gate_arg[col, 1]
+				control2 = gate_arg[col, 2]
+				target = gate_arg[col, 3]
+				cell[control1, col] = "\\ctrl{" target - control1 "}"
+				cell[control2, col] = "\\ctrl{" target - control2 "}"
+				cell[target, col] = "\\targ{}"
+			} else if (base == "ccz" && gate_arity[col] == 3) {
+				control1 = gate_arg[col, 1]
+				control2 = gate_arg[col, 2]
+				target = gate_arg[col, 3]
+				cell[control1, col] = "\\ctrl{" target - control1 "}"
+				cell[control2, col] = "\\ctrl{" target - control2 "}"
+				cell[target, col] = "\\gate{Z}"
+			} else if (base == "swap" && gate_arity[col] == 2) {
+				control1 = gate_arg[col, 1]
+				target = gate_arg[col, 2]
+				cell[control1, col] = "\\swap{" target - control1 "}"
+				cell[target, col] = "\\targX{}"
+			} else if (base == "measure" && gate_arity[col] == 1) {
+				cell[gate_arg[col, 1], col] = "\\meter{}"
+			} else if (base ~ /^c/ && gate_arity[col] == 2) {
+				controlled_base = base
+				sub(/^c/, "", controlled_base)
+				label = gate_label(controlled_base, gate_params[col], gate_conditional[col])
+				set_controlled_gate(col, label)
+			} else if (gate_arity[col] == 1) {
+				set_single_gate(col, label)
+			} else {
+				cell[0, col] = "\\gate{\\mathrm{unsupported}}"
+			}
+		}
+
+		{
+			line = $0
+			sub(/\/\/.*/, "", line)
+			line = trim(line)
+			if (line == "") next
+			# Custom gate bodies are definitions, not top-level circuit steps.
+			if (definition_depth > 0) {
+				if (waiting_definition_brace && line ~ /^\{/) {
+					waiting_definition_brace = 0
+					next
+				}
+				definition_depth += count_char(line, "{") - count_char(line, "}")
+				if (definition_depth < 0) {
+					definition_depth = 0
+				}
+				next
+			}
+			if (line ~ /^opaque[[:space:]]/) {
+				next
+			}
+			if (line ~ /^(gate|def)[[:space:]]/) {
+				definition_depth += count_char(line, "{") - count_char(line, "}")
+				if (definition_depth < 0) {
+					definition_depth = 0
+				}
+				if (definition_depth == 0 && line !~ /\}/) {
+					definition_depth = 1
+					waiting_definition_brace = 1
+				}
+				next
+			}
+			if (line ~ /^OPENQASM/ || line ~ /^include / || line ~ /^creg / || line ~ /^barrier /) next
+			if (line ~ /^qreg /) {
+				decl = line
+				sub(/^qreg[[:space:]]+/, "", decl)
+				sub(/;$/, "", decl)
+				name = decl
+				sub(/\[.*/, "", name)
+				size = decl
+				sub(/^.*\[/, "", size)
+				sub(/\].*$/, "", size)
+				if (size ~ /^[0-9]+$/) {
+					qoffset[name] = qubit_count
+					qubit_count += size
+				}
+				next
+			}
+			conditional = 0
+			if (line ~ /^measure /) {
+				sub(/[[:space:]]*->[[:space:]]*.*/, ";", line)
+				sub(/^measure[[:space:]]+/, "measure ", line)
+			} else if (line ~ /^if[[:space:]]*\(/) {
+				conditional = 1
+				sub(/^if[[:space:]]*\([^)]*\)[[:space:]]*/, "", line)
+			}
+			if (line ~ /;$/) {
+				record_gate(line, conditional)
+			}
+		}
+
+		END {
+			if (max_seen_qubit == "") {
+				max_seen_qubit = -1
+			}
+
+			print "% Generated by scripts/inspect-sqbricks.sh"
+			print "% Source: " qasm_file
+			print ""
+
+			if (qubit_count == 0 && max_seen_qubit >= 0) {
+				qubit_count = max_seen_qubit + 1
+			}
+			if (qubit_count <= 0) {
+				print "\\noindent\\textit{No OpenQASM 2 qreg declaration was found.}"
+				exit
+			}
+			# Large circuits become unreadable in this prototype export.
+			if (qubit_count > max_qubits || gate_count > max_gates) {
+				print "\\noindent\\textit{Circuit too large for prototype Quantikz2 export.}"
+				print ""
+				print "% Qubits: " qubit_count
+				print "% Gates: " gate_count
+				print "% Qubit limit: " max_qubits
+				print "% Gate limit: " max_gates
+				exit
+			}
+
+			if (simplified_count > 0) {
+				print "% Some unsupported operations were simplified in the drawing."
+			}
+
+			for (col = 1; col <= gate_count; col++) {
+				for (q = 0; q < qubit_count; q++) {
+					cell[q, col] = "\\qw"
+				}
+				render_gate(col)
+			}
+
+			print "\\begin{quantikz}[row sep={0.18cm,between origins}, column sep=0.24cm]"
+			for (q = 0; q < qubit_count; q++) {
+				printf "\\lstick{$q_{%d}$}", q
+				for (col = 1; col <= gate_count; col++) {
+					printf " & %s", cell[q, col]
+				}
+				print " & \\qw \\\\"
+			}
+			print "\\end{quantikz}"
+		}
+	' "$qasm_file" >"$target_file"
+}
+
+write_circuits_latex_document() {
+	local target_file="$1"
+
+	{
+		printf "%s\n" "\\documentclass{article}"
+		printf "%s\n" "\\usepackage[margin=1in]{geometry}"
+		printf "%s\n" "\\usepackage{amsmath}"
+		printf "%s\n" "\\usepackage{tikz}"
+		printf "%s\n" "\\usetikzlibrary{quantikz2}"
+		printf "%s\n" "\\begin{document}"
+		printf "%s\n" "\\subsection*{Left circuit}"
+		printf "%s\n" "\\input{circuit-left.tex}"
+		printf "%s\n" "\\subsection*{Right circuit}"
+		printf "%s\n" "\\input{circuit-right.tex}"
+		printf "%s\n" "\\end{document}"
+	} >"$target_file"
+}
+
 compile_latex_document() {
 	local tex_file="$1"
 	local log_file="$2"
@@ -554,6 +886,8 @@ compile_latex_document() {
 	printf "meas2=%s\n" "$meas2"
 	printf "sqv_verbose=true\n"
 	printf "latex_max_chars=%s\n" "$latex_max_chars"
+	printf "circuit_max_qubits=%s\n" "$circuit_max_qubits"
+	printf "circuit_max_gates=%s\n" "$circuit_max_gates"
 } >"$out_dir/metadata.txt"
 
 declare -a sqv_command
@@ -591,6 +925,11 @@ final_path_sums_latex="$out_dir/final-path-sums.tex"
 path_sums_latex="$out_dir/path-sums.tex"
 path_sums_pdf="$out_dir/path-sums.pdf"
 path_sums_pdf_log="$out_dir/path-sums-pdf.log"
+circuit_left_latex="$out_dir/circuit-left.tex"
+circuit_right_latex="$out_dir/circuit-right.tex"
+circuits_latex="$out_dir/circuits.tex"
+circuits_pdf="$out_dir/circuits.pdf"
+circuits_pdf_log="$out_dir/circuits-pdf.log"
 
 if [[ "$sqv_status" -ne 0 ]]; then
 	equivalence_result="command failed"
@@ -626,6 +965,12 @@ write_path_sums_latex_document "$path_sums_latex"
 compile_latex_document "$path_sums_latex" "$path_sums_pdf_log"
 path_sums_pdf_status=$?
 
+write_circuit_latex "$left_qasm" "$circuit_left_latex"
+write_circuit_latex "$right_qasm" "$circuit_right_latex"
+write_circuits_latex_document "$circuits_latex"
+compile_latex_document "$circuits_latex" "$circuits_pdf_log"
+circuits_pdf_status=$?
+
 {
 	printf "sqv_status=%s\n" "$sqv_status"
 	printf "pathsum_left_status=%s\n" "$pathsum_left_status"
@@ -639,6 +984,12 @@ path_sums_pdf_status=$?
 	printf "path_sums_pdf=%s\n" "$path_sums_pdf"
 	printf "path_sums_pdf_status=%s\n" "$path_sums_pdf_status"
 	printf "path_sums_pdf_log=%s\n" "$path_sums_pdf_log"
+	printf "circuit_left_latex=%s\n" "$circuit_left_latex"
+	printf "circuit_right_latex=%s\n" "$circuit_right_latex"
+	printf "circuits_latex=%s\n" "$circuits_latex"
+	printf "circuits_pdf=%s\n" "$circuits_pdf"
+	printf "circuits_pdf_status=%s\n" "$circuits_pdf_status"
+	printf "circuits_pdf_log=%s\n" "$circuits_pdf_log"
 	printf "report=%s\n" "$report_file"
 	printf "sqv_stdout=%s\n" "$out_dir/sqv.stdout"
 	printf "sqv_stderr=%s\n" "$out_dir/sqv.stderr"
@@ -664,6 +1015,10 @@ path_sums_pdf_status=$?
 	printf "Path-sums PDF status: %s\n" "$path_sums_pdf_status"
 	printf "Path-sums PDF: %s\n" "$path_sums_pdf"
 	printf "Path-sums PDF log: %s\n" "$path_sums_pdf_log"
+	printf "Circuits LaTeX: %s\n" "$circuits_latex"
+	printf "Circuits PDF status: %s\n" "$circuits_pdf_status"
+	printf "Circuits PDF: %s\n" "$circuits_pdf"
+	printf "Circuits PDF log: %s\n" "$circuits_pdf_log"
 	if [[ -n "$sqv_error" ]]; then
 		printf "Command stderr: %s\n" "$sqv_error"
 	fi
@@ -681,6 +1036,11 @@ path_sums_pdf_status=$?
 	printf -- "- Combined path-sums LaTeX: %s\n" "$path_sums_latex"
 	printf -- "- Combined path-sums PDF: %s\n" "$path_sums_pdf"
 	printf -- "- Combined path-sums PDF log: %s\n" "$path_sums_pdf_log"
+	printf -- "- Left circuit LaTeX: %s\n" "$circuit_left_latex"
+	printf -- "- Right circuit LaTeX: %s\n" "$circuit_right_latex"
+	printf -- "- Combined circuits LaTeX: %s\n" "$circuits_latex"
+	printf -- "- Combined circuits PDF: %s\n" "$circuits_pdf"
+	printf -- "- Combined circuits PDF log: %s\n" "$circuits_pdf_log"
 } >"$report_file"
 
 echo "Inspection written to $out_dir"

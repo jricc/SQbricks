@@ -57,6 +57,9 @@
 * Small, concrete helpers are better than broad abstractions when they make the current behavior easier to read.
 * Scripts should stay procedural and readable; avoid making benchmark runners more generic than the current workflow requires.
 * When starting a new roadmap step, consider creating or switching to a dedicated branch before changing code.
+* For LaTeX quantum-circuit output, use Quantikz2
+  (`Quantum-Software-Development/Quantikz-and-QuerasAWS`) instead of ad hoc
+  TikZ/Qcircuit code.
 * In quality mode, keep both technical documentation files up to date: `doc/SQbricks.md` and `doc/SQbricks.en.md`.
 * Update the technical documentation incrementally after each validated function or behavior.
 
