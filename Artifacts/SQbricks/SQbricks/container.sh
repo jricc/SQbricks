@@ -1,3 +1,5 @@
+#!/bin/bash
+
 #  This file is part of SQbricks.
 #
 #  Copyright (C) 2022-2026
@@ -15,8 +17,6 @@
 #
 #  See the GNU Lesser General Public License version 2.1
 #  for more details (enclosed in the file licenses/LGPLv2.1).
-
-#!/bin/bash
 
 DEFAULT_IMAGE="sqbricks"
 CUSTOM_IMAGE="jricc/sqbricks:latest"
@@ -54,15 +54,8 @@ else
   IMAGE=$DEFAULT_IMAGE
 fi
 
-_pwd="$(pwd)"
-docker create --name="sqbricks1" -ti \
-  -e DISPLAY=$DISPLAY \
+docker run --rm -ti \
+  -e DISPLAY="$DISPLAY" \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v "${_pwd}/:/sqbricks/" \
-  "$IMAGE"
-
-docker create --name="sqbricks2" -ti \
-  -e DISPLAY=$DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v "${_pwd}/:/sqbricks/" \
+  -v "$(pwd):/sqbricks" \
   "$IMAGE"
