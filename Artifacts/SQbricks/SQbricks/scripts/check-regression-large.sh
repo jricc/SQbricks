@@ -54,41 +54,33 @@ function row_key() {
 	return $1 ";" $2 ";" $3 ";" $4 ";" $5
 }
 
+function case_key() {
+	if (NF == 14) return $1 ";" $2 ";" $3 ";" $4
+	return $1 ";" $2 ";" $3
+}
+
+function row_opt() {
+	if (NF == 14) return $6
+	return $5
+}
+
+function is_case_level_row() {
+	return row_opt() == "Skip" || row_opt() == "Conversion"
+}
+
 function remember_message(messages, count, text) {
 	if (count <= 20) messages[count] = text
 }
 
-function read_baseline_row(key, status) {
-	key = row_key()
-	status = $NF
-	if (key in baseline_status) {
-		duplicate_baseline_count++
-		duplicate_baseline_messages[duplicate_baseline_count] = key
-		return
-	}
-	baseline_status[key] = status
-	baseline_seen[key] = 1
-	baseline_count++
+function remember_case_improvement(ck, baseline, text) {
+	if (ck in case_improvement_seen) return
+	case_improvement_seen[ck] = 1
+	improvement_count++
+	text = ck ": baseline " baseline ", current has checked mode row(s)"
+	remember_message(improvement_messages, improvement_count, text)
 }
 
-function compare_current_row(key, baseline, current, base_rank, current_rank, base, actual, ratio, slowdown) {
-	key = row_key()
-	current = $NF
-	if (key in current_seen) {
-		duplicate_current_count++
-		duplicate_current_messages[duplicate_current_count] = key
-		return
-	}
-	current_seen[key] = 1
-	current_count++
-
-	if (!(key in baseline_seen)) {
-		missing_baseline_count++
-		remember_message(missing_baseline_messages, missing_baseline_count, key)
-		return
-	}
-
-	baseline = baseline_status[key]
+function compare_status(key, baseline, current, base_rank, current_rank, base, actual, ratio, slowdown) {
 	base_rank = status_rank(baseline)
 	current_rank = status_rank(current)
 
@@ -122,6 +114,74 @@ function compare_current_row(key, baseline, current, base_rank, current_rank, ba
 			}
 		}
 	}
+}
+
+function read_baseline_row(key, ck, status, case_level) {
+	key = row_key()
+	ck = case_key()
+	status = $NF
+	case_level = is_case_level_row()
+	if (key in baseline_status) {
+		duplicate_baseline_count++
+		duplicate_baseline_messages[duplicate_baseline_count] = key
+		return
+	}
+	baseline_status[key] = status
+	baseline_seen[key] = 1
+	baseline_key_case[key] = ck
+	baseline_key_is_case_level[key] = case_level
+	if (case_level) {
+		baseline_case_level_seen[ck] = 1
+		baseline_case_level_status[ck] = status
+	} else {
+		baseline_mode_seen[ck] = 1
+	}
+	baseline_count++
+}
+
+function compare_current_row(key, ck, current, case_level, baseline) {
+	key = row_key()
+	ck = case_key()
+	current = $NF
+	case_level = is_case_level_row()
+	if (key in current_seen) {
+		duplicate_current_count++
+		duplicate_current_messages[duplicate_current_count] = key
+		return
+	}
+	current_seen[key] = 1
+	if (case_level) {
+		current_case_level_seen[ck] = 1
+	} else {
+		current_mode_seen[ck] = 1
+	}
+	current_count++
+
+	if (!(key in baseline_seen)) {
+		if (!case_level && (ck in baseline_case_level_seen)) {
+			remember_case_improvement(ck, baseline_case_level_status[ck])
+			return
+		}
+		if (case_level && (ck in baseline_mode_seen)) {
+			if (!(ck in case_regression_seen)) {
+				case_regression_seen[ck] = 1
+				functional_failure_count++
+				remember_message(functional_failure_messages, functional_failure_count,
+					ck ": baseline had checked mode rows, current " current)
+			}
+			return
+		}
+		if (case_level && (ck in baseline_case_level_seen)) {
+			baseline = baseline_case_level_status[ck]
+			compare_status(ck, baseline, current)
+			return
+		}
+		missing_baseline_count++
+		remember_message(missing_baseline_messages, missing_baseline_count, key)
+		return
+	}
+
+	compare_status(key, baseline_status[key], current)
 }
 
 function print_messages(title, messages, count, i) {
@@ -183,6 +243,13 @@ $0 == "" {
 END {
 	for (key in baseline_seen) {
 		if (!(key in current_seen)) {
+			ck = baseline_key_case[key]
+			if (baseline_key_is_case_level[key] && (ck in current_mode_seen || ck in current_case_level_seen)) {
+				continue
+			}
+			if (!baseline_key_is_case_level[key] && (ck in current_case_level_seen)) {
+				continue
+			}
 			missing_current_count++
 			remember_message(missing_current_messages, missing_current_count, key)
 		}
