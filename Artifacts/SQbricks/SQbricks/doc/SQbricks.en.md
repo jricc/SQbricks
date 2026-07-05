@@ -303,6 +303,89 @@ that `den` is a power of two and returns the exponent expected by SQbricks'
 `2*pi/2^k` representation. Zarith integers are compared with `Z.equal`, meaning
 by mathematical value, not by memory identity.
 
+## Deferred measurement translation
+
+`To_deferred_measurement.to_deferred_measurements_result` translates a hybrid
+program into a program without intermediate measurements. It returns:
+
+- the translated program;
+- the list of initialized qubits;
+- the list of measured qubits;
+- or a typed error when the translation is unsupported.
+
+`to_deferred_measurements` remains the historical wrapper: it calls the typed
+version and raises `Failure` on errors, to preserve compatibility with older
+callers.
+
+The translation keeps three important pieces of state:
+
+- `bit_to_qubit` records which qubit currently carries the classical value of a
+  bit. This table may be overwritten when the same classical bit is reused;
+- `meas` records every qubit that has been measured. This list must not be
+  inferred from `bit_to_qubit`, because reusing a classical bit would erase the
+  information about a previous measurement;
+- `used_qubits` records qubits already used by a gate, a measurement, or a
+  translated correction.
+
+Reusing a classical bit is therefore accepted. For example, if `c0` receives the
+measurement of `q0` and later the measurement of `q1`, later controls on `c0`
+depend on the latest measurement stored in that bit. Both measured qubits still
+remain in `meas`.
+
+Classical corrections are translated into quantum controls. For example:
+
+```text
+measure q0 -> c0;
+if c0 then x q2;
+measure q1 -> c0;
+if c0 then x q2;
+```
+
+conceptually becomes:
+
+```text
+cx q0 q2;
+cx q1 q2;
+```
+
+The second `measure` overwrites the classical bit `c0`, but it does not undo the
+effect already applied to `q2`.
+
+`InitQ` is treated as the initialization of a fresh qubit. This form is needed
+by MBQC/OWM translations, which introduce ancillas while constructing the
+program. For example:
+
+```text
+iq0 1; h 1; iq0 2; h 2
+```
+
+is accepted, because `q2` has not been used yet when it is initialized. In
+contrast, dynamic reset of an already used qubit is not supported yet:
+
+```text
+x 0; iq0 0
+```
+
+returns `ResetOfUsedQubitUnsupported 0`.
+
+The currently exposed typed errors are:
+
+- `InvalidClassicalBit`, for a classical bit outside the computed width;
+- `InvalidQubitIndex`, for a qubit outside the computed width;
+- `ClassicalControlWithoutMeasurement`, when a classical control has no stored
+  measurement result;
+- `MeasuredQubitUsedAfterMeasurement`, when a gate reuses a qubit that has
+  already been measured;
+- `ResetOfUsedQubitUnsupported`, when `InitQ` targets a qubit that was already
+  used;
+- `UnsupportedConditionalProgram`, for a conditional shape that is not
+  translated.
+
+True dynamic OpenQASM `reset` and the general `discard` / qubit-reuse model
+remain roadmap items. The validated behavior here is conservative: SQbricks
+accepts fresh ancillas, but does not yet claim to correctly reset an already
+active qubit.
+
 ## Equiv audit
 
 The targeted audit of the reduction-to-equivalence pipeline started with
