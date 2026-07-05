@@ -417,3 +417,47 @@ The internal helpers that depended on index validation were also typed,
 including `normalisation_factor`, `q2`, and `ccrz`. They
 are not exposed in the public interface, but they let the public typed
 constructors propagate the error instead of triggering an uncontrolled failure.
+
+## Inspection prototype
+
+The phase 9 inspection prototype is provided by
+`scripts/inspect-sqbricks.sh`. It does not change the OCaml core: it orchestrates
+existing SQbricks commands to make a comparison easier to inspect.
+
+The script takes two QASM files and has two modes:
+
+- `--mode auto` calls the automatic SQbricks workflow with `-sq`;
+- `--mode manual` calls `-sqv` with explicit metadata (`inputs`, `outputs`,
+  `meas`, algorithm, and equivalence relation).
+
+SQV is run with `verbose=true` because this script is meant for inspection, not
+compact measurement output. The full trace is kept in `sqv.stdout`. The script
+also extracts final path-sums from this trace. This extraction therefore still
+depends on the current debug text format; it is not a stable OCaml interface.
+
+By default, results are written to `_tmp/inspection/<timestamp>/`. Important
+files are:
+
+- `report.txt`: human-readable execution summary;
+- `commands.sh`: replayable commands;
+- `sqv.stdout` and `sqv.stderr`: full SQV trace;
+- `pathsum-left.stdout` and `pathsum-right.stdout`: path-sums for the two
+  inputs;
+- `final-path-sums.txt`: final path-sums extracted from SQV;
+- `pathsum-left.tex`, `pathsum-right.tex`, `final-path-sums.tex`, and
+  `path-sums.tex`: prototype LaTeX export;
+- `path-sums.pdf`: compiled PDF when `pdflatex` is available.
+
+The LaTeX export separates each path-sum into three parts:
+
+- `p`, shown as a two-column table of numbered monomials;
+- `f`, shown as a table of output components numbered by qubit;
+- `Y`, shown separately for path variables.
+
+Very large path-sums can be skipped from LaTeX export to avoid overloading
+LaTeX. The threshold is controlled by `SQBRICKS_INSPECT_LATEX_MAX_CHARS` and
+defaults to `30000` characters.
+
+The planned next step for this phase is a graphical interface to load two QASM
+files, edit metadata, choose auto/manual mode, run SQV, and browse generated
+artifacts.
