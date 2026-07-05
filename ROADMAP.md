@@ -19,7 +19,7 @@ Avoid large feature additions before the benchmark and regression setup are reli
 
 ## Current checkpoint
 
-As of 2026-07-03:
+As of 2026-07-05:
 
 - the light non-regression benchmark exists and checks both functional status
   and tracked performance;
@@ -33,6 +33,9 @@ As of 2026-07-03:
 - phases 1 and 2 are done;
 - phase 3 has covered reduction, equivalence checking, separation, projection,
   and benchmark scripts.
+- phase 9 has a first prototype script for inspecting two QASM files, collecting
+  SQV traces, path-sums, final path-sums, and prototype LaTeX/PDF path-sum
+  exports.
 
 ## ~~Phase 1 — Minimal regression benchmark~~
 
@@ -225,6 +228,8 @@ User workflow:
 
 - load two QASM files;
 - load or enter the metadata needed for partial equivalence;
+- provide a graphical interface for this workflow once the CLI prototype has
+  stabilized;
 - provide a full-auto mode that derives the available metadata and runs the
   standard equivalence workflow;
 - provide a manual mode where inputs, outputs, measurements, and equivalence
@@ -244,6 +249,8 @@ Export workflow:
 Expected output:
 
 - a small inspection interface;
+- a graphical interface to load the two QASM files, edit metadata, choose
+  auto/manual mode, run SQV, and browse generated artifacts;
 - clear auto/manual modes;
 - documented metadata format;
 - LaTeX circuit export;

@@ -76,6 +76,8 @@ Two verification algorithms are available:
 
 - Supports input in **OpenQASM 2.0** format.
 - Packaged as a **Docker container** with all necessary dependencies.
+- Provides a prototype inspection workflow for comparing two QASM files and
+  exporting path-sums to text, LaTeX, and PDF.
 
 ---
 
@@ -112,6 +114,40 @@ make start
 
 ```bash
 dune build
+```
+
+### Inspection workflow prototype
+
+The inspection script runs SQbricks on two QASM files and stores the artifacts
+needed to inspect the comparison:
+
+```bash
+bash scripts/inspect-sqbricks.sh --mode auto left.qasm right.qasm
+```
+
+Manual mode accepts explicit metadata:
+
+```bash
+bash scripts/inspect-sqbricks.sh --mode manual --algo seq --equiv s \
+  --inputs1 "[0;1]" --inputs2 "[0;1]" --outputs1 "[0]" --outputs2 "[0]" \
+  --meas1 "[]" --meas2 "[]" left.qasm right.qasm
+```
+
+The output directory is `_tmp/inspection/<timestamp>/` by default. Important
+files include:
+
+- `report.txt`: human-readable summary;
+- `commands.sh`: replayable commands;
+- `sqv.stdout`: full SQV trace;
+- `pathsum-left.stdout` and `pathsum-right.stdout`: input path-sums;
+- `final-path-sums.txt`: final path-sums extracted from SQV;
+- `path-sums.tex` and `path-sums.pdf`: prototype LaTeX/PDF export.
+
+The LaTeX export size threshold can be tuned with:
+
+```bash
+SQBRICKS_INSPECT_LATEX_MAX_CHARS=30000 bash scripts/inspect-sqbricks.sh \
+  --mode auto left.qasm right.qasm
 ```
 
 ### SQbricks-Lift

@@ -25,6 +25,9 @@ RUN sudo apt-get update && sudo apt-get install -y \
   python3-tk \
   libgmp-dev pkg-config \
   bash-completion \
+  texlive-latex-base \
+  texlive-latex-recommended \
+  texlive-fonts-recommended \
   && sudo apt-get clean 
 
 RUN git clone https://github.com/Z3Prover/z3.git && \
