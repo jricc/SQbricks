@@ -459,7 +459,7 @@ Les fichiers importants sont :
 - `pathsum-left.stdout` et `pathsum-right.stdout` : path-sums des deux entrées ;
 - `final-path-sums.txt` : path-sums finaux extraits de SQV ;
 - `circuit-left.tex`, `circuit-right.tex`, `circuits.tex` et `circuits.pdf` :
-  export prototype des circuits avec Quantikz2 quand ils sont assez petits ;
+  export prototype des circuits avec Quantikz quand ils sont assez petits ;
 - `pathsum-left.tex`, `pathsum-right.tex`, `final-path-sums.tex` et
   `path-sums.tex` : export LaTeX prototype ;
 - `path-sums.pdf` : PDF compilé si `pdflatex` est disponible.
@@ -475,15 +475,15 @@ de saturer LaTeX. Le seuil est contrôlé par
 `SQBRICKS_INSPECT_LATEX_MAX_CHARS` et vaut `30000` caractères par défaut.
 
 L'export circuit est volontairement limité. Il lit les circuits OpenQASM 2
-simples, produit du LaTeX Quantikz2, et saute le dessin si le nombre de qubits
+simples, produit du LaTeX Quantikz, et saute le dessin si le nombre de qubits
 ou de portes dépasse les seuils `SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS` et
 `SQBRICKS_INSPECT_CIRCUIT_MAX_GATES`. Cette limite évite de produire des PDF
 illisibles ou trop lourds pendant l'inspection.
 Les définitions de portes personnalisées ne sont pas développées ; le script
 se contente d'ignorer leur corps et de simplifier les appels qu'il ne sait pas
 dessiner précisément.
-L'image Docker installe la bibliothèque TikZ Quantikz2 depuis
-`Quantum-Software-Development/Quantikz-and-QuerasAWS`.
+Dans l'image Docker Ubuntu 22.04, `texlive-science` fournit la bibliothèque
+TikZ `quantikz` utilisée par cet export.
 
 La suite prévue de cette phase est une interface graphique qui permettra de
 charger deux fichiers QASM, modifier les métadonnées, choisir le mode

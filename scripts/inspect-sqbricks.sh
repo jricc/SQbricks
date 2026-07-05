@@ -48,9 +48,9 @@ Environment:
   SQBRICKS_INSPECT_LATEX_MAX_CHARS
       Maximum source text size for prototype LaTeX export. Default: 30000.
   SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS
-      Maximum qubit count for prototype Quantikz2 circuit export. Default: 16.
+      Maximum qubit count for prototype Quantikz circuit export. Default: 16.
   SQBRICKS_INSPECT_CIRCUIT_MAX_GATES
-      Maximum gate count for prototype Quantikz2 circuit export. Default: 80.
+      Maximum gate count for prototype Quantikz circuit export. Default: 80.
 
 Examples:
   bash scripts/inspect-sqbricks.sh --mode auto a.qasm b.qasm
@@ -799,7 +799,7 @@ write_circuit_latex() {
 			}
 			# Large circuits become unreadable in this prototype export.
 			if (qubit_count > max_qubits || gate_count > max_gates) {
-				print "\\noindent\\textit{Circuit too large for prototype Quantikz2 export.}"
+				print "\\noindent\\textit{Circuit too large for prototype Quantikz export.}"
 				print ""
 				print "% Qubits: " qubit_count
 				print "% Gates: " gate_count
@@ -840,7 +840,7 @@ write_circuits_latex_document() {
 		printf "%s\n" "\\usepackage[margin=1in]{geometry}"
 		printf "%s\n" "\\usepackage{amsmath}"
 		printf "%s\n" "\\usepackage{tikz}"
-		printf "%s\n" "\\usetikzlibrary{quantikz2}"
+		printf "%s\n" "\\usetikzlibrary{quantikz}"
 		printf "%s\n" "\\begin{document}"
 		printf "%s\n" "\\subsection*{Left circuit}"
 		printf "%s\n" "\\input{circuit-left.tex}"
