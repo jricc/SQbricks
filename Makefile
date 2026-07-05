@@ -194,9 +194,18 @@ regression-large-baseline:
 	done
 
 regression-large-check:
-	@for type in $(LARGE_TYPES); do \
-		$(MAKE) TYPE=$$type benchmark-regression-large-check || exit $$?; \
-	done
+	@status=0; failed=""; \
+	for type in $(LARGE_TYPES); do \
+		if ! $(MAKE) TYPE=$$type benchmark-regression-large-check; then \
+			status=1; \
+			failed="$$failed $$type"; \
+			echo "Large regression check failed for $$type; continuing." >&2; \
+		fi; \
+	done; \
+	if [ $$status -ne 0 ]; then \
+		echo "Large regression check completed with failure(s):$$failed" >&2; \
+		exit $$status; \
+	fi
 
 owm:
 	@echo "owm"
@@ -266,7 +275,6 @@ build:
 	docker build -t sqbricks .
 
 container:
-	@docker rm -f sqbricks 2>/dev/null >/dev/null || true
 	bash container.sh
 
 
@@ -276,13 +284,14 @@ pull:
 	docker pull jricc/sqbricks:latest
 
 container-pull:
-	@docker rm -f sqbricks 2>/dev/null >/dev/null || true
 	bash container.sh --custom-image
 
 # Container Start
 
+start: container
+
 start1:
-	docker start -ai sqbricks1
+	bash container.sh
 
 start2:
-	docker start -ai sqbricks2
+	bash container.sh

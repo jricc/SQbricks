@@ -24,7 +24,7 @@ debug="${SQBRICKS_LONG_DEBUG:-false}"
 version="${1:-}"
 timeout_seconds="${SQBRICKS_LONG_TIMEOUT:-600}"
 timeout_seconds="${timeout_seconds%s}"
-memory_kb="${SQBRICKS_LONG_MEMORY_KB:-7340032}"
+memory_kb="${SQBRICKS_LONG_MEMORY_KB:-6291456}"
 progress_mode="${SQBRICKS_LONG_PROGRESS:-auto}"
 
 if [[ -z "$version" ]]; then

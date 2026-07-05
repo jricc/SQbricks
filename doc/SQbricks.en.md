@@ -202,7 +202,7 @@ benchmarks/result/<month>/benchmarks_sqbricks_<TYPE>_<date>.csv
 Resource limits are applied at the beginning of the script with `ulimit`:
 
 - `SQBRICKS_LONG_TIMEOUT`, defaulting to `600` CPU seconds per process;
-- `SQBRICKS_LONG_MEMORY_KB`, defaulting to `7340032`.
+- `SQBRICKS_LONG_MEMORY_KB`, defaulting to `6291456`.
 
 If a case from an ordered series reaches `TO` or `OutOfMemory`, larger cases in
 the same series are no longer executed. A series is identified by the benchmark
