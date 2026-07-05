@@ -94,17 +94,18 @@ Alternative, pull the Docker image:
 make pull
 ```
 
-4. Create the container:
+4. Start a container from the current worktree:
 
 ```bash
 make container
 ```
 
-4. Start the container:
+The container is removed automatically when the shell exits. To start from the
+pulled image instead of the local image:
 
 ```bash
-make start
-`````
+make container-pull
+```
 
 ## Usage
 

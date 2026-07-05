@@ -266,7 +266,6 @@ build:
 	docker build -t sqbricks .
 
 container:
-	@docker rm -f sqbricks 2>/dev/null >/dev/null || true
 	bash container.sh
 
 
@@ -276,13 +275,14 @@ pull:
 	docker pull jricc/sqbricks:latest
 
 container-pull:
-	@docker rm -f sqbricks 2>/dev/null >/dev/null || true
 	bash container.sh --custom-image
 
 # Container Start
 
+start: container
+
 start1:
-	docker start -ai sqbricks1
+	bash container.sh
 
 start2:
-	docker start -ai sqbricks2
+	bash container.sh
