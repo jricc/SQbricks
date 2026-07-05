@@ -3,7 +3,9 @@
 ## Next
 
 - [ ] Continue the remaining phase 3 audit targets after `Program`:
-  parser, deferred measurement, and path-sum generation.
+  deferred measurement and remaining parser unsupported-syntax boundaries.
+- [ ] Add real OpenQASM include handling instead of only accepting
+  `include "...";` as a compatibility no-op.
 - [ ] Fix the `Equiv.parallel` behavior behind
   `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
   `SubCircuitInconclusive` instead of a timed equivalence result.
@@ -102,6 +104,16 @@
   before they can become invalid `Var (-n)` path-sum nodes.
 - [x] Fix `Path_sum_library.rx_result` and `ry_result` path-variable metadata
   so introduced variables are offset by the circuit width.
+- [x] Fix `Parser_help.den_to_k` to compare Zarith denominators structurally
+  instead of physically.
+- [x] Treat OpenQASM `barrier ...;` as a no-op statement instead of a line
+  comment that can hide following gates.
+- [x] Fix OpenQASM register handling so declared `qreg`/`creg` names and
+  offsets are preserved when translating to SQbricks indices.
+- [x] Keep parsing malformed OpenQASM register widths and out-of-range register
+  accesses with warnings, so external benchmark libraries are not modified.
+- [x] Document that OpenQASM `include "...";` is currently accepted as a
+  compatibility no-op, not loaded as an external gate library.
 
 ## Notes
 
