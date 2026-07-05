@@ -194,9 +194,18 @@ regression-large-baseline:
 	done
 
 regression-large-check:
-	@for type in $(LARGE_TYPES); do \
-		$(MAKE) TYPE=$$type benchmark-regression-large-check || exit $$?; \
-	done
+	@status=0; failed=""; \
+	for type in $(LARGE_TYPES); do \
+		if ! $(MAKE) TYPE=$$type benchmark-regression-large-check; then \
+			status=1; \
+			failed="$$failed $$type"; \
+			echo "Large regression check failed for $$type; continuing." >&2; \
+		fi; \
+	done; \
+	if [ $$status -ne 0 ]; then \
+		echo "Large regression check completed with failure(s):$$failed" >&2; \
+		exit $$status; \
+	fi
 
 owm:
 	@echo "owm"
