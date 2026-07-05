@@ -16,20 +16,21 @@
 # See the GNU Lesser General Public License version 2.1
 # for more details (enclosed in the file licenses/LGPLv2.1).
 
-FROM ocaml/opam:ubuntu-22.04-ocaml-5.1
+FROM ocaml/opam:ubuntu-26.04-ocaml-5.5
 
 RUN sudo apt-get update && sudo apt-get install -y \
   git \
   python3 \
   python3-pip \
   python3-tk \
+  python3-venv \
   libgmp-dev pkg-config \
   bash-completion \
   && sudo apt-get clean 
 
 RUN git clone https://github.com/Z3Prover/z3.git && \
   cd z3 && \
-  git checkout z3-4.12.2 && \
+  git checkout z3-4.16.0 && \
   python3 scripts/mk_make.py
 
 RUN cd z3/build && \
@@ -37,12 +38,12 @@ RUN cd z3/build && \
   sudo make install && \
   sudo ldconfig && \
   cd ../.. && rm -rf z3
-RUN sudo apt-get update && sudo apt-get install -y libboost-regex1.74.0
+RUN sudo apt-get update && sudo apt-get install -y libboost-regex-dev
 
 RUN opam init --disable-sandboxing -y && \
   opam update && \
   opam install -y \
-  dune \
+  "dune>=3.17" \
   zarith \
   landmarks \
   benchmark \
@@ -55,10 +56,11 @@ RUN opam init --disable-sandboxing -y && \
   odoc
 
 RUN opam env >> ~/.bashrc
-ENV PATH="/home/opam/.opam/default/bin:$PATH"
+ENV PATH="/home/opam/sqbricks-python/bin:/home/opam/.opam/default/bin:$PATH"
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+RUN python3 -m venv /home/opam/sqbricks-python && \
+  /home/opam/sqbricks-python/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
 WORKDIR /sqbricks
 COPY . /sqbricks
