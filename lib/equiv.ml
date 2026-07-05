@@ -597,8 +597,8 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                                   | GlobalPhase ->
                                                       GlobalPhaseInconclusive
                                                   | FullCircuit ->
-                                                      ErrorFullCircuitNotImplemented)))))
-                else Entanglement1
+                                                      ErrorFullCircuitNotImplemented))))
+                        else Entanglement1)
 
 let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
     ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)

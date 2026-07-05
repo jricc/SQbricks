@@ -254,6 +254,8 @@ Tasks:
 - distinguish accepted syntax from supported semantics;
 - reject unsupported constructs explicitly;
 - improve tests;
+- handle OpenQASM `include` files instead of only accepting include statements
+  as compatibility no-ops;
 - consider separating OpenQASM AST from SQbricks core AST.
 
 Possible constructs to clarify:
@@ -262,6 +264,8 @@ Possible constructs to clarify:
 - opaque gates;
 - barriers;
 - resets;
+- measured-qubit reuse, first with explicit reset semantics and later with a
+  clearer discard/reuse model;
 - measurements;
 - classical conditionals;
 - parameterized gates;

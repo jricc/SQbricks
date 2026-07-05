@@ -244,6 +244,65 @@ Current status:
   exceeds both configured relative and absolute thresholds;
 - a functional improvement is reported but does not fail the check.
 
+## OpenQASM parser
+
+The OpenQASM parser translates circuits to `Program.t`, which uses flat integer
+indices for qubits and classical bits. OpenQASM, on the other hand, allows
+several named registers, for example:
+
+```qasm
+qreg q[1];
+qreg r[1];
+qreg s[2];
+```
+
+The parser flattens these registers by assigning each one a global offset:
+
+| Register | Offset | Size | SQbricks indices |
+| --- | --- | --- | --- |
+| `q` | `0` | `1` | `q[0] -> 0` |
+| `r` | `1` | `1` | `r[0] -> 1` |
+| `s` | `2` | `2` | `s[0] -> 2`, `s[1] -> 3` |
+
+The same rule is used for classical registers declared with `creg`. The
+`qreg_offsets` and `creg_offsets` tables therefore store, for each register
+name, the pair `(offset, size)`.
+
+The helpers added in `Parser_OpenQASM.mly` each have a narrow role:
+
+- `reset_registers` clears the register tables at the beginning of parsing, so
+  one QASM file cannot reuse declarations from the previous file;
+- `declare_register` records a `qreg` or `creg` declaration, reserves a
+  consecutive slice of indices, then advances the next available offset;
+- `register_offset` returns the offset of a whole classical register, used for
+  conditions such as `if (c == n)`;
+- `register_index` translates `name[index]` to `offset + index`.
+
+For compatibility with existing QASM libraries, SQbricks also accepts some
+malformed registers instead of stopping immediately. For example,
+`qreg q[0]; h q[0];` and `qreg q[1]; h q[1];` are reported with a warning on
+`stderr`, then translated with the flat `offset + index` index. This behavior is
+an input tolerance: the circuit is still malformed, but SQbricks tries to process
+it so external benchmark sets do not have to be altered.
+
+`include "...";` statements are accepted for compatibility with common
+OpenQASM files, but SQbricks does not load the included file at this stage. The
+supported gates are the ones hard-coded in the lexer and parser. If an unknown
+gate really depends on an included file, it remains unsupported.
+
+The `OPENQASM 3.0;` header is tolerated for some benchmark files that in
+practice use the legacy subset described above. This does not mean that the
+parser supports OpenQASM 3 in general.
+
+`barrier ...;` statements are treated as OpenQASM no-ops: the lexer skips only
+up to the next `;`, then resumes parsing. This is different from a `//`
+comment, which skips everything up to the end of the line.
+
+Angle conversion for `pi/den` uses `Parser_help.den_to_k`. This function checks
+that `den` is a power of two and returns the exponent expected by SQbricks'
+`2*pi/2^k` representation. Zarith integers are compared with `Z.equal`, meaning
+by mathematical value, not by memory identity.
+
 ## Equiv audit
 
 The targeted audit of the reduction-to-equivalence pipeline started with
