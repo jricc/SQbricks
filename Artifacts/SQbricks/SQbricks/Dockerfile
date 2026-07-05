@@ -32,14 +32,6 @@ RUN sudo apt-get update && sudo apt-get install -y \
   texlive-science \
   && sudo apt-get clean 
 
-RUN git clone --depth 1 https://github.com/Quantum-Software-Development/Quantikz-and-QuerasAWS.git /tmp/quantikz2 && \
-  sudo mkdir -p /usr/local/share/texmf/tex/latex/quantikz2 && \
-  sudo find /tmp/quantikz2 -name 'tikzlibraryquantikz2.code.tex' \
-    -exec cp {} /usr/local/share/texmf/tex/latex/quantikz2/ \; && \
-  test -f /usr/local/share/texmf/tex/latex/quantikz2/tikzlibraryquantikz2.code.tex && \
-  sudo texhash && \
-  rm -rf /tmp/quantikz2
-
 RUN git clone https://github.com/Z3Prover/z3.git && \
   cd z3 && \
   git checkout z3-4.12.2 && \
