@@ -309,6 +309,87 @@ correspondant au format SQbricks `2*pi/2^k`. La comparaison des entiers Zarith
 se fait avec `Z.equal`, c'est-à-dire par valeur mathématique, pas par identité
 mémoire.
 
+## Traduction en mesures différées
+
+`To_deferred_measurement.to_deferred_measurements_result` transforme un
+programme hybride en programme sans mesures intermédiaires. Elle retourne :
+
+- le programme traduit ;
+- la liste des qubits initialisés ;
+- la liste des qubits mesurés ;
+- ou une erreur typée si la traduction n'est pas supportée.
+
+`to_deferred_measurements` reste le wrapper historique : il appelle la version
+typée et lève `Failure` en cas d'erreur, pour garder la compatibilité avec les
+anciens appels.
+
+La traduction garde trois états importants :
+
+- `bit_to_qubit` indique quel qubit porte actuellement la valeur classique d'un
+  bit. Cette table peut être écrasée quand un même bit classique est réutilisé ;
+- `meas` garde tous les qubits déjà mesurés. Cette liste ne doit pas être
+  déduite de `bit_to_qubit`, car une réutilisation de bit classique effacerait
+  l'information d'une mesure précédente ;
+- `used_qubits` garde les qubits déjà utilisés par une porte, une mesure ou une
+  correction traduite.
+
+La réutilisation d'un bit classique est donc acceptée. Par exemple, si `c0`
+reçoit successivement les mesures de `q0` puis de `q1`, les prochains contrôles
+sur `c0` dépendent toujours de la dernière mesure stockée dans ce bit. En
+revanche, les deux qubits mesurés restent dans `meas`.
+
+Les corrections classiques sont traduites en contrôles quantiques. Par exemple :
+
+```text
+measure q0 -> c0;
+if c0 then x q2;
+measure q1 -> c0;
+if c0 then x q2;
+```
+
+devient conceptuellement :
+
+```text
+cx q0 q2;
+cx q1 q2;
+```
+
+Le second `measure` écrase le bit classique `c0`, mais il n'annule pas l'effet
+déjà appliqué sur `q2`.
+
+`InitQ` est traité comme l'initialisation d'un qubit frais. Cette forme est
+nécessaire pour les traductions MBQC/OWM, qui introduisent des ancillas pendant
+la construction du programme. Par exemple :
+
+```text
+iq0 1; h 1; iq0 2; h 2
+```
+
+est accepté, car `q2` n'a pas encore servi quand il est initialisé. En revanche,
+un reset dynamique d'un qubit déjà utilisé n'est pas encore supporté :
+
+```text
+x 0; iq0 0
+```
+
+retourne `ResetOfUsedQubitUnsupported 0`.
+
+Les erreurs typées actuellement exposées sont :
+
+- `InvalidClassicalBit`, pour un bit classique hors largeur ;
+- `InvalidQubitIndex`, pour un qubit hors largeur ;
+- `ClassicalControlWithoutMeasurement`, quand un contrôle classique ne contient
+  aucun résultat de mesure ;
+- `MeasuredQubitUsedAfterMeasurement`, quand une porte réutilise un qubit déjà
+  mesuré ;
+- `ResetOfUsedQubitUnsupported`, quand `InitQ` vise un qubit déjà utilisé ;
+- `UnsupportedConditionalProgram`, pour une forme de conditionnel non traduite.
+
+Le vrai `reset` dynamique OpenQASM et le modèle général `discard` / réutilisation
+de qubit restent des points de roadmap. Le comportement validé ici est
+conservateur : SQbricks accepte les ancillas fraîches, mais ne prétend pas encore
+réinitialiser correctement un qubit déjà actif.
+
 ## Audit Equiv
 
 L'audit ciblé du pipeline réduction vers équivalence a commencé par la

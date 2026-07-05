@@ -2,8 +2,9 @@
 
 ## Next
 
-- [ ] Continue the remaining phase 3 audit targets after `Program`:
-  deferred measurement and remaining parser unsupported-syntax boundaries.
+- [ ] Continue the remaining phase 3 audit targets after `Program`, parser, and
+  deferred measurement: path-sum generation and remaining parser
+  unsupported-syntax boundaries.
 - [ ] Add real OpenQASM include handling instead of only accepting
   `include "...";` as a compatibility no-op.
 - [ ] Fix the `Equiv.parallel` behavior behind
@@ -114,6 +115,13 @@
   accesses with warnings, so external benchmark libraries are not modified.
 - [x] Document that OpenQASM `include "...";` is currently accepted as a
   compatibility no-op, not loaded as an external gate library.
+- [x] Add typed deferred-measurement errors so malformed hybrid programs are
+  reported explicitly instead of escaping through uncontrolled exceptions.
+- [x] Keep classical-bit reuse correct in deferred measurement by separating
+  the current `bit -> measured qubit` mapping from the list of all measured
+  qubits.
+- [x] Allow `InitQ` on fresh ancilla qubits during deferred measurement, but
+  reject reset/init on qubits that have already been used.
 
 ## Notes
 

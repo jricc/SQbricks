@@ -19,7 +19,7 @@ Avoid large feature additions before the benchmark and regression setup are reli
 
 ## Current checkpoint
 
-As of 2026-07-03:
+As of 2026-07-05:
 
 - the light non-regression benchmark exists and checks both functional status
   and tracked performance;
@@ -32,7 +32,8 @@ As of 2026-07-03:
   workflow;
 - phases 1 and 2 are done;
 - phase 3 has covered reduction, equivalence checking, separation, projection,
-  and benchmark scripts.
+  benchmark scripts, AST/Program invariants, OpenQASM parser behavior, and
+  deferred measurement translation.
 
 ## ~~Phase 1 — Minimal regression benchmark~~
 
@@ -89,9 +90,9 @@ Goal: identify bugs and fragile assumptions before feature work.
 
 Audit targets:
 
-- parser;
-- AST;
-- deferred measurement;
+- ~~parser~~;
+- ~~AST~~;
+- ~~deferred measurement~~;
 - path-sum generation;
 - ~~reduction~~;
 - ~~equivalence checking~~;
