@@ -512,5 +512,6 @@ setup.log
 _opam/
 
 test/logs/
+benchmarks/result/
 
 *.patch
