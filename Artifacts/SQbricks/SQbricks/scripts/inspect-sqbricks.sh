@@ -48,9 +48,11 @@ Environment:
   SQBRICKS_INSPECT_LATEX_MAX_CHARS
       Maximum source text size for prototype LaTeX export. Default: 30000.
   SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS
-      Maximum qubit count for prototype Quantikz circuit export. Default: 16.
+      Maximum qubit count for prototype Quantikz2 circuit export. Default: 16.
   SQBRICKS_INSPECT_CIRCUIT_MAX_GATES
-      Maximum gate count for prototype Quantikz circuit export. Default: 80.
+      Maximum gate count for prototype Quantikz2 circuit export. Default: 80.
+  SQBRICKS_INSPECT_CIRCUIT_WRAP_GATES
+      Maximum gate columns per Quantikz2 block before wrapping. Default: 12.
 
 Examples:
   bash scripts/inspect-sqbricks.sh --mode auto a.qasm b.qasm
@@ -74,6 +76,7 @@ out_dir=""
 latex_max_chars="${SQBRICKS_INSPECT_LATEX_MAX_CHARS:-30000}"
 circuit_max_qubits="${SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS:-16}"
 circuit_max_gates="${SQBRICKS_INSPECT_CIRCUIT_MAX_GATES:-80}"
+circuit_wrap_gates="${SQBRICKS_INSPECT_CIRCUIT_WRAP_GATES:-12}"
 declare -a qasm_files
 
 while [[ $# -gt 0 ]]; do
@@ -181,6 +184,13 @@ esac
 case "$circuit_max_gates" in
 "" | *[!0-9]*)
 	echo "SQBRICKS_INSPECT_CIRCUIT_MAX_GATES must be a non-negative integer." >&2
+	exit 1
+	;;
+esac
+
+case "$circuit_wrap_gates" in
+"" | *[!0-9]*)
+	echo "SQBRICKS_INSPECT_CIRCUIT_WRAP_GATES must be a non-negative integer." >&2
 	exit 1
 	;;
 esac
@@ -547,7 +557,8 @@ write_circuit_latex() {
 	awk \
 		-v qasm_file="$qasm_file" \
 		-v max_qubits="$circuit_max_qubits" \
-		-v max_gates="$circuit_max_gates" '
+		-v max_gates="$circuit_max_gates" \
+		-v wrap_gates="$circuit_wrap_gates" '
 		function trim(s) {
 			gsub(/\r/, "", s)
 			gsub(/^[[:space:]]+/, "", s)
@@ -574,13 +585,31 @@ write_circuit_latex() {
 
 		function tex_param(s) {
 			s = trim(s)
-			gsub(/pi/, "\\\\pi", s)
-			gsub(/PI/, "\\\\pi", s)
+			gsub(/pi/, "\\pi", s)
+			gsub(/PI/, "\\pi", s)
 			gsub(/\*/, "", s)
 			return s
 		}
 
-		function gate_label(base, params, conditional, label) {
+		function compact_pi_param(s) {
+			s = trim(s)
+			gsub(/[[:space:]]/, "", s)
+			gsub(/\*/, "", s)
+			gsub(/PI/, "pi", s)
+			if (s == "pi") return "1"
+			if (s == "-pi") return "-1"
+			if (s ~ /^pi\/[0-9]+$/) {
+				sub(/^pi\//, "", s)
+				return s
+			}
+			if (s ~ /^-pi\/[0-9]+$/) {
+				sub(/^-pi\//, "-", s)
+				return s
+			}
+			return tex_param(s)
+		}
+
+		function gate_label(base, params, conditional, label, rendered_params) {
 			if (base == "h") label = "H"
 			else if (base == "x") label = "X"
 			else if (base == "y") label = "Y"
@@ -589,20 +618,25 @@ write_circuit_latex() {
 			else if (base == "sdg" || base == "sinv") label = "S^{\\dagger}"
 			else if (base == "t") label = "T"
 			else if (base == "tdg" || base == "tinv") label = "T^{\\dagger}"
-			else if (base == "u1") label = "U_1"
-			else if (base == "u2") label = "U_2"
+			else if (base == "u1") label = "R_{zp}"
+			else if (base == "u2") label = "U_{2}"
 			else if (base == "u3" || base == "u") label = "U"
-			else if (base == "rz") label = "R_z"
-			else if (base == "rx") label = "R_x"
-			else if (base == "ry") label = "R_y"
+			else if (base == "rz") label = "R_{zp}"
+			else if (base == "rx") label = "R_{x}"
+			else if (base == "ry") label = "R_{y}"
 			else if (base == "reset") label = "\\lvert0\\rangle"
 			else label = "\\mathrm{" tex_text(base) "}"
 
 			if (params != "") {
-				label = label "(" tex_param(params) ")"
+				if (base == "u1" || base == "rz") {
+					rendered_params = compact_pi_param(params)
+				} else {
+					rendered_params = tex_param(params)
+				}
+				label = label "(" rendered_params ")"
 			}
 			if (conditional) {
-				label = "\\mathrm{if}\\;" label
+				label = label "^{c}"
 			}
 			return label
 		}
@@ -624,7 +658,24 @@ write_circuit_latex() {
 			return qoffset[name] + index_text
 		}
 
-		function record_gate(line, conditional, raw, gate_part, arg_text, base, params, n, args, i, idx) {
+		function classical_arg_index(arg, name, index_text) {
+			arg = trim(arg)
+			gsub(/[[:space:]]/, "", arg)
+			if (arg !~ /^[A-Za-z_][A-Za-z0-9_]*\[[0-9]+\]$/) {
+				return -1
+			}
+			name = arg
+			sub(/\[.*/, "", name)
+			index_text = arg
+			sub(/^.*\[/, "", index_text)
+			sub(/\].*$/, "", index_text)
+			if (!(name in coffset)) {
+				return -1
+			}
+			return coffset[name] + index_text
+		}
+
+		function record_gate(line, conditional, classical_target, raw, gate_part, arg_text, base, params, n, args, i, idx) {
 			raw = line
 			sub(/;$/, "", raw)
 			gate_part = raw
@@ -647,6 +698,10 @@ write_circuit_latex() {
 			gate_raw[gate_count] = raw
 			gate_conditional[gate_count] = conditional
 			gate_arity[gate_count] = 0
+			gate_classical_arg[gate_count] = classical_arg_index(classical_target)
+			if (base == "measure" && gate_classical_arg[gate_count] >= 0) {
+				used_classical[gate_classical_arg[gate_count]] = 1
+			}
 
 			n = split(arg_text, args, ",")
 			for (i = 1; i <= n; i++) {
@@ -679,7 +734,7 @@ write_circuit_latex() {
 			cell[target, col] = "\\gate{" label "}"
 		}
 
-		function render_gate(col, base, label, controlled_base, control1, control2, target) {
+		function render_gate(col, base, label, controlled_base, control1, control2, target, classical_target, classical_row) {
 			base = gate_name[col]
 			label = gate_label(base, gate_params[col], gate_conditional[col])
 
@@ -708,7 +763,13 @@ write_circuit_latex() {
 				cell[control1, col] = "\\swap{" target - control1 "}"
 				cell[target, col] = "\\targX{}"
 			} else if (base == "measure" && gate_arity[col] == 1) {
-				cell[gate_arg[col, 1], col] = "\\meter{}"
+				target = gate_arg[col, 1]
+				cell[target, col] = "\\meter{}"
+				classical_target = gate_classical_arg[col]
+				if (classical_target >= 0 && (classical_target in drawn_classical)) {
+					classical_row = qubit_count + drawn_classical[classical_target]
+					cell[classical_row, col] = "\\wire[u][" classical_row - target "]{c}\\cw"
+				}
 			} else if (base ~ /^c/ && gate_arity[col] == 2) {
 				controlled_base = base
 				sub(/^c/, "", controlled_base)
@@ -719,6 +780,41 @@ write_circuit_latex() {
 			} else {
 				cell[0, col] = "\\gate{\\mathrm{unsupported}}"
 			}
+		}
+
+		function row_label(row) {
+			if (row < qubit_count) {
+				return "$q_{" row "}$"
+			}
+			return "$" drawn_classical_label[row - qubit_count] "$"
+		}
+
+		function print_quantikz_block(start_col, end_col, row, col) {
+			print "\\begin{center}"
+			print "\\footnotesize"
+			print "\\begin{adjustbox}{max width=\\linewidth}"
+			print "\\begin{quantikz}[scale=0.68, transform shape, row sep={0.48cm,between origins}, column sep=0.42cm]"
+			for (row = 0; row < total_rows; row++) {
+				printf "\\lstick{%s}", row_label(row)
+				if (start_col > 1) {
+					if (row < qubit_count) {
+						printf " & \\qw"
+					} else {
+						printf " & \\cw"
+					}
+				}
+				for (col = start_col; col <= end_col; col++) {
+					printf " & %s", cell[row, col]
+				}
+				if (row < qubit_count) {
+					print " & \\qw \\\\"
+				} else {
+					print " & \\cw \\\\"
+				}
+			}
+			print "\\end{quantikz}"
+			print "\\end{adjustbox}"
+			print "\\end{center}"
 		}
 
 		{
@@ -752,7 +848,7 @@ write_circuit_latex() {
 				}
 				next
 			}
-			if (line ~ /^OPENQASM/ || line ~ /^include / || line ~ /^creg / || line ~ /^barrier /) next
+			if (line ~ /^OPENQASM/ || line ~ /^include / || line ~ /^barrier /) next
 			if (line ~ /^qreg /) {
 				decl = line
 				sub(/^qreg[[:space:]]+/, "", decl)
@@ -768,8 +864,30 @@ write_circuit_latex() {
 				}
 				next
 			}
+			if (line ~ /^creg /) {
+				decl = line
+				sub(/^creg[[:space:]]+/, "", decl)
+				sub(/;$/, "", decl)
+				name = decl
+				sub(/\[.*/, "", name)
+				size = decl
+				sub(/^.*\[/, "", size)
+				sub(/\].*$/, "", size)
+				if (size ~ /^[0-9]+$/) {
+					coffset[name] = classical_count
+					for (i = 0; i < size; i++) {
+						classical_label[classical_count + i] = tex_text(name) "_{" i "}"
+					}
+					classical_count += size
+				}
+				next
+			}
 			conditional = 0
+			classical_target = ""
 			if (line ~ /^measure /) {
+				classical_target = line
+				sub(/^.*->[[:space:]]*/, "", classical_target)
+				sub(/;$/, "", classical_target)
 				sub(/[[:space:]]*->[[:space:]]*.*/, ";", line)
 				sub(/^measure[[:space:]]+/, "measure ", line)
 			} else if (line ~ /^if[[:space:]]*\(/) {
@@ -777,7 +895,7 @@ write_circuit_latex() {
 				sub(/^if[[:space:]]*\([^)]*\)[[:space:]]*/, "", line)
 			}
 			if (line ~ /;$/) {
-				record_gate(line, conditional)
+				record_gate(line, conditional, classical_target)
 			}
 		}
 
@@ -799,7 +917,7 @@ write_circuit_latex() {
 			}
 			# Large circuits become unreadable in this prototype export.
 			if (qubit_count > max_qubits || gate_count > max_gates) {
-				print "\\noindent\\textit{Circuit too large for prototype Quantikz export.}"
+				print "\\noindent\\textit{Circuit too large for prototype Quantikz2 export.}"
 				print ""
 				print "% Qubits: " qubit_count
 				print "% Gates: " gate_count
@@ -812,22 +930,44 @@ write_circuit_latex() {
 				print "% Some unsupported operations were simplified in the drawing."
 			}
 
+			drawn_classical_count = 0
+			for (i = 0; i < classical_count; i++) {
+				if (used_classical[i]) {
+					drawn_classical[i] = drawn_classical_count
+					drawn_classical_label[drawn_classical_count] = classical_label[i]
+					drawn_classical_count++
+				}
+			}
+
+			total_rows = qubit_count + drawn_classical_count
 			for (col = 1; col <= gate_count; col++) {
-				for (q = 0; q < qubit_count; q++) {
-					cell[q, col] = "\\qw"
+				for (row = 0; row < total_rows; row++) {
+					if (row < qubit_count) {
+						cell[row, col] = "\\qw"
+					} else {
+						cell[row, col] = "\\cw"
+					}
 				}
 				render_gate(col)
 			}
 
-			print "\\begin{quantikz}[row sep={0.18cm,between origins}, column sep=0.24cm]"
-			for (q = 0; q < qubit_count; q++) {
-				printf "\\lstick{$q_{%d}$}", q
-				for (col = 1; col <= gate_count; col++) {
-					printf " & %s", cell[q, col]
-				}
-				print " & \\qw \\\\"
+			if (wrap_gates <= 0 || wrap_gates > gate_count) {
+				wrap_gates = gate_count
 			}
-			print "\\end{quantikz}"
+			if (wrap_gates <= 0) {
+				wrap_gates = 1
+			}
+
+			for (start_col = 1; start_col <= gate_count || (gate_count == 0 && start_col == 1); start_col += wrap_gates) {
+				end_col = start_col + wrap_gates - 1
+				if (end_col > gate_count) {
+					end_col = gate_count
+				}
+				print_quantikz_block(start_col, end_col)
+				if (end_col >= gate_count) {
+					break
+				}
+			}
 		}
 	' "$qasm_file" >"$target_file"
 }
@@ -837,11 +977,15 @@ write_circuits_latex_document() {
 
 	{
 		printf "%s\n" "\\documentclass{article}"
-		printf "%s\n" "\\usepackage[margin=1in]{geometry}"
+		printf "%s\n" "\\usepackage[a4paper,landscape,margin=0.55in]{geometry}"
 		printf "%s\n" "\\usepackage{amsmath}"
+		printf "%s\n" "\\usepackage{adjustbox}"
 		printf "%s\n" "\\usepackage{tikz}"
-		printf "%s\n" "\\usetikzlibrary{quantikz}"
+		printf "%s\n" "\\usetikzlibrary{quantikz2}"
 		printf "%s\n" "\\begin{document}"
+		printf "%s\n" "\\pagestyle{empty}"
+		printf "%s\n" "\\raggedbottom"
+		printf "%s\n" "\\setlength{\\parindent}{0pt}"
 		printf "%s\n" "\\subsection*{Left circuit}"
 		printf "%s\n" "\\input{circuit-left.tex}"
 		printf "%s\n" "\\subsection*{Right circuit}"
@@ -888,6 +1032,7 @@ compile_latex_document() {
 	printf "latex_max_chars=%s\n" "$latex_max_chars"
 	printf "circuit_max_qubits=%s\n" "$circuit_max_qubits"
 	printf "circuit_max_gates=%s\n" "$circuit_max_gates"
+	printf "circuit_wrap_gates=%s\n" "$circuit_wrap_gates"
 } >"$out_dir/metadata.txt"
 
 declare -a sqv_command

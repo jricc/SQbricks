@@ -96,7 +96,7 @@
   replayable commands.
 - [x] Add prototype LaTeX/PDF path-sum export to the inspection workflow, with
   compact tables for phase monomials, output qubits, and path variables.
-- [x] Add prototype Quantikz LaTeX/PDF circuit export to the inspection
+- [x] Add prototype Quantikz2 LaTeX/PDF circuit export to the inspection
   workflow for circuits below configurable size limits.
 - [x] Add LaTeX packages to the Docker image so inspection PDFs can be built in
   the container.
@@ -155,5 +155,5 @@
 - The phase 9 inspection prototype is in `scripts/inspect-sqbricks.sh`. Its
   path-sum LaTeX export is intentionally simple and still depends on SQbricks'
   current textual path-sum/debug output.
-- Circuit LaTeX export in the inspection prototype uses Quantikz and is
+- Circuit LaTeX export in the inspection prototype uses Quantikz2 and is
   intentionally limited to small OpenQASM 2 circuits.

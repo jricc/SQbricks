@@ -143,7 +143,7 @@ files include:
 - `pathsum-left.stdout` and `pathsum-right.stdout`: input path-sums;
 - `final-path-sums.txt`: final path-sums extracted from SQV;
 - `circuit-left.tex`, `circuit-right.tex`, `circuits.tex`, and `circuits.pdf`:
-  prototype Quantikz circuit export when circuits are small enough;
+  prototype Quantikz2 circuit export when circuits are small enough;
 - `path-sums.tex` and `path-sums.pdf`: prototype LaTeX/PDF export.
 
 The LaTeX export size thresholds can be tuned with:
@@ -153,12 +153,16 @@ SQBRICKS_INSPECT_LATEX_MAX_CHARS=30000 bash scripts/inspect-sqbricks.sh \
   --mode auto left.qasm right.qasm
 ```
 
-For circuit drawings, the prototype uses Quantikz and skips circuits above
+For circuit drawings, the prototype uses Quantikz2 and skips circuits above
 `SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS` or
 `SQBRICKS_INSPECT_CIRCUIT_MAX_GATES`.
+Wide circuits are wrapped across several Quantikz2 blocks; the default wrap
+limit is `SQBRICKS_INSPECT_CIRCUIT_WRAP_GATES=12`.
+Classical bits written by simple `measure q[i] -> c[j]` operations are drawn
+as classical wires and connected to their measurement.
 It does not expand custom gate definitions.
-On Ubuntu 22.04, the Docker image gets the packaged `quantikz` TikZ library
-from `texlive-science`.
+The Docker image installs the current Quantikz2 TikZ library from CTAN in a
+final layer.
 
 ### SQbricks-Lift
 
