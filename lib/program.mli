@@ -81,6 +81,9 @@ type execution_error =
   | InvalidGateApplication of int * t
       (** A gate uses invalid indices or overlaps controls and targets.
           The integer is the execution width used for validation. *)
+  | InputStateTooSmall of int * int
+      (** The provided input path-sum is smaller than the program to execute.
+          The integers are [(program_width, input_width)]. *)
   | HybridProgram of t
       (** A hybrid construct was sent to unitary symbolic execution. *)
   | NegativeRotationExponent of t

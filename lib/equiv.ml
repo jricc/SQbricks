@@ -117,6 +117,7 @@ let execution_for_equiv ?debug ?input_state program =
   | Ok state -> Ok state
   | Error (Program.EmptyTargetList _)
   | Error (Program.InvalidGateApplication _)
+  | Error (Program.InputStateTooSmall _)
   | Error (Program.NegativeRotationExponent _) ->
       Error ErrorInvalidProgram
   | Error (Program.HybridProgram _) -> Error ErrorCircuitNotUnitary
