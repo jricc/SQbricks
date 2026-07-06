@@ -445,7 +445,7 @@ files are:
   inputs;
 - `final-path-sums.txt`: final path-sums extracted from SQV;
 - `circuit-left.tex`, `circuit-right.tex`, `circuits.tex`, and
-  `circuits.pdf`: prototype Quantikz circuit export when circuits are small
+  `circuits.pdf`: prototype Quantikz2 circuit export when circuits are small
   enough;
 - `pathsum-left.tex`, `pathsum-right.tex`, `final-path-sums.tex`, and
   `path-sums.tex`: prototype LaTeX export;
@@ -462,14 +462,19 @@ LaTeX. The threshold is controlled by `SQBRICKS_INSPECT_LATEX_MAX_CHARS` and
 defaults to `30000` characters.
 
 Circuit export is intentionally limited. It reads simple OpenQASM 2 circuits,
-produces Quantikz LaTeX, and skips the drawing when the number of qubits or
+produces Quantikz2 LaTeX, and skips the drawing when the number of qubits or
 gates exceeds `SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS` or
 `SQBRICKS_INSPECT_CIRCUIT_MAX_GATES`. This keeps inspection PDFs readable and
 avoids overloading LaTeX.
+Wide circuits are split into several Quantikz2 blocks in a landscape document.
+The maximum number of columns per block is controlled by
+`SQBRICKS_INSPECT_CIRCUIT_WRAP_GATES`, with a default value of `12`.
+Classical bits written by simple `measure q[i] -> c[j]` operations are drawn
+as classical wires and connected to their measurement.
 Custom gate definitions are not expanded; the script ignores their bodies and
 simplifies calls it cannot draw precisely.
-In the Ubuntu 22.04 Docker image, `texlive-science` provides the `quantikz`
-TikZ library used by this export.
+The Docker image installs the current Quantikz2 TikZ library from CTAN in a
+final layer.
 
 The planned next step for this phase is a graphical interface to load two QASM
 files, edit metadata, choose auto/manual mode, run SQV, and browse generated
