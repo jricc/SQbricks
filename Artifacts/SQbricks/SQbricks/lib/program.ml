@@ -273,6 +273,7 @@ let nb_gate_and_gates_decomposition p =
 type execution_error =
   | EmptyTargetList of t
   | InvalidGateApplication of int * t
+  | InputStateTooSmall of int * int
   | HybridProgram of t
   | NegativeRotationExponent of t
 
@@ -283,13 +284,19 @@ let execution_error_message = function
   | InvalidGateApplication (width, p) ->
       sprintf "Program.execution_aux.Apply, width = %d, p =%s" width
         (String.pretty p)
+  | InputStateTooSmall (program_width, input_width) ->
+      sprintf
+        "Program.execution, input state width %d is smaller than program width \
+         %d"
+        input_width program_width
   | HybridProgram p ->
       sprintf "Program.execution_aux, p = %s forbidden" (String.pretty p)
   | NegativeRotationExponent _ -> "Program.execution.GP/U1, k < 0, forbidden"
 
 let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let _, wq = widths p in
-  let width = Int.max wq (Array.length input_state.ket) in
+  let input_width = Array.length input_state.ket in
+  let width = Int.max wq input_width in
 
   let execution_aux (p : t) (ps : Path_sum.t) =
     let rec apply_forall apply (ps : Path_sum.t) co (ta : int list) =
@@ -356,6 +363,7 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   else if p = E || p = Sequence (E, E) then Ok input_state
   else if input_state = Path_sum.ofSize 0 then
     execution_aux (format p) (Path_sum.ofSize width)
+  else if input_width < wq then Error (InputStateTooSmall (wq, input_width))
   else execution_aux (format p) input_state
 
 let execution ?debug ?input_state p =

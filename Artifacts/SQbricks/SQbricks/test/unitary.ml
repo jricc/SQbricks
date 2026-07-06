@@ -167,9 +167,16 @@ let test_execution_result_reports_other_errors () =
         check bool "negative rotation exponent" true true
     | _ -> check bool "negative rotation exponent" true false
   in
+  let check_input_state_too_small () =
+    match Program.execution_result ~input_state:(Path_sum.ofSize 1) (h 1) with
+    | Error (Program.InputStateTooSmall (2, 1)) ->
+        check bool "input state too small" true true
+    | _ -> check bool "input state too small" true false
+  in
   check_invalid_gate ();
   check_hybrid_program ();
-  check_negative_rotation ()
+  check_negative_rotation ();
+  check_input_state_too_small ()
 
 let test_unitary_is_only_a_hybrid_syntax_check () =
   (* Program.unitary does not validate malformed gate applications. *)
