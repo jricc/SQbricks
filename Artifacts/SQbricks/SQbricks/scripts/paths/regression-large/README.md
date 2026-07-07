@@ -9,8 +9,9 @@ long benchmark runner with a shorter path list.
 Selection rule:
 
 - keep every long benchmark type;
-- for sized families, keep up to the three largest representatives present in
-  the long path list;
+- for sized families, keep two representatives that complete without resource
+  exhaustion and then the first known `TO` or `OutOfMemory` representative,
+  when such a frontier is known from the long benchmark results;
 - keep isolated circuits that do not belong to a clear sized family;
 - keep explicit watchlist cases that are useful to detect future improvements,
   such as `adder_8` for OWM.
