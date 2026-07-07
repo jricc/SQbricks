@@ -22,6 +22,7 @@ RUN sudo apt-get update && sudo apt-get install -y \
   git \
   python3 \
   python3-pip \
+  python3-venv \
   python3-tk \
   libgmp-dev pkg-config \
   bash-completion \
@@ -57,8 +58,15 @@ RUN opam init --disable-sandboxing -y && \
 RUN opam env >> ~/.bashrc
 ENV PATH="/home/opam/.opam/default/bin:$PATH"
 
+ENV VIRTUAL_ENV="/home/opam/.venv/sqbricks"
+RUN python3 -m venv "$VIRTUAL_ENV"
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+RUN printf '\nexport VIRTUAL_ENV="/home/opam/.venv/sqbricks"\nexport PATH="$VIRTUAL_ENV/bin:$PATH"\n' >> ~/.bashrc
+
 COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+RUN python -m pip install --upgrade pip
+RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt
+RUN python -c "from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager"
 
 WORKDIR /sqbricks
 COPY . /sqbricks

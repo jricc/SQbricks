@@ -88,6 +88,15 @@ auto | always | never) ;;
 	;;
 esac
 
+case "$version" in
+qiskit-hybrid | owm-vs-qiskit)
+	if ! python3 -c 'from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager' >/dev/null 2>&1; then
+		echo "Missing Python dependency: qiskit is required for $version." >&2
+		exit 1
+	fi
+	;;
+esac
+
 mkdir -p "$tmp_dir"
 
 # Apply the same limits to every command launched by this script.

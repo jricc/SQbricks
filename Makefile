@@ -161,6 +161,7 @@ regression-light-check:
 benchmark-regression-large:
 	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-regression-large TYPE=owm"; exit 1; fi
 	@if [ ! -f "$(LARGE_PATH_DIR)/paths_$(TYPE).txt" ]; then echo "Missing large regression path file: $(LARGE_PATH_DIR)/paths_$(TYPE).txt"; exit 1; fi
+	@if [ "$(TYPE)" = "qiskit-hybrid" ] || [ "$(TYPE)" = "owm-vs-qiskit" ]; then python3 -c 'from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager' >/dev/null 2>&1 || { echo "Missing Python dependency: qiskit is required for $(TYPE)."; exit 1; }; fi
 	@mkdir -p $(RESULT_FOLDER) $(shell pwd)/_build/regression-large/$(TYPE)
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) dune build
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) SQBRICKS_LONG_PATH_FILE=$(LARGE_PATH_DIR)/paths_$(TYPE).txt SQBRICKS_LONG_PROGRESS=$(LARGE_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv
@@ -169,6 +170,7 @@ benchmark-regression-large:
 benchmark-regression-large-baseline:
 	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-regression-large-baseline TYPE=owm"; exit 1; fi
 	@if [ ! -f "$(LARGE_PATH_DIR)/paths_$(TYPE).txt" ]; then echo "Missing large regression path file: $(LARGE_PATH_DIR)/paths_$(TYPE).txt"; exit 1; fi
+	@if [ "$(TYPE)" = "qiskit-hybrid" ] || [ "$(TYPE)" = "owm-vs-qiskit" ]; then python3 -c 'from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager' >/dev/null 2>&1 || { echo "Missing Python dependency: qiskit is required for $(TYPE)."; exit 1; }; fi
 	@mkdir -p $(LARGE_BASELINE_DIR) $(shell pwd)/_build/regression-large/$(TYPE)
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) dune build
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) SQBRICKS_LONG_PATH_FILE=$(LARGE_PATH_DIR)/paths_$(TYPE).txt SQBRICKS_LONG_PROGRESS=$(LARGE_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(LARGE_BASELINE_DIR)/$(TYPE).csv
@@ -178,6 +180,7 @@ benchmark-regression-large-check:
 	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-regression-large-check TYPE=owm"; exit 1; fi
 	@if [ ! -f "$(LARGE_PATH_DIR)/paths_$(TYPE).txt" ]; then echo "Missing large regression path file: $(LARGE_PATH_DIR)/paths_$(TYPE).txt"; exit 1; fi
 	@if [ ! -f "$(LARGE_BASELINE_DIR)/$(TYPE).csv" ]; then echo "Missing large regression baseline: $(LARGE_BASELINE_DIR)/$(TYPE).csv"; exit 1; fi
+	@if [ "$(TYPE)" = "qiskit-hybrid" ] || [ "$(TYPE)" = "owm-vs-qiskit" ]; then python3 -c 'from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager' >/dev/null 2>&1 || { echo "Missing Python dependency: qiskit is required for $(TYPE)."; exit 1; }; fi
 	@mkdir -p $(RESULT_FOLDER) $(shell pwd)/_build/regression-large/$(TYPE)
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) dune build
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) SQBRICKS_LONG_PATH_FILE=$(LARGE_PATH_DIR)/paths_$(TYPE).txt SQBRICKS_LONG_PROGRESS=$(LARGE_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv

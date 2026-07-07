@@ -72,12 +72,24 @@ function remember_message(messages, count, text) {
 	if (count <= 20) messages[count] = text
 }
 
-function remember_case_improvement(ck, baseline, text) {
-	if (ck in case_improvement_seen) return
-	case_improvement_seen[ck] = 1
-	improvement_count++
-	text = ck ": baseline " baseline ", current has checked mode row(s)"
-	remember_message(improvement_messages, improvement_count, text)
+function compare_case_shape_change(ck, baseline, current, baseline_text, current_text, base_rank, current_rank) {
+	base_rank = status_rank(baseline)
+	current_rank = status_rank(current)
+	if (base_rank > current_rank) {
+		if (ck in case_regression_seen) return
+		case_regression_seen[ck] = 1
+		functional_failure_count++
+		remember_message(functional_failure_messages, functional_failure_count,
+			ck ": baseline " baseline_text " " baseline ", current " current_text " " current)
+		return
+	}
+	if (base_rank < current_rank) {
+		if (ck in case_improvement_seen) return
+		case_improvement_seen[ck] = 1
+		improvement_count++
+		remember_message(improvement_messages, improvement_count,
+			ck ": baseline " baseline_text " " baseline ", current " current_text " " current)
+	}
 }
 
 function compare_status(key, baseline, current, base_rank, current_rank, base, actual, ratio, slowdown) {
@@ -135,6 +147,10 @@ function read_baseline_row(key, ck, status, case_level) {
 		baseline_case_level_status[ck] = status
 	} else {
 		baseline_mode_seen[ck] = 1
+		if (!(ck in baseline_mode_best_rank) || status_rank(status) > baseline_mode_best_rank[ck]) {
+			baseline_mode_best_rank[ck] = status_rank(status)
+			baseline_mode_best_status[ck] = status
+		}
 	}
 	baseline_count++
 }
@@ -159,16 +175,13 @@ function compare_current_row(key, ck, current, case_level, baseline) {
 
 	if (!(key in baseline_seen)) {
 		if (!case_level && (ck in baseline_case_level_seen)) {
-			remember_case_improvement(ck, baseline_case_level_status[ck])
+			compare_case_shape_change(ck, baseline_case_level_status[ck], current,
+				"case row", "mode row")
 			return
 		}
 		if (case_level && (ck in baseline_mode_seen)) {
-			if (!(ck in case_regression_seen)) {
-				case_regression_seen[ck] = 1
-				functional_failure_count++
-				remember_message(functional_failure_messages, functional_failure_count,
-					ck ": baseline had checked mode rows, current " current)
-			}
+			compare_case_shape_change(ck, baseline_mode_best_status[ck], current,
+				"mode row", "case row")
 			return
 		}
 		if (case_level && (ck in baseline_case_level_seen)) {
