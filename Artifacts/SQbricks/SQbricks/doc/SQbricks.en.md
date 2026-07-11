@@ -234,9 +234,9 @@ The current entry points are:
 Current status:
 
 - path selections exist for every long benchmark family;
-- for size-ordered families, the selection keeps up to the three largest
-  representatives so the check does not depend on a single case that may reach
-  `TO` or `OutOfMemory` depending on the run;
+- for size-ordered families with a known resource frontier, the selection keeps
+  two stable cases, the first `TO` or `OutOfMemory` case, and the immediately
+  larger case as a fallback;
 - the runner writes result CSV files;
 - baselines are stored per family in `benchmarks/baseline/regression-large/`;
 - the check is separate from the light benchmark. It fails when a baseline row
@@ -244,10 +244,44 @@ Current status:
   exceeds both configured relative and absolute thresholds;
 - a functional improvement is reported but does not fail the check.
 
+The fourth case in a series is normally skipped by the cutoff. It is executed
+when the frontier case completes during a later run. This margin preserves
+functional coverage when the frontier fluctuates, but it does not reduce timing
+noise.
+
+The Feynman file `benchmarks/Feynman/grover_5.qasm` keeps its original name and
+provenance on disk. The runner nevertheless uses `grover_5_feynman` as its CSV
+program name so it does not create the same key as VeriQbench's circuit also
+named `grover_5`.
+
 ## Equiv audit
 
 The targeted audit of the reduction-to-equivalence pipeline started with
 parameter preparation in `lib/equiv.ml`.
+
+### Evolution of `Entanglement1` results
+
+`Entanglement1` is an inconclusive result from the separability check. After
+reducing the first circuit, it means that variables from the observed outputs
+are not separable from variables belonging to discarded qubits. SQbricks
+therefore does not project those qubits and stops the proof; this result does
+not mean that the circuits are non-equivalent.
+
+The long results from June 22 to June 25, 2026 predate the June 27 corrections
+that made ket substitution, variable replacement, and gate application
+functional. Before these corrections, these operations could mutate a ket
+array that was still shared by another path sum. The separability check could
+then observe residual dependencies that did not belong to the expected reduced
+state. States are now independent, allowing reduction to remove those
+dependencies before separability is checked.
+
+At the subsystem level, this evolution explains the change from
+`Entanglement1` to a timed equivalence for `owm/grover_3`, the Sequence check of
+`owm/grover_5`, `owm-vs-tele/grover_3`, and the Sequence check of
+`owm-vs-qiskit/shor_n5_ancillas`. The Parallel check of `owm/grover_5` remains
+`SubCircuitInconclusive`. Comparing the results and their chronology cannot
+attribute each changed case to one specific correction without replaying the
+cases on the intermediate commits.
 
 The first validated change avoids some uncontrolled exceptions when input or
 output lists are incompatible. These cases now return an explicit equivalence
