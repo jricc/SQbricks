@@ -692,6 +692,12 @@ for path_original in "${path_originals[@]}"; do
 		;;
 	esac
 
+	# Keep the original Feynman filename on disk, but disambiguate its CSV key
+	# from the VeriQbench circuit that is also named grover_5.
+	if [[ "$path_original" == "benchmarks/Feynman/grover_5.qasm" ]]; then
+		name="grover_5_feynman"
+	fi
+
 	series_key="$(case_series_key "$name" "$path_original")"
 	begin_progress_case "$name"
 	if [[ -n "$series_key" && -n "${stopped_series[$series_key]:-}" ]]; then

@@ -9,9 +9,9 @@ long benchmark runner with a shorter path list.
 Selection rule:
 
 - keep every long benchmark type;
-- for sized families, keep two representatives that complete without resource
-  exhaustion and then the first known `TO` or `OutOfMemory` representative,
-  when such a frontier is known from the long benchmark results;
+- for sized families with a known resource frontier, keep two stable
+  representatives, the first known `TO` or `OutOfMemory` representative, and
+  the immediately larger case as a fallback;
 - keep isolated circuits that do not belong to a clear sized family;
 - keep explicit watchlist cases that are useful to detect future improvements,
   such as `adder_8` for OWM.
@@ -34,6 +34,15 @@ The selected large regression uses the same ordered-series cutoff as the long
 SQbricks-only benchmark: after `TO` or `OutOfMemory`, larger cases in that same
 series are emitted as `SKIP_AFTER_RESOURCE_FAILURE`. Series are scoped by source
 directory as well as by name family.
+
+The fallback case is normally skipped. It is executed only when the previous
+frontier improves, which keeps the selection useful when a result fluctuates
+between a completed check and resource exhaustion. This fourth case improves
+functional coverage around the frontier; it does not reduce timing noise.
+
+The Feynman circuit stored as `benchmarks/Feynman/grover_5.qasm` is emitted as
+`grover_5_feynman` in CSV results. The alias preserves the original benchmark
+file while keeping its row key distinct from VeriQbench's `grover_5`.
 
 The check compares every row key against the baseline. A timed baseline row must
 remain timed, and timed rows are checked for slowdown. Rows that improve from a

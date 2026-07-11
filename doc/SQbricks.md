@@ -237,9 +237,9 @@ Les points d'entrée actuels sont :
 État actuel :
 
 - la sélection de chemins existe pour chaque famille du benchmark long ;
-- pour les familles ordonnées par taille, elle garde jusqu'à trois plus gros
-  représentants afin de ne pas dépendre d'un seul cas qui peut atteindre `TO`
-  ou `OutOfMemory` selon l'exécution ;
+- pour les familles ordonnées par taille qui ont une frontière de ressources
+  connue, elle garde deux cas stables, le premier cas `TO` ou `OutOfMemory`,
+  puis le cas immédiatement supérieur comme repli ;
 - le runner écrit des CSV de résultat ;
 - les baselines sont stockées par famille dans
   `benchmarks/baseline/regression-large/` ;
@@ -248,10 +248,45 @@ Les points d'entrée actuels sont :
   dépasse à la fois le seuil relatif et le seuil absolu configurés ;
 - une amélioration fonctionnelle est signalée mais ne fait pas échouer le check.
 
+Le quatrième cas d'une série est normalement sauté par le cutoff. Il est
+exécuté si le cas frontière passe lors d'une nouvelle exécution. Cette marge
+maintient la couverture fonctionnelle quand la frontière fluctue, mais elle ne
+réduit pas le bruit des mesures de temps.
+
+Le fichier Feynman `benchmarks/Feynman/grover_5.qasm` conserve son nom et sa
+provenance sur disque. Le runner utilise toutefois `grover_5_feynman` comme nom
+de programme dans les CSV, afin de ne pas créer la même clé que le circuit
+VeriQbench également nommé `grover_5`.
+
 ## Audit Equiv
 
 L'audit ciblé du pipeline réduction vers équivalence a commencé par la
 préparation des paramètres dans `lib/equiv.ml`.
+
+### Évolution des résultats `Entanglement1`
+
+`Entanglement1` est un résultat inconclusif du contrôle de séparabilité. Après
+réduction du premier circuit, il indique que les variables des sorties
+observées ne sont pas séparables de celles des qubits éliminés. SQbricks ne
+projette donc pas ces qubits et arrête la preuve ; ce résultat ne signifie pas
+que les circuits sont non équivalents.
+
+Les résultats longs des 22 au 25 juin 2026 précèdent les corrections du 27 juin
+qui ont rendu fonctionnelles les substitutions de ket, le remplacement de
+variables et l'application des portes. Avant ces corrections, ces opérations
+pouvaient modifier un tableau de ket encore partagé par un autre path-sum. Le
+contrôle de séparabilité pouvait alors observer des dépendances résiduelles qui
+n'appartenaient pas à l'état réduit attendu. Les états sont maintenant
+indépendants, ce qui permet à la réduction d'éliminer ces dépendances avant le
+contrôle de séparabilité.
+
+Cette évolution explique au niveau du sous-système le passage d'`Entanglement1`
+à une équivalence chronométrée pour `owm/grover_3`, la vérification Sequence de
+`owm/grover_5`, `owm-vs-tele/grover_3` et la vérification Sequence de
+`owm-vs-qiskit/shor_n5_ancillas`. La vérification Parallel de
+`owm/grover_5` reste `SubCircuitInconclusive`. La comparaison des résultats et
+de la chronologie ne permet pas d'attribuer chaque changement à une seule des
+trois corrections sans rejouer les cas sur les commits intermédiaires.
 
 Le premier changement validé évite certaines exceptions non maîtrisées lorsque
 les listes d'entrées ou de sorties ne sont pas compatibles. Ces cas renvoient
