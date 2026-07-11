@@ -267,21 +267,31 @@ are not separable from variables belonging to discarded qubits. SQbricks
 therefore does not project those qubits and stops the proof; this result does
 not mean that the circuits are non-equivalent.
 
-The long results from June 22 to June 25, 2026 predate the June 27 corrections
-that made ket substitution, variable replacement, and gate application
-functional. Before these corrections, these operations could mutate a ket
-array that was still shared by another path sum. The separability check could
-then observe residual dependencies that did not belong to the expected reduced
-state. States are now independent, allowing reduction to remove those
-dependencies before separability is checked.
+The long results from June 22 to June 25, 2026 predate commit `e6700a6`, which
+extends variable replacement in kets. Replaying the cases on the intermediate
+commits and then removing each change separately isolated the cause of the
+observed improvements: substitution now descends into `Qubit.Prod`
+expressions, whereas it previously traversed only `Qubit.SumMod2` expressions.
 
-At the subsystem level, this evolution explains the change from
-`Entanglement1` to a timed equivalence for `owm/grover_3`, the Sequence check of
-`owm/grover_5`, `owm-vs-tele/grover_3`, and the Sequence check of
-`owm-vs-qiskit/shor_n5_ancillas`. The Parallel check of `owm/grover_5` remains
-`SubCircuitInconclusive`. Comparing the results and their chronology cannot
-attribute each changed case to one specific correction without replaying the
-cases on the intermediate commits.
+Without this recursive branch, a variable to replace that occurs inside a
+product remains in the reduced ket. The separability check may then still
+observe that variable in both the outputs and discarded qubits and return
+`Entanglement1`. Substitution under `Qubit.Prod` allows reduction to eliminate
+this residual dependency.
+
+This correction gives timed equivalence results for both Sequence and Parallel
+on `owm/grover_3`, a timed Sequence equivalence for `owm/grover_5`, and
+`SubCircuitInconclusive` for its Parallel check. It also gives a timed
+equivalence for `owm-vs-tele/grover_3` and changes the Sequence and Parallel
+checks of `owm-vs-qiskit/shor_n5_ancillas` to a timed equivalence and
+`SubCircuitInconclusive`, respectively.
+
+Removing only this branch from `e6700a6` restores `Entanglement1` in every one
+of these modes. Conversely, adding only this branch to `3d002fc` reproduces all
+the improvements. It is therefore necessary and sufficient for these cases.
+The changes that avoid mutating shared kets remain safety fixes. Neither these
+changes nor the additional call to `Qubit.simplify` are required for these
+specific results.
 
 The first validated change avoids some uncontrolled exceptions when input or
 output lists are incompatible. These cases now return an explicit equivalence
