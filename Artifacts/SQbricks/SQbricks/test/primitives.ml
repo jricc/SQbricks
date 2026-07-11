@@ -1369,7 +1369,10 @@ let variable_replacement_factorisation =
           ket = [| x0 ++ Var 1 ++ Var 2 |];
           path_var = [ 1; 2 ];
         } );
-    ( "1/2 x0y0 + 1/2 x0y1 |x0+y0+y1> -> 1/2 x0y0 |x0+y0>",
+    (* Here + is modulo 2. The bijection (y0, y1) -> (u = y0 + y1, y1)
+       preserves all path assignments. The now-unused y1 can be eliminated and
+       u renamed y0, provided the substitution also descends under Prod. *)
+    ( "1/2 x0y0 + 1/2 x0y1 |x0*(y0+y1)> -> 1/2 x0y0 |x0*y0>",
       `Quick,
       let p =
         Prod (Scal div2, Prod (Qubit x0, Qubit (v 1)))
@@ -1377,10 +1380,14 @@ let variable_replacement_factorisation =
       in
       let p' = to_poly (Prod (Scal div2, Prod (Qubit x0, Qubit (v 1)))) in
       let ps : Path_sum.t =
-        { phase = p; ket = [| x0 ++ Var 1 ++ Var 2 |]; path_var = [ 1; 2 ] }
+        {
+          phase = p;
+          ket = [| Qubit.Prod (x0, (Var 1 ++ Var 2)) |];
+          path_var = [ 1; 2 ];
+        }
       in
       let ps' : Path_sum.t =
-        { phase = p'; ket = [| x0 ++ Var 1 |]; path_var = [ 1 ] }
+        { phase = p'; ket = [| Qubit.Prod (x0, Var 1) |]; path_var = [ 1 ] }
       in
       test_variable_replacement_factorisation ps ps' );
     ( "1/2 x0y0 + 1/2 x0y1 |x0+y0+y1> -> 1/2 x0y0 |x0+y0>",

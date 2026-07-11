@@ -9,6 +9,9 @@
 - [ ] Fix the `Equiv.parallel` behavior behind
   `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
   `SubCircuitInconclusive` instead of a timed equivalence result.
+- [ ] Measure the performance impact of recursive variable substitution under
+  `Qubit.Prod`; it unlocks additional reductions and equivalence proofs, but
+  traversing larger qubit expressions may increase reduction time.
 - [ ] Start phase 4 bug fixes one issue at a time, with focused regression
   tests before or with each fix.
 

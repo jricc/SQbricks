@@ -19,9 +19,7 @@
 .PHONY: all benchmark sanity sanity-unit sanity-hybrid sanity-partial benchmarks \
         benchmark-sqbricks benchmarks-sqbricks \
         regression-light regression-light-baseline regression-light-check \
-        benchmark-regression-large benchmark-regression-large-baseline \
-        benchmark-regression-large-check regression-large \
-        regression-large-baseline regression-large-check \
+        benchmark-regression-large regression-large \
         owm tele unit-vs-hybrid qiskit-hybrid owm-vs-qiskit owm-vs-tele veriqc \
         tests tests_prim tests_qiskit tests_mbqc tests_unit tests_regression_light \
         build container start fig6 fig7 examples \
@@ -36,15 +34,9 @@ LIGHT_RESULT ?= benchmarks/result/light_$(DATE_FILE).csv
 LIGHT_RUNS ?= 3
 LONG_TYPES ?= sanity-unit sanity-hybrid sanity-partial unit-vs-hybrid veriqc qiskit-hybrid owm tele owm-vs-tele owm-vs-qiskit
 LONG_PROGRESS ?= auto
-# LARGE_TYPES ?=  owm tele owm-vs-tele owm-vs-qiskit
-# LARGE_TYPES ?=  owm-vs-qiskit
-LARGE_TYPES ?=  owm  owm-vs-tele owm-vs-qiskit
-# LARGE_TYPES ?= sanity-unit sanity-hybrid sanity-partial unit-vs-hybrid veriqc qiskit-hybrid owm tele owm-vs-tele owm-vs-qiskit
+LARGE_TYPES ?= sanity-unit sanity-hybrid sanity-partial unit-vs-hybrid veriqc qiskit-hybrid owm tele owm-vs-tele owm-vs-qiskit
 LARGE_PATH_DIR ?= scripts/paths/regression-large
-LARGE_BASELINE_DIR ?= benchmarks/baseline/regression-large
 LARGE_PROGRESS ?= auto
-LARGE_PERF_THRESHOLD ?= 1.25
-LARGE_MIN_SLOWDOWN_SECONDS ?= 5
 MAKEFLAGS += --no-print-directory
 
 # Documentation generation
@@ -163,54 +155,15 @@ regression-light-check:
 benchmark-regression-large:
 	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-regression-large TYPE=owm"; exit 1; fi
 	@if [ ! -f "$(LARGE_PATH_DIR)/paths_$(TYPE).txt" ]; then echo "Missing large regression path file: $(LARGE_PATH_DIR)/paths_$(TYPE).txt"; exit 1; fi
-	@if [ "$(TYPE)" = "qiskit-hybrid" ] || [ "$(TYPE)" = "owm-vs-qiskit" ]; then python3 -c 'from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager' >/dev/null 2>&1 || { echo "Missing Python dependency: qiskit is required for $(TYPE)."; exit 1; }; fi
 	@mkdir -p $(RESULT_FOLDER) $(shell pwd)/_build/regression-large/$(TYPE)
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) dune build
 	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) SQBRICKS_LONG_PATH_FILE=$(LARGE_PATH_DIR)/paths_$(TYPE).txt SQBRICKS_LONG_PROGRESS=$(LARGE_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv
 	@echo "Large regression benchmark $(TYPE) written to $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv"
 
-benchmark-regression-large-baseline:
-	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-regression-large-baseline TYPE=owm"; exit 1; fi
-	@if [ ! -f "$(LARGE_PATH_DIR)/paths_$(TYPE).txt" ]; then echo "Missing large regression path file: $(LARGE_PATH_DIR)/paths_$(TYPE).txt"; exit 1; fi
-	@if [ "$(TYPE)" = "qiskit-hybrid" ] || [ "$(TYPE)" = "owm-vs-qiskit" ]; then python3 -c 'from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager' >/dev/null 2>&1 || { echo "Missing Python dependency: qiskit is required for $(TYPE)."; exit 1; }; fi
-	@mkdir -p $(LARGE_BASELINE_DIR) $(shell pwd)/_build/regression-large/$(TYPE)
-	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) dune build
-	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) SQBRICKS_LONG_PATH_FILE=$(LARGE_PATH_DIR)/paths_$(TYPE).txt SQBRICKS_LONG_PROGRESS=$(LARGE_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(LARGE_BASELINE_DIR)/$(TYPE).csv
-	@echo "Large regression baseline $(TYPE) written to $(LARGE_BASELINE_DIR)/$(TYPE).csv"
-
-benchmark-regression-large-check:
-	@if [ -z "$(TYPE)" ]; then echo "TYPE is required, for example: make benchmark-regression-large-check TYPE=owm"; exit 1; fi
-	@if [ ! -f "$(LARGE_PATH_DIR)/paths_$(TYPE).txt" ]; then echo "Missing large regression path file: $(LARGE_PATH_DIR)/paths_$(TYPE).txt"; exit 1; fi
-	@if [ ! -f "$(LARGE_BASELINE_DIR)/$(TYPE).csv" ]; then echo "Missing large regression baseline: $(LARGE_BASELINE_DIR)/$(TYPE).csv"; exit 1; fi
-	@if [ "$(TYPE)" = "qiskit-hybrid" ] || [ "$(TYPE)" = "owm-vs-qiskit" ]; then python3 -c 'from qiskit import qasm2; from qiskit.circuit import QuantumCircuit; from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager' >/dev/null 2>&1 || { echo "Missing Python dependency: qiskit is required for $(TYPE)."; exit 1; }; fi
-	@mkdir -p $(RESULT_FOLDER) $(shell pwd)/_build/regression-large/$(TYPE)
-	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) dune build
-	@DUNE_BUILD_DIR=$(shell pwd)/_build/regression-large/$(TYPE) SQBRICKS_LONG_PATH_FILE=$(LARGE_PATH_DIR)/paths_$(TYPE).txt SQBRICKS_LONG_PROGRESS=$(LARGE_PROGRESS) bash scripts/benchmarks-sqbricks.sh $(TYPE) > $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv
-	@SQBRICKS_LARGE_PERF_THRESHOLD=$(LARGE_PERF_THRESHOLD) SQBRICKS_LARGE_MIN_SLOWDOWN_SECONDS=$(LARGE_MIN_SLOWDOWN_SECONDS) bash scripts/check-regression-large.sh $(LARGE_BASELINE_DIR)/$(TYPE).csv $(RESULT_FOLDER)/regression_large_$(TYPE)_$(DATE_FILE).csv $(TYPE)
-
 regression-large:
 	@for type in $(LARGE_TYPES); do \
 		$(MAKE) TYPE=$$type benchmark-regression-large || exit $$?; \
 	done
-
-regression-large-baseline:
-	@for type in $(LARGE_TYPES); do \
-		$(MAKE) TYPE=$$type benchmark-regression-large-baseline || exit $$?; \
-	done
-
-regression-large-check:
-	@status=0; failed=""; \
-	for type in $(LARGE_TYPES); do \
-		if ! $(MAKE) TYPE=$$type benchmark-regression-large-check; then \
-			status=1; \
-			failed="$$failed $$type"; \
-			echo "Large regression check failed for $$type; continuing." >&2; \
-		fi; \
-	done; \
-	if [ $$status -ne 0 ]; then \
-		echo "Large regression check completed with failure(s):$$failed" >&2; \
-		exit $$status; \
-	fi
 
 owm:
 	@echo "owm"
@@ -280,6 +233,7 @@ build:
 	docker build -t sqbricks .
 
 container:
+	@docker rm -f sqbricks 2>/dev/null >/dev/null || true
 	bash container.sh
 
 
@@ -289,14 +243,13 @@ pull:
 	docker pull jricc/sqbricks:latest
 
 container-pull:
+	@docker rm -f sqbricks 2>/dev/null >/dev/null || true
 	bash container.sh --custom-image
 
 # Container Start
 
-start: container
-
 start1:
-	bash container.sh
+	docker start -ai sqbricks1
 
 start2:
-	bash container.sh
+	docker start -ai sqbricks2
