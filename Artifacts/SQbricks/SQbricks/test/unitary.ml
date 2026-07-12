@@ -167,6 +167,26 @@ let test_execution_result_reports_other_errors () =
         check bool "negative rotation exponent" true true
     | _ -> check bool "negative rotation exponent" true false
   in
+  let check_non_dyadic_rotation () =
+    let angle = Q.make (Z.of_int 1) (Z.of_int 3) in
+    let check_rejected name program =
+      match Program.execution_result program with
+      | Error (Program.NonDyadicRotationAngle _) -> check bool name true true
+      | _ -> check bool name true false
+    in
+    check_rejected "non-dyadic u1 angle"
+      (Program.Apply (Gates.U1 (angle, 0), [], [ 0 ]));
+    check_rejected "non-dyadic global phase angle"
+      (Program.Apply (Gates.GP (angle, 0), [], []))
+  in
+  let check_negative_angle () =
+    match
+      Program.execution_result
+        (Program.Apply (Gates.U1 (Q.minus_one, 2), [], [ 0 ]))
+    with
+    | Ok _ -> check bool "negative dyadic angle" true true
+    | Error _ -> check bool "negative dyadic angle" true false
+  in
   let check_input_state_too_small () =
     match Program.execution_result ~input_state:(Path_sum.ofSize 1) (h 1) with
     | Error (Program.InputStateTooSmall (2, 1)) ->
@@ -176,6 +196,8 @@ let test_execution_result_reports_other_errors () =
   check_invalid_gate ();
   check_hybrid_program ();
   check_negative_rotation ();
+  check_non_dyadic_rotation ();
+  check_negative_angle ();
   check_input_state_too_small ()
 
 let test_unitary_is_only_a_hybrid_syntax_check () =

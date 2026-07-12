@@ -276,6 +276,7 @@ type execution_error =
   | InputStateTooSmall of int * int
   | HybridProgram of t
   | NegativeRotationExponent of t
+  | NonDyadicRotationAngle of t
 
 let execution_error_message = function
   | EmptyTargetList p ->
@@ -292,11 +293,19 @@ let execution_error_message = function
   | HybridProgram p ->
       sprintf "Program.execution_aux, p = %s forbidden" (String.pretty p)
   | NegativeRotationExponent _ -> "Program.execution.GP/U1, k < 0, forbidden"
+  | NonDyadicRotationAngle p ->
+      sprintf "Program.execution.GP/U1, non-dyadic angle, p = %s"
+        (String.pretty p)
 
 let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let _, wq = widths p in
   let input_width = Array.length input_state.ket in
   let width = Int.max wq input_width in
+
+  let rotation_angle_is_dyadic s k =
+    let denominator = Q.den (Q.div_2exp s k) in
+    Z.(equal (logand denominator (denominator - one)) zero)
+  in
 
   let execution_aux (p : t) (ps : Path_sum.t) =
     let rec apply_forall apply (ps : Path_sum.t) co (ta : int list) =
@@ -338,6 +347,9 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       | Apply (X, co, ta) -> Ok (apply_forall Apply_gates.apply_not ps co ta)
       | (Apply (GP (_, k), _, _) | Apply (U1 (_, k), _, _)) when k < 0 ->
           Error (NegativeRotationExponent p)
+      | (Apply (GP (s, k), _, _) | Apply (U1 (s, k), _, _))
+        when not (rotation_angle_is_dyadic s k) ->
+          Error (NonDyadicRotationAngle p)
       | (Apply (GP (s, _), _, _) | Apply (U1 (s, _), _, _))
         when Q.equal Q.zero s ->
           Ok ps
