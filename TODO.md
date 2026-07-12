@@ -2,16 +2,19 @@
 
 ## Next
 
-- [ ] Continue the remaining phase 3 audit targets after `Program`, parser, and
-  deferred measurement: path-sum generation and remaining parser
-  unsupported-syntax boundaries.
+- [ ] Start phase 4 bug fixes one issue at a time, with focused regression
+  tests before or with each fix.
+- [ ] Make direct `Program.t` execution report non-dyadic angles explicitly
+  instead of allowing `find_k` to raise an uncontrolled exception. Negative
+  angles remain valid.
+- [ ] Clarify and document the intended `Path_sum_library` behavior for
+  negative rotation exponents `k`; this is distinct from a valid negative
+  angle coefficient.
 - [ ] Add real OpenQASM include handling instead of only accepting
   `include "...";` as a compatibility no-op.
 - [ ] Fix the `Equiv.parallel` behavior behind
   `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
   `SubCircuitInconclusive` instead of a timed equivalence result.
-- [ ] Start phase 4 bug fixes one issue at a time, with focused regression
-  tests before or with each fix.
 
 ## Done
 
@@ -53,6 +56,9 @@
 - [x] Audit the phase 3 separation target.
 - [x] Audit the phase 3 projection target.
 - [x] Audit the phase 3 benchmark-scripts target.
+- [x] Audit the phase 3 AST/Program, parser, deferred-measurement, and path-sum
+  generation targets.
+- [x] Complete roadmap phase 3: correctness audit.
 - [x] Keep the reduction entry-point names short after validating the typed
   reduction results.
 - [x] Route Equiv initial-state construction through
