@@ -118,7 +118,6 @@ let execution_for_equiv ?debug ?input_state program =
   | Error (Program.EmptyTargetList _)
   | Error (Program.InvalidGateApplication _)
   | Error (Program.InputStateTooSmall _)
-  | Error (Program.NegativeRotationExponent _)
   | Error (Program.NonDyadicRotationAngle _) ->
       Error ErrorInvalidProgram
   | Error (Program.HybridProgram _) -> Error ErrorCircuitNotUnitary
@@ -134,13 +133,11 @@ let program_has_valid_gate_applications width program =
          controls)
   in
   let rec aux = function
-    | Program.Apply (Gates.GP (_, k), controls, targets) ->
-        0 <= k
-        && gate_indices_are_valid controls targets
+    | Program.Apply (Gates.GP _, controls, targets) ->
+        gate_indices_are_valid controls targets
         && controls_are_distinct_from_targets controls targets
-    | Program.Apply (Gates.U1 (_, k), controls, targets) ->
-        0 <= k
-        && (not (List.is_empty targets))
+    | Program.Apply (Gates.U1 _, controls, targets) ->
+        (not (List.is_empty targets))
         && gate_indices_are_valid controls targets
         && controls_are_distinct_from_targets controls targets
     | Program.Apply (_, controls, targets) ->

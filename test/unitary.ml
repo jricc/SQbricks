@@ -146,6 +146,32 @@ let test_execution_result_reports_empty_gate_targets () =
   check_rejected "u1 empty target"
     (Program.Apply (Gates.U1 (Q.of_int 1, 1), [], []))
 
+let test_execution_normalizes_rotation_angles () =
+  (* Compare exact path sums so the tests check the canonical representation,
+     not only semantic equivalence modulo a full turn. *)
+  let check_same_execution name program expected_program =
+    match
+      ( Program.execution_result program,
+        Program.execution_result expected_program )
+    with
+    | Ok path_sum, Ok expected_path_sum ->
+        check string name (PSS.exact expected_path_sum) (PSS.exact path_sum)
+    | _ -> check bool name true false
+  in
+  let quarter = Q.make (Z.of_int 1) (Z.of_int 4) in
+  check_same_execution "negative exponent with rational coefficient"
+    (Program.Apply (Gates.U1 (quarter, -1), [], [ 0 ]))
+    (Program.Apply (Gates.U1 (Q.one, 1), [], [ 0 ]));
+  check_same_execution "negative angle"
+    (Program.Apply (Gates.U1 (Q.minus_one, 2), [], [ 0 ]))
+    (Program.Apply (Gates.U1 (Q.of_int 3, 2), [], [ 0 ]));
+  check_same_execution "angle above one"
+    (Program.Apply (Gates.GP (Q.of_int 5, 2), [], []))
+    (Program.Apply (Gates.GP (Q.one, 2), [], []));
+  check_same_execution "integer angle"
+    (Program.Apply (Gates.GP (Q.one, -1), [], []))
+    (Program.Apply (Gates.GP (Q.zero, 0), [], []))
+
 let test_execution_result_reports_other_errors () =
   (* execution_result classifies the other direct execution failures explicitly. *)
   let check_invalid_gate () =
@@ -159,14 +185,6 @@ let test_execution_result_reports_other_errors () =
     | Error (Program.HybridProgram _) -> check bool "hybrid program" true true
     | _ -> check bool "hybrid program" true false
   in
-  let check_negative_rotation () =
-    match
-      Program.execution_result (Program.Apply (Gates.U1 (Q.of_int 1, -1), [], [ 0 ]))
-    with
-    | Error (Program.NegativeRotationExponent _) ->
-        check bool "negative rotation exponent" true true
-    | _ -> check bool "negative rotation exponent" true false
-  in
   let check_non_dyadic_rotation () =
     let angle = Q.make (Z.of_int 1) (Z.of_int 3) in
     let check_rejected name program =
@@ -179,14 +197,6 @@ let test_execution_result_reports_other_errors () =
     check_rejected "non-dyadic global phase angle"
       (Program.Apply (Gates.GP (angle, 0), [], []))
   in
-  let check_negative_angle () =
-    match
-      Program.execution_result
-        (Program.Apply (Gates.U1 (Q.minus_one, 2), [], [ 0 ]))
-    with
-    | Ok _ -> check bool "negative dyadic angle" true true
-    | Error _ -> check bool "negative dyadic angle" true false
-  in
   let check_input_state_too_small () =
     match Program.execution_result ~input_state:(Path_sum.ofSize 1) (h 1) with
     | Error (Program.InputStateTooSmall (2, 1)) ->
@@ -195,9 +205,7 @@ let test_execution_result_reports_other_errors () =
   in
   check_invalid_gate ();
   check_hybrid_program ();
-  check_negative_rotation ();
   check_non_dyadic_rotation ();
-  check_negative_angle ();
   check_input_state_too_small ()
 
 let test_unitary_is_only_a_hybrid_syntax_check () =
@@ -674,11 +682,12 @@ let unitary =
       test_sqv_result Equiv.ErrorInvalidProgram
         (Program.Apply (Gates.H, [], []))
         (h 0) );
-    ( "seq negative u1 exponent",
+    ( "seq negative u1 exponent is normalized",
       `Quick,
-      test_sqv_result Equiv.ErrorInvalidProgram
-        (Program.Apply (Gates.U1 (Q.of_int 1, -1), [], [ 0 ]))
-        (h 0) );
+      let quarter = Q.make (Z.of_int 1) (Z.of_int 4) in
+      test_prog_equiv
+        (Program.Apply (Gates.U1 (quarter, -1), [], [ 0 ]))
+        (zz 0) );
     ( "seq controlled global phase target overlap is invalid",
       `Quick,
       let controlled_global_phase_with_same_target =
@@ -717,6 +726,9 @@ let unitary =
     ( "execution_result reports other execution errors",
       `Quick,
       test_execution_result_reports_other_errors );
+    ( "execution normalizes rotation angles",
+      `Quick,
+      test_execution_normalizes_rotation_angles );
     ( "unitary is only a hybrid syntax check",
       `Quick,
       test_unitary_is_only_a_hybrid_syntax_check );
@@ -1053,11 +1065,11 @@ let parallel =
       test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
         controlled_global_phase_with_same_target
         (h 0) );
-    ( "parallel negative gp exponent",
+    ( "parallel negative gp exponent is normalized",
       `Quick,
-      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
+      test_prog_equiv ~algo:Parallel
         (Program.Apply (Gates.GP (Q.of_int 1, -1), [], []))
-        (h 0) );
+        (gp ~s:0 0) );
     ( "parallel unit vs hybrid",
       `Quick,
       test_prog_equiv ~algo:Parallel ~not_equiv:true (m 0 0) (h 0) );
