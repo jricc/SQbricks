@@ -204,11 +204,12 @@ Resource limits are applied at the beginning of the script with `ulimit`:
 - `SQBRICKS_LONG_TIMEOUT`, defaulting to `600` CPU seconds per process;
 - `SQBRICKS_LONG_MEMORY_KB`, defaulting to `6291456`.
 
-If a case from an ordered series reaches `TO` or `OutOfMemory`, larger cases in
-the same series are no longer executed. A series is identified by the benchmark
-type, the source directory, and the name family. The runner writes a CSV row
-with `SKIP_AFTER_RESOURCE_FAILURE` and continues with other series. For example,
-a failure on `benchmarks/Feynman/grover_5.qasm` does not skip
+If one mode in an ordered series reaches `TO` or `OutOfMemory`, that mode is no
+longer executed for larger cases in the same series. The runner writes
+`SKIP_AFTER_RESOURCE_FAILURE` for that mode but continues to execute the other
+one. A conversion resource failure stops both modes. A series is identified by
+the benchmark type, source directory, and name family. For example, a failure
+on `benchmarks/Feynman/grover_5.qasm` does not skip
 `benchmarks/VeriQbench/combinational/grover/grover_*.qasm` cases.
 
 Progress is controlled by `SQBRICKS_LONG_PROGRESS=auto|always|never`. Like the

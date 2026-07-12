@@ -69,11 +69,11 @@ cmd_stderr=""
 # Last wrapped command exit status.
 cmd_status=0
 
-# True when the current input case hit a timeout or memory limit.
-case_resource_failed="false"
+# Ordered-size series of the current input case. Empty means isolated.
+series_key=""
 
-# Series already stopped after a timeout or memory limit.
-declare -A stopped_series
+# Series/mode pairs already stopped after a timeout or memory limit.
+declare -A stopped_series_modes
 
 if [[ ! -f "$path_file" ]]; then
 	echo "Missing path file: $path_file" >&2
@@ -131,6 +131,45 @@ status_from_failure() {
 
 is_resource_failure() {
 	[[ "$1" == "TO" || "$1" == "OutOfMemory" ]]
+}
+
+# Return true when this mode was stopped for the current ordered series.
+series_mode_stopped() {
+	local mode="$1"
+	local key
+
+	if [[ -z "$series_key" ]]; then
+		return 1
+	fi
+	key="$series_key|$mode"
+	[[ -n "${stopped_series_modes[$key]:-}" ]]
+}
+
+# Stop only one verification mode for the current ordered series.
+stop_series_mode() {
+	local mode="$1"
+	local key
+
+	if [[ -z "$series_key" ]]; then
+		return 0
+	fi
+	key="$series_key|$mode"
+	stopped_series_modes["$key"]="true"
+}
+
+# A conversion failure is independent of the equivalence algorithm.
+stop_all_series_modes() {
+	stop_series_mode "Sequence"
+	stop_series_mode "Parallel"
+}
+
+# Return true only when no verification mode remains runnable for this case.
+all_series_modes_stopped() {
+	if [[ "$version" == "owm-vs-tele" ]]; then
+		series_mode_stopped "Parallel"
+	else
+		series_mode_stopped "Sequence" && series_mode_stopped "Parallel"
+	fi
 }
 
 # Return the ordered-size series for cases where a larger case is expected to be
@@ -274,7 +313,7 @@ emit_conversion_error() {
 	failure_status="$(status_from_failure "$cmd_status" "$cmd_stderr")"
 	if is_resource_failure "$failure_status"; then
 		result="$failure_status"
-		case_resource_failed="true"
+		stop_all_series_modes
 	fi
 
 	echo "$name;SQbricks;2025;$lift;Conversion;;;;;;;;$result"
@@ -307,7 +346,9 @@ run_equiv_sqbricks() {
 		local label="$2"
 		local result
 
-		if run_sqbricks_command -sqv "$algo" s \
+		if series_mode_stopped "$label"; then
+			result="SKIP_AFTER_RESOURCE_FAILURE"
+		elif run_sqbricks_command -sqv "$algo" s \
 			"$path1" "$path2" \
 			"$inputs1" "$inputs2" "$outputs1" "$outputs2" \
 			"$meas1" "$meas2"; then
@@ -315,7 +356,7 @@ run_equiv_sqbricks() {
 		else
 			result="$(status_from_failure "$cmd_status" "$cmd_stderr")"
 			if is_resource_failure "$result"; then
-				case_resource_failed="true"
+				stop_series_mode "$label"
 			fi
 		fi
 
@@ -669,7 +710,6 @@ configure_progress
 for path_original in "${path_originals[@]}"; do
 	case_index=$((case_index + 1))
 	prepare_paths "$path_original"
-	case_resource_failed="false"
 
 	case "$version" in
 	sanity-unit)
@@ -700,7 +740,7 @@ for path_original in "${path_originals[@]}"; do
 
 	series_key="$(case_series_key "$name" "$path_original")"
 	begin_progress_case "$name"
-	if [[ -n "$series_key" && -n "${stopped_series[$series_key]:-}" ]]; then
+	if all_series_modes_stopped; then
 		emit_skipped_case "$name"
 	else
 		case "$version" in
@@ -727,10 +767,6 @@ for path_original in "${path_originals[@]}"; do
 				"$path_optimized" "$path_optimized_ium" "$path_owm" "$path_owm_ium" "$name"
 			;;
 		esac
-
-		if [[ "$case_resource_failed" == "true" && -n "$series_key" ]]; then
-			stopped_series["$series_key"]="true"
-		fi
 	fi
 	finish_progress_case "$name"
 	echo ""
