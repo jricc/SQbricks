@@ -88,6 +88,9 @@ type execution_error =
       (** A hybrid construct was sent to unitary symbolic execution. *)
   | NegativeRotationExponent of t
       (** A [GP] or [U1] application has a negative exponent. *)
+  | NonDyadicRotationAngle of t
+      (** A [GP] or [U1] angle has a denominator that is not a power of two.
+          Negative angles remain valid when their denominator is dyadic. *)
 
 val execution_result :
   ?debug:bool -> ?input_state:Path_sum.t -> t -> (Path_sum.t, execution_error) result
