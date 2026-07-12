@@ -86,8 +86,6 @@ type execution_error =
           The integers are [(program_width, input_width)]. *)
   | HybridProgram of t
       (** A hybrid construct was sent to unitary symbolic execution. *)
-  | NegativeRotationExponent of t
-      (** A [GP] or [U1] application has a negative exponent. *)
   | NonDyadicRotationAngle of t
       (** A [GP] or [U1] angle has a denominator that is not a power of two.
           Negative angles remain valid when their denominator is dyadic. *)
@@ -100,7 +98,11 @@ val execution_result :
 
     [H], [X], and [U1] applications require a non-empty target list.
     [Apply (GP _, controls, targets)] ignores [targets]: [GP] is semantically
-    targetless, even when a target list is present in the program value. *)
+    targetless, even when a target list is present in the program value.
+
+    Dyadic [GP] and [U1] angles are normalized modulo one, from zero included
+    to one excluded. Negative coefficients and negative exponents are therefore
+    valid when their effective angle is dyadic. *)
 
 val execution : ?debug:bool -> ?input_state:Path_sum.t -> t -> Path_sum.t
 (** [execution ?debug ?input_state prog] is the historical wrapper around
@@ -123,7 +125,7 @@ val inverse : ?debug:bool -> t -> t
 val unitary : t -> bool
 (** [unitary prog] checks only that [prog] has no measurements or classical
     operations. It does not validate gate indices, target lists, control/target
-    overlaps, or rotation exponents.
+    overlaps, or whether rotation angles are dyadic.
 
     Example: [unitary (h 0)] returns [true]. *)
 

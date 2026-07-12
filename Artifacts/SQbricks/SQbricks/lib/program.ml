@@ -275,7 +275,6 @@ type execution_error =
   | InvalidGateApplication of int * t
   | InputStateTooSmall of int * int
   | HybridProgram of t
-  | NegativeRotationExponent of t
   | NonDyadicRotationAngle of t
 
 let execution_error_message = function
@@ -292,7 +291,6 @@ let execution_error_message = function
         input_width program_width
   | HybridProgram p ->
       sprintf "Program.execution_aux, p = %s forbidden" (String.pretty p)
-  | NegativeRotationExponent _ -> "Program.execution.GP/U1, k < 0, forbidden"
   | NonDyadicRotationAngle p ->
       sprintf "Program.execution.GP/U1, non-dyadic angle, p = %s"
         (String.pretty p)
@@ -302,9 +300,17 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let input_width = Array.length input_state.ket in
   let width = Int.max wq input_width in
 
-  let rotation_angle_is_dyadic s k =
-    let denominator = Q.den (Q.div_2exp s k) in
-    Z.(equal (logand denominator (denominator - one)) zero)
+  let canonical_rotation_angle (s : Q.t) (k : int) : Q.t option =
+    let angle = if k < 0 then Q.mul_2exp s (-k) else Q.div_2exp s k in
+    let denominator = Q.den angle in
+    if
+      Z.gt denominator Z.zero
+      && Z.(equal (logand denominator (denominator - one)) zero)
+    then
+      (* Phase coefficients are modulo 1. The non-negative remainder gives the
+         representative in [0, 1), including for negative angles. *)
+      Some (Q.make (Z.erem (Q.num angle) denominator) denominator)
+    else None
   in
 
   let execution_aux (p : t) (ps : Path_sum.t) =
@@ -345,23 +351,21 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       | Measure _ | It _ | InitQ _ | Not _ -> Error (HybridProgram p)
       | Apply (H, co, ta) -> Ok (apply_forall Apply_gates.apply_hadamard ps co ta)
       | Apply (X, co, ta) -> Ok (apply_forall Apply_gates.apply_not ps co ta)
-      | (Apply (GP (_, k), _, _) | Apply (U1 (_, k), _, _)) when k < 0 ->
-          Error (NegativeRotationExponent p)
-      | (Apply (GP (s, k), _, _) | Apply (U1 (s, k), _, _))
-        when not (rotation_angle_is_dyadic s k) ->
-          Error (NonDyadicRotationAngle p)
-      | (Apply (GP (s, _), _, _) | Apply (U1 (s, _), _, _))
-        when Q.equal Q.zero s ->
-          Ok ps
-      | Apply (GP (s, k), co, _) ->
-          (* GP is targetless: targets are tolerated in Program.t but ignored. *)
-          Ok (Apply_gates.apply_gp (Q.div_2exp s k) ps co)
-      | Apply (U1 (s, k), co, ta) ->
-          if debug then
-            printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
-          Ok
-            (apply_forall (Apply_gates.apply_u1 ~debug (Q.div_2exp s k)) ps co
-               ta)
+      | Apply (GP (s, k), co, _) -> (
+          match canonical_rotation_angle s k with
+          | None -> Error (NonDyadicRotationAngle p)
+          | Some angle when Q.equal angle Q.zero -> Ok ps
+          | Some angle ->
+              (* GP is targetless: targets are tolerated in Program.t but ignored. *)
+              Ok (Apply_gates.apply_gp angle ps co))
+      | Apply (U1 (s, k), co, ta) -> (
+          match canonical_rotation_angle s k with
+          | None -> Error (NonDyadicRotationAngle p)
+          | Some angle when Q.equal angle Q.zero -> Ok ps
+          | Some angle ->
+              if debug then
+                printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
+              Ok (apply_forall (Apply_gates.apply_u1 ~debug angle) ps co ta))
       | E -> Ok ps
       | Sequence (p1, p2) -> (
           match aux p1 ps with Error error -> Error error | Ok ps' -> aux p2 ps')
