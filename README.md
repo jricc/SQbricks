@@ -560,10 +560,12 @@ For sized families, the selection keeps up to the three largest representatives
 instead of only the largest one, so the check can still observe nearby cases
 when the largest case reaches the timeout or memory limit.
 
-For ordered-size series, the long runner stops trying larger cases in the same
-series after a timeout or memory limit and writes `SKIP_AFTER_RESOURCE_FAILURE`
-rows instead. Series are scoped by source directory, so a Feynman failure does
-not stop the corresponding VeriQbench family. Other series continue to run.
+For ordered-size series, the long runner tracks Sequence and Parallel
+independently. After a timeout or memory limit, larger cases skip only the mode
+that failed and write `SKIP_AFTER_RESOURCE_FAILURE`; the other mode still runs.
+A conversion resource failure stops both modes. Series are scoped by source
+directory, so a Feynman failure does not stop the corresponding VeriQbench
+family. Other series continue to run.
 
 Progress bars are printed on `stderr` and CSV data is written on `stdout`, so
 redirected result files stay clean.

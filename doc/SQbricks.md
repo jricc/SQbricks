@@ -207,10 +207,11 @@ Les limites de ressources sont posées au début du script avec `ulimit` :
 - `SQBRICKS_LONG_TIMEOUT`, par défaut `600` secondes de CPU par processus ;
 - `SQBRICKS_LONG_MEMORY_KB`, par défaut `6291456`.
 
-Si un cas d'une série ordonnée atteint `TO` ou `OutOfMemory`, les cas plus
-grands de la même série ne sont plus exécutés. Une série est identifiée par le
-type de benchmark, le dossier source et la famille de nom. Le runner écrit alors
-une ligne CSV avec `SKIP_AFTER_RESOURCE_FAILURE` et continue les autres séries.
+Si un mode d'une série ordonnée atteint `TO` ou `OutOfMemory`, ce mode n'est plus
+exécuté pour les cas plus grands de la même série. Le runner écrit
+`SKIP_AFTER_RESOURCE_FAILURE` pour ce mode, mais continue d'exécuter l'autre.
+Un échec de ressource pendant la conversion arrête les deux modes. Une série est
+identifiée par le type de benchmark, le dossier source et la famille de nom.
 Par exemple, un échec sur `benchmarks/Feynman/grover_5.qasm` ne saute pas les
 cas `benchmarks/VeriQbench/combinational/grover/grover_*.qasm`.
 

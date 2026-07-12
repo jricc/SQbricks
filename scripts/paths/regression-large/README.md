@@ -31,9 +31,10 @@ Current status:
   files with those baselines.
 
 The selected large regression uses the same ordered-series cutoff as the long
-SQbricks-only benchmark: after `TO` or `OutOfMemory`, larger cases in that same
-series are emitted as `SKIP_AFTER_RESOURCE_FAILURE`. Series are scoped by source
-directory as well as by name family.
+SQbricks-only benchmark. After `TO` or `OutOfMemory`, larger cases skip only the
+failed Sequence or Parallel mode; the other mode still runs. A conversion
+resource failure stops both modes. Series are scoped by source directory as well
+as by name family.
 
 The fallback case is normally skipped. It is executed only when the previous
 frontier improves, which keeps the selection useful when a result fluctuates

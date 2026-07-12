@@ -104,8 +104,9 @@
 - The long SQbricks-only benchmark reuses the historical path files, including
   `qiskit-hybrid` and `owm-vs-qiskit`; it does not run external verification
   tools.
-- The long runner writes `SKIP_AFTER_RESOURCE_FAILURE` for larger cases in an
-  ordered source-scoped series after `TO` or `OutOfMemory`.
+- The long runner writes `SKIP_AFTER_RESOURCE_FAILURE` only for the mode that
+  reached `TO` or `OutOfMemory` in an ordered source-scoped series. A conversion
+  resource failure stops both modes.
 - SQbricks-only benchmark levels are now split into light, selected large
   regression, and full long benchmark.
 - Vigilance: `Path_sum.equal_result` now has defensive phase-comparison errors
