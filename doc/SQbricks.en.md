@@ -454,7 +454,7 @@ Unitary gate applications must then be well formed:
 - control and target indices must be inside the circuit width;
 - a target gate such as `H`, `X`, or `U1` must have at least one target;
 - for these gates, a control must not also be a target;
-- the exponent of `GP` and `U1` must be non-negative.
+- the effective angle of `GP` and `U1` must be dyadic.
 
 A violation of these constraints returns `ErrorInvalidProgram`. A global phase
 `GP` is a special case: it may carry targets, possibly with controls. These
@@ -462,9 +462,18 @@ targets are validated as indices, but they do not affect symbolic execution. If
 `GP` carries both controls and targets, these lists must remain disjoint as for
 other gates.
 
-Malformed programs remain printable for diagnostics:
-`Program.String.pretty` uses a generic form for `GP` and `U1` when the exponent
-is negative, instead of raising during display.
+`Program.execution_result` computes the effective angle `s / 2^k`, then
+normalizes dyadic angles modulo one into the interval `[0, 1)`. Negative
+coefficients and negative exponents therefore remain valid: `-1/4` becomes
+`3/4`, `5/4` becomes `1/4`, and an integer angle becomes `0`, the identity. A
+non-dyadic angle returns `NonDyadicRotationAngle`, which `Equiv` converts to
+`ErrorInvalidProgram`.
+
+The stored `Program.t` is not rewritten: normalization happens only during
+symbolic execution. `Program.String.pretty` therefore keeps a generic form for
+`GP` and `U1` when the exponent is negative, without raising during display.
+The historical `Program.Macros` helpers still reject `k < 0` before constructing
+the `Program.t`.
 
 Symbolic comparison now follows the same principle. The functions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,

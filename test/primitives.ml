@@ -2369,6 +2369,24 @@ let test_path_sum_library_ry_result_reports_invalid_target () =
   (* ry_result still validates the target even when s=0 makes the phase trivial. *)
   check_gate_invalid_target (Path_sum_library.ry_result ~s:0 1 1 1)
 
+let test_path_sum_library_negative_rotation_exponents_are_identity () =
+  (* With integer s, k < 0 gives an exact identity and needs no path variables. *)
+  let expected : Path_sum.t =
+    {
+      phase = Monome.Scal Q.zero +++ Poly.empty;
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  check_gate_result "negative-exponent u1" expected
+    (Path_sum_library.u1_result (-1) 0 1);
+  check_gate_result "negative-exponent rz" expected
+    (Path_sum_library.rz_result (-1) 0 1);
+  check_gate_result "negative-exponent rx" expected
+    (Path_sum_library.rx_result (-1) 0 1);
+  check_gate_result "negative-exponent ry" expected
+    (Path_sum_library.ry_result (-1) 0 1)
+
 let test_path_sum_library_rotation_path_vars_are_width_offset () =
   (* RX/RY introduce y0 and y1, represented as Var width and Var (width + 1). *)
   let check_path_vars name = function
@@ -2631,6 +2649,9 @@ let gates_apply =
     ( "ry_result reports invalid target",
       `Quick,
       test_path_sum_library_ry_result_reports_invalid_target );
+    ( "negative rotation exponents are identity",
+      `Quick,
+      test_path_sum_library_negative_rotation_exponents_are_identity );
     ( "rotation path vars are width-offset",
       `Quick,
       test_path_sum_library_rotation_path_vars_are_width_offset );

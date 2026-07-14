@@ -650,13 +650,16 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   let apply_angle sQ k = if sQ < Q.zero then Q.add (pow2Q k) sQ else sQ
 
+  (* Since s is an integer, k < 0 makes each rotation below an exact identity.
+     Handle it before the dyadic arithmetic, which requires non-negative shifts. *)
+
   (* \( u1 s k  : |x0> -> e^{2.pi.i. x0.s / 2^k} \) |x0> *)
   let u1_result ?(s = 1) k ta w =
     match xx ta w with
     | Error error -> Error error
     | Ok target ->
         let p =
-          if s = 0 || k = 0 then Scal Q.zero ++ empty
+          if s = 0 || k <= 0 then Scal Q.zero ++ empty
           else
             Prod
               ( Scal (Q.div_2exp (apply_angle (Q.of_int s) k) k),
@@ -718,9 +721,9 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Error error -> Error error
     | Ok target ->
         let sQ = Q.of_int s in
+        let is_identity = s = 0 || k < 0 in
         let p =
-          if sQ = Q.zero then Scal Q.zero ++ empty
-            (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
+          if is_identity then Scal Q.zero ++ empty
           else
             Scal (Q.div_2exp (apply_angle (Q.neg sQ) (k + 1)) (k + 1))
             ++ (Prod (Scal (Q.div_2exp (apply_angle sQ k) k), Qubit target)
@@ -739,9 +742,9 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Error error -> Error error
     | Ok target ->
         let sQ = Q.of_int s in
+        let is_identity = s = 0 || k < 0 in
         let p =
-          if sQ = Q.zero then Scal Q.zero ++ empty
-            (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
+          if is_identity then Scal Q.zero ++ empty
           else if Q.zero < sQ then
             let pow2kp1 = pow2Q (k + 1) in
             Prod (Scal div2, Prod (Qubit target, Qubit (yy 0 w)))
@@ -760,8 +763,8 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
                      ++ empty)))
         in
 
-        let q = if sQ = Q.zero || k = 0 then target else yy 1 w in
-        let pv = if sQ = Q.zero then [] else [ w; w + 1 ] in
+        let q = if is_identity || k = 0 then target else yy 1 w in
+        let pv = if is_identity then [] else [ w; w + 1 ] in
         Ok { phase = p; ket = [| q |]; path_var = pv }
 
   let rx ?(s = 1) k ta w =
@@ -777,9 +780,9 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | Error error -> Error error
     | Ok target ->
         let sQ = Q.of_int s in
+        let is_identity = s = 0 || k < 0 in
         let p =
-          if sQ = Q.zero then Scal Q.zero ++ empty
-            (* if sQ = Q.zero || k = 0 then Scal Q.zero ++ empty *)
+          if is_identity then Scal Q.zero ++ empty
           else if Q.zero < sQ then
             let pow2kp1 = pow2Q (k + 1) in
             Scal (7 /// 4)
@@ -809,9 +812,9 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
         in
 
         let q =
-          if sQ = Q.zero || k = 0 then target else SumMod2 (One, yy 1 w)
+          if is_identity || k = 0 then target else SumMod2 (One, yy 1 w)
         in
-        let pv = if sQ = Q.zero then [] else [ w; w + 1 ] in
+        let pv = if is_identity then [] else [ w; w + 1 ] in
         Ok { phase = p; ket = [| q |]; path_var = pv }
 
   let ry ?(s = 1) k ta w =

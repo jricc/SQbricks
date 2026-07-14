@@ -463,7 +463,7 @@ Les applications de portes unitaires doivent ensuite être bien formées :
 - une porte qui agit sur une cible, comme `H`, `X` ou `U1`, doit avoir au moins
   une cible ;
 - pour ces portes, un contrôle ne doit pas être aussi une cible ;
-- l'exposant de `GP` et `U1` doit être positif ou nul.
+- l'angle effectif de `GP` et `U1` doit être dyadique.
 
 Une violation de ces contraintes retourne `ErrorInvalidProgram`. Une phase
 globale `GP` est un cas particulier : elle peut porter des cibles,
@@ -472,9 +472,18 @@ n'ont pas d'effet sur l'exécution symbolique. Si `GP` porte à la fois des
 contrôles et des cibles, ces listes doivent rester disjointes comme pour les
 autres portes.
 
-Les programmes mal formés restent affichables pour le diagnostic :
-`Program.String.pretty` utilise une forme générique pour `GP` et `U1` quand
-l'exposant est négatif, au lieu de lever une exception pendant l'affichage.
+`Program.execution_result` calcule l'angle effectif `s / 2^k`, puis normalise
+les angles dyadiques modulo un dans l'intervalle `[0, 1)`. Les coefficients et
+les exposants négatifs restent donc valides : `-1/4` devient `3/4`, `5/4`
+devient `1/4`, et un angle entier devient `0`, c'est-à-dire l'identité. Un angle
+non dyadique retourne `NonDyadicRotationAngle`, converti par `Equiv` en
+`ErrorInvalidProgram`.
+
+Le `Program.t` stocké n'est pas réécrit : la normalisation a lieu seulement au
+moment de l'exécution symbolique. `Program.String.pretty` conserve donc une
+forme générique pour `GP` et `U1` quand l'exposant est négatif, sans lever
+d'exception pendant l'affichage. Les macros historiques de `Program.Macros`
+continuent toutefois à refuser `k < 0` avant de construire le `Program.t`.
 
 La comparaison symbolique suit maintenant le même principe. Les fonctions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
