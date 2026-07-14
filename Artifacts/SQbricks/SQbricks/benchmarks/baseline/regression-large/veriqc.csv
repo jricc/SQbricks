@@ -1,34 +1,34 @@
 Program1;Program2;Tool;Version;Lift;Opt;CH;CS;CZ;CCZ;CCX;CU1;Gates;Time
-DQC_qft_14_1;DQC_qft_14;SQbricks;2025;lifting;Sequence;0;26;0;0;0;156;212;0,040255
-DQC_qft_14_1;DQC_qft_14;SQbricks;2025;lifting;Parallel;0;26;0;0;0;156;212;0,017117
+DQC_qft_14_1;DQC_qft_14;SQbricks;2025;lifting;Sequence;0;26;0;0;0;156;212;0,039234
+DQC_qft_14_1;DQC_qft_14;SQbricks;2025;lifting;Parallel;0;26;0;0;0;156;212;0,025568
 
-DQC_qft_15_1;DQC_qft_15;SQbricks;2025;lifting;Sequence;0;28;0;0;0;182;242;0,048840
-DQC_qft_15_1;DQC_qft_15;SQbricks;2025;lifting;Parallel;0;28;0;0;0;182;242;0,020394
+DQC_qft_15_1;DQC_qft_15;SQbricks;2025;lifting;Sequence;0;28;0;0;0;182;242;0,055157
+DQC_qft_15_1;DQC_qft_15;SQbricks;2025;lifting;Parallel;0;28;0;0;0;182;242;0,022449
 
-DQC_qft_16_1;DQC_qft_16;SQbricks;2025;lifting;Sequence;0;29;0;0;0;212;273;0,061437
-DQC_qft_16_1;DQC_qft_16;SQbricks;2025;lifting;Parallel;0;29;0;0;0;212;273;0,025943
+DQC_qft_16_1;DQC_qft_16;SQbricks;2025;lifting;Sequence;0;29;0;0;0;212;273;0,072052
+DQC_qft_16_1;DQC_qft_16;SQbricks;2025;lifting;Parallel;0;29;0;0;0;212;273;0,028291
 
-DQC_PE_7_1;DQC_PE_7;SQbricks;2025;lifting;Sequence;0;12;0;0;0;44;86;0,009619
-DQC_PE_7_1;DQC_PE_7;SQbricks;2025;lifting;Parallel;0;12;0;0;0;44;86;0,004090
+DQC_PE_7_1;DQC_PE_7;SQbricks;2025;lifting;Sequence;0;12;0;0;0;44;86;0,010032
+DQC_PE_7_1;DQC_PE_7;SQbricks;2025;lifting;Parallel;0;12;0;0;0;44;86;0,006008
 
-DQC_PE_8_1;DQC_PE_8;SQbricks;2025;lifting;Sequence;0;14;0;0;0;58;106;0,013075
-DQC_PE_8_1;DQC_PE_8;SQbricks;2025;lifting;Parallel;0;14;0;0;0;58;106;0,006035
+DQC_PE_8_1;DQC_PE_8;SQbricks;2025;lifting;Sequence;0;14;0;0;0;58;106;0,013903
+DQC_PE_8_1;DQC_PE_8;SQbricks;2025;lifting;Parallel;0;14;0;0;0;58;106;0,006977
 
-DQC_PE_9_1;DQC_PE_9;SQbricks;2025;lifting;Sequence;0;16;0;0;0;75;127;0,018326
-DQC_PE_9_1;DQC_PE_9;SQbricks;2025;lifting;Parallel;0;16;0;0;0;75;127;0,007378
+DQC_PE_9_1;DQC_PE_9;SQbricks;2025;lifting;Sequence;0;16;0;0;0;75;127;0,019311
+DQC_PE_9_1;DQC_PE_9;SQbricks;2025;lifting;Parallel;0;16;0;0;0;75;127;0,008515
 
-DQC_teleportation_1;DQC_teleportation;SQbricks;2025;lifting;Sequence;0;0;2;0;0;0;12;0,000144
-DQC_teleportation_1;DQC_teleportation;SQbricks;2025;lifting;Parallel;0;0;2;0;0;0;12;0,000133
+DQC_teleportation_1;DQC_teleportation;SQbricks;2025;lifting;Sequence;0;0;2;0;0;0;12;0,000149
+DQC_teleportation_1;DQC_teleportation;SQbricks;2025;lifting;Parallel;0;0;2;0;0;0;12;0,000130
 
-DQC_bitflip_code_1;DQC_bitflip_code;SQbricks;2025;lifting;Sequence;0;0;0;0;6;0;20;0,000154
-DQC_bitflip_code_1;DQC_bitflip_code;SQbricks;2025;lifting;Parallel;0;0;0;0;6;0;20;0,000154
+DQC_bitflip_code_1;DQC_bitflip_code;SQbricks;2025;lifting;Sequence;0;0;0;0;6;0;20;0,000180
+DQC_bitflip_code_1;DQC_bitflip_code;SQbricks;2025;lifting;Parallel;0;0;0;0;6;0;20;0,000161
 
-DQC_phaseflip_code_1;DQC_phaseflip_code;SQbricks;2025;lifting;Sequence;0;0;0;0;6;0;32;0,003863
-DQC_phaseflip_code_1;DQC_phaseflip_code;SQbricks;2025;lifting;Parallel;0;0;0;0;6;0;32;0,002379
+DQC_phaseflip_code_1;DQC_phaseflip_code;SQbricks;2025;lifting;Sequence;0;0;0;0;6;0;32;0,003832
+DQC_phaseflip_code_1;DQC_phaseflip_code;SQbricks;2025;lifting;Parallel;0;0;0;0;6;0;32;0,002788
 
-DQC_state_injection_S_1;DQC_state_injection_S;SQbricks;2025;lifting;Sequence;0;0;2;0;0;0;10;0,000195
-DQC_state_injection_S_1;DQC_state_injection_S;SQbricks;2025;lifting;Parallel;0;0;2;0;0;0;10;0,000156
+DQC_state_injection_S_1;DQC_state_injection_S;SQbricks;2025;lifting;Sequence;0;0;2;0;0;0;10;0,000221
+DQC_state_injection_S_1;DQC_state_injection_S;SQbricks;2025;lifting;Parallel;0;0;2;0;0;0;10;0,000173
 
-DQC_state_injection_T_1;DQC_state_injection_T;SQbricks;2025;lifting;Sequence;0;2;0;0;0;0;10;0,000202
-DQC_state_injection_T_1;DQC_state_injection_T;SQbricks;2025;lifting;Parallel;0;2;0;0;0;0;10;0,000242
+DQC_state_injection_T_1;DQC_state_injection_T;SQbricks;2025;lifting;Sequence;0;2;0;0;0;0;10;0,000325
+DQC_state_injection_T_1;DQC_state_injection_T;SQbricks;2025;lifting;Parallel;0;2;0;0;0;0;10;0,000210
 

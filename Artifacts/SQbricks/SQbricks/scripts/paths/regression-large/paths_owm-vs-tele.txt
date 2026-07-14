@@ -41,11 +41,11 @@ benchmarks/VeriQbench/combinational/pe/pe_25.qasm
 benchmarks/VeriQbench/combinational/pe/pe_26.qasm
 benchmarks/VeriQbench/combinational/pe/pe_27.qasm
 benchmarks/VeriQbench/combinational/pe/pe_28.qasm
+benchmarks/VeriQbench/combinational/qft/qft_26.qasm
 benchmarks/VeriQbench/combinational/qft/qft_27.qasm
 benchmarks/VeriQbench/combinational/qft/qft_28.qasm
 benchmarks/VeriQbench/combinational/qft/qft_29.qasm
-benchmarks/VeriQbench/combinational/qft/qft_30.qasm
+benchmarks/VeriQbench/combinational/rev_circuit/gf2^10mult_109_509.qasm
 benchmarks/VeriQbench/combinational/rev_circuit/gf2^11mult_131_615.qasm
 benchmarks/VeriQbench/combinational/rev_circuit/gf2^12mult_177_753.qasm
 benchmarks/VeriQbench/combinational/rev_circuit/gf2^13mult_205_881.qasm
-benchmarks/VeriQbench/combinational/rev_circuit/gf2^14mult_235_1019.qasm

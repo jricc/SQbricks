@@ -1,18 +1,18 @@
 Program1;Program2;Tool;Version;Lift;Opt;CH;CS;CZ;CCZ;CCX;CU1;Gates;Time
-pe_70;dqc_pe_70;SQbricks;2025;lifting;Sequence;0;140;2;0;0;4364;4786;83,382912
-pe_70;dqc_pe_70;SQbricks;2025;lifting;Parallel;0;140;2;0;0;4364;4786;9,585722
+pe_70;dqc_pe_70;SQbricks;2025;lifting;Sequence;0;140;2;0;0;4364;4786;97,799830
+pe_70;dqc_pe_70;SQbricks;2025;lifting;Parallel;0;140;2;0;0;4364;4786;11,158202
 
-pe_71;dqc_pe_71;SQbricks;2025;lifting;Sequence;0;142;2;0;0;4460;4888;87,694562
-pe_71;dqc_pe_71;SQbricks;2025;lifting;Parallel;0;142;2;0;0;4460;4888;10,063553
+pe_71;dqc_pe_71;SQbricks;2025;lifting;Sequence;0;142;2;0;0;4460;4888;102,585065
+pe_71;dqc_pe_71;SQbricks;2025;lifting;Parallel;0;142;2;0;0;4460;4888;12,008789
 
 pe_72;dqc_pe_72;SQbricks;2025;lifting;Conversion;;;;;;;;ErrConv
 
-qft_98;dqc_qft_98;SQbricks;2025;lifting;Sequence;0;194;0;0;0;6862;7252;255,808292
-qft_98;dqc_qft_98;SQbricks;2025;lifting;Parallel;0;194;0;0;0;6862;7252;21,114018
+qft_98;dqc_qft_98;SQbricks;2025;lifting;Sequence;0;194;0;0;0;6862;7252;300,662827
+qft_98;dqc_qft_98;SQbricks;2025;lifting;Parallel;0;194;0;0;0;6862;7252;25,165427
 
-qft_99;dqc_qft_99;SQbricks;2025;lifting;Sequence;0;196;0;0;0;6956;7350;265,052458
-qft_99;dqc_qft_99;SQbricks;2025;lifting;Parallel;0;196;0;0;0;6956;7350;21,751653
+qft_99;dqc_qft_99;SQbricks;2025;lifting;Sequence;0;196;0;0;0;6956;7350;311,022224
+qft_99;dqc_qft_99;SQbricks;2025;lifting;Parallel;0;196;0;0;0;6956;7350;26,834356
 
-qft_100;dqc_qft_100;SQbricks;2025;lifting;Sequence;0;198;0;0;0;7050;7448;274,907942
-qft_100;dqc_qft_100;SQbricks;2025;lifting;Parallel;0;198;0;0;0;7050;7448;22,247217
+qft_100;dqc_qft_100;SQbricks;2025;lifting;Sequence;0;198;0;0;0;7050;7448;328,075901
+qft_100;dqc_qft_100;SQbricks;2025;lifting;Parallel;0;198;0;0;0;7050;7448;25,992018
 
