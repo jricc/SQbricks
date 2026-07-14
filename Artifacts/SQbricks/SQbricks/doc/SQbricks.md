@@ -526,6 +526,178 @@ fonction renvoie `Error CannotSubstitutePathVariable`; avec
 `except_path_var=true`, elle protège cette variable et renvoie le path-sum
 inchangé. L'ancien `Path_sum.substitute` reste un wrapper de compatibilité.
 
+### Changement de variable de chemin
+
+Cette section suit le formalisme des définitions 2.3.2 à 2.3.4 de la thèse de
+Jérôme Ricciardi, *Practical verification of quantum circuit transformations*
+([HAL tel-05681895](https://theses.hal.science/tel-05681895)). Cette thèse est
+le socle théorique de SQbricks et sert de référence pour la notation et les
+preuves ci-dessous.
+
+*Statut : cette formalisation doit encore être relue mathématiquement.*
+
+#### Définition (changement d'une variable de chemin)
+
+Soit le path-sum en forme algébrique
+
+\[
+P = \langle \mathbf{y},\; p(\mathbf{x},\mathbf{y}),\;
+f(\mathbf{x},\mathbf{y}) \rangle,
+\]
+
+où \(\mathbf{y}=(y_0,\ldots,y_{m-1})\). Fixons \(k<m\) et un polynôme
+booléen \(Q(\mathbf{x},\mathbf{y}_{\ne k})\) qui ne dépend pas de \(y_k\).
+Pour une entrée \(\mathbf{x}\), on définit
+\(\tau_{k,Q,\mathbf{x}}:\mathbb{F}_2^m\to\mathbb{F}_2^m\) par
+
+\[
+\tau_{k,Q,\mathbf{x}}(\mathbf{y})_i =
+\begin{cases}
+y_i & \text{si } i\ne k,\\
+y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}) & \text{si } i=k.
+\end{cases}
+\]
+
+Le changement de variable de chemin associé est
+
+\[
+P^{(k,Q)} =
+\langle \mathbf{y},\;
+p(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y})),\;
+f(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y}))\rangle.
+\]
+
+Dans la signature de sortie \(f\), la substitution est booléenne. Dans la
+phase \(p\), elle utilise la transformation d'un polynôme booléen en polynôme
+arithmétique de la définition 2.3.2. En particulier,
+
+\[
+\overline{a\oplus b}=\bar a+\bar b-2\bar a\bar b.
+\]
+
+Cette distinction est nécessaire : remplacer directement \(y_k\) par une
+somme arithmétique ferait perdre les termes correctifs produits par le XOR.
+
+#### Lemme (préservation de la concrétisation)
+
+Si \(Q\) ne dépend pas de \(y_k\), alors le changement de variable préserve la
+concrétisation du path-sum :
+
+\[
+\mathcal{V}(P^{(k,Q)})=\mathcal{V}(P).
+\]
+
+**Preuve.** Fixons une entrée \(\mathbf{x}\). Comme \(Q\) ne dépend pas de
+\(y_k\), l'application \(\tau=\tau_{k,Q,\mathbf{x}}\) est une involution. Ses
+coordonnées autres que \(k\) sont inchangées et
+
+\[
+\tau(\tau(\mathbf{y}))_k
+= (y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}))
+  \oplus Q(\mathbf{x},\mathbf{y}_{\ne k})
+=y_k.
+\]
+
+Ainsi, \(\tau\) est une bijection de \(\mathbb{F}_2^m\). En utilisant la
+définition 2.3.4 de la concrétisation, puis le changement d'indice
+\(\mathbf{z}=\tau(\mathbf{y})\), on obtient
+
+\[
+\begin{aligned}
+\mathcal{V}(P^{(k,Q)})(\mathbf{x})
+&=2^{-m/2}\sum_{\mathbf{y}\in\mathbb{F}_2^m}
+e^{2\pi i\,p(\mathbf{x},\tau(\mathbf{y}))}
+\lvert f(\mathbf{x},\tau(\mathbf{y}))\rangle\\
+&=2^{-m/2}\sum_{\mathbf{z}\in\mathbb{F}_2^m}
+e^{2\pi i\,p(\mathbf{x},\mathbf{z})}
+\lvert f(\mathbf{x},\mathbf{z})\rangle\\
+&=\mathcal{V}(P)(\mathbf{x}).
+\end{aligned}
+\]
+
+L'égalité vaut pour toute entrée, donc les deux path-sums concrétisent la même
+application linéaire. Il s'agit d'une égalité sémantique des concrétisations,
+pas nécessairement d'une égalité syntaxique des structures OCaml ni de la
+relation de renommage des variables de chemin. \(\square\)
+
+#### Corollaire (isolation d'une variable de chemin en sortie)
+
+Si une composante de sortie vérifie
+
+\[
+f_j(\mathbf{x},\mathbf{y})=
+y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}),
+\]
+
+alors sa composante transformée vaut \(f_j^{(k,Q)}=y_k\), et
+\(P^{(k,Q)}\) a la même concrétisation que \(P\).
+
+**Preuve.** Les coordonnées différentes de \(k\) ne sont pas modifiées par
+\(\tau\). L'indépendance de \(Q\) par rapport à \(y_k\) donne donc
+
+\[
+f_j(\mathbf{x},\tau(\mathbf{y}))
+=(y_k\oplus Q)\oplus Q
+=y_k.
+\]
+
+La préservation de la concrétisation découle du lemme. \(\square\)
+
+Le lemme autorise tout polynôme booléen \(Q\) indépendant de \(y_k\). La
+première implémentation visée dans
+`Rules.Variable_replacement.replace_not_path_var_by_var` est volontairement
+plus étroite : elle doit seulement reconnaître une forme affine construite à
+partir des variables d'entrée,
+
+\[
+Q(\mathbf{x})=c\oplus\bigoplus_{i\in I}x_i,
+\qquad c\in\mathbb{F}_2.
+\]
+
+Les produits booléens et les décalages qui contiennent une autre variable de
+chemin restent hors de ce premier périmètre. Une substitution reconnue doit en
+revanche être appliquée à toute la phase et à tout le ket, pas uniquement à la
+composante qui a permis de la détecter.
+
+Deux exemples fixent les résultats attendus par les tests :
+
+1. Pour le cas `owm-vs-qiskit/dqc_teleportation`, considérons
+
+   \[
+   \begin{aligned}
+   P=\langle (y_0,y_1),\;&\tfrac12x_1y_0+\tfrac12x_2y_1,\\
+   &(y_0,\;x_0\oplus x_1\oplus y_1,\;x_0\oplus x_1)\rangle.
+   \end{aligned}
+   \]
+
+   Le changement \(y_1\leftarrow y_1\oplus x_0\oplus x_1\) donne, après
+   simplification de la phase modulo les polynômes à coefficients entiers,
+
+   \[
+   \begin{aligned}
+   P'=\langle (y_0,y_1),\;&\tfrac12x_0x_2+\tfrac12x_1x_2
+   +\tfrac12x_1y_0+\tfrac12x_2y_1,\\
+   &(y_0,\;y_1,\;x_0\oplus x_1)\rangle.
+   \end{aligned}
+   \]
+
+2. Pour
+
+   \[
+   P=\langle y_0,\;\tfrac14y_0,\;(x_0\oplus y_0,\;y_0)\rangle,
+   \]
+
+   le changement \(y_0\leftarrow y_0\oplus x_0\) donne
+
+   \[
+   P'=\langle y_0,\;\tfrac14x_0+\tfrac14y_0
+   +\tfrac12x_0y_0,\;(y_0,\;x_0\oplus y_0)\rangle.
+   \]
+
+   Le coefficient \(+\tfrac12\) est équivalent à \(-\tfrac12\) modulo un
+   coefficient entier. Cet exemple vérifie que la substitution conserve le
+   coefficient \(\tfrac14\) du contexte de phase.
+
 La lecture de l'ordre des variables de chemin est typée avec
 `Path_sum.Ket.path_var_order_result`. Elle reconstruit l'ordre temporaire et
 l'ordre final des variables de chemin présentes dans un ket. Elle renvoie
@@ -575,6 +747,14 @@ Les constructeurs typés validés sont :
 - portes contrôlées : `ch_result`, `cx_result`, `crz_result`, `cz_result`,
   `cs_result`, `ct_result` ;
 - portes doublement contrôlées : `ccx_result`, `ccz_result`.
+
+Pour `u1_result`, `rz_result`, `rx_result` et `ry_result`, le coefficient `s`
+est un entier. Un exposant `k < 0` donne donc exactement l'identité : la phase
+est nulle, la cible reste inchangée et aucune variable de chemin n'est créée.
+`u1_result` donne aussi l'identité pour `k = 0`. Ce cas est distinct d'un
+coefficient `s < 0`, qui reste un angle négatif valide. Les tests couvrent les
+quatre constructeurs et vérifient notamment que `rx_result` et `ry_result`
+retournent `path_var = []`.
 
 Les helpers internes qui dépendaient de la validation d'indices ont aussi été
 typés, notamment `normalisation_factor`, `q2` et `ccrz`.

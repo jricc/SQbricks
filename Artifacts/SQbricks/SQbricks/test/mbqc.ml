@@ -391,6 +391,12 @@ let owm_parallel =
        -- cx 1 6 -- cx 2 6 -- cx 3 6 -- cx 4 6 -- cx 5 6 -- h 0 -- h 1 -- h 2
        -- h 3 -- h 4 -- h 5 -- h 6) );
     ("cxn", `Quick, test_owm ~algo:Parallel (cx 0 1 -- cx 1 2));
+    ( "owm-vs-qiskit dqc_teleportation",
+      `Quick,
+      (* The Qiskit-lifted circuit is identical to this lifted circuit, so this
+         test isolates the OWM side of the benchmark case. *)
+      test_owm ~algo:Parallel
+        (h 2 -- cx 2 1 -- cx 0 1 -- h 0 -- cx 1 2 -- cu1 1 0 2) );
     ("ccx", `Quick, test_owm ~algo:Parallel (ccx 0 1 2));
     ("swap", `Quick, test_owm ~algo:Parallel (swap 0 1));
     ("swap", `Quick, test_owm ~algo:Parallel (swap 1 3 -- swap 4 2 -- swap 1 2));

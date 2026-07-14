@@ -515,6 +515,177 @@ target is a path variable, the function returns
 that variable and returns the path sum unchanged. The old
 `Path_sum.substitute` remains a compatibility wrapper.
 
+### Path-variable change
+
+This section follows Definitions 2.3.2 to 2.3.4 of Jérôme Ricciardi's thesis,
+*Practical verification of quantum circuit transformations*
+([HAL tel-05681895](https://theses.hal.science/tel-05681895)). This thesis is
+the theoretical foundation of SQbricks and is the reference for the notation
+and proofs below.
+
+*Status: this formalization still requires mathematical review.*
+
+#### Definition (change of one path variable)
+
+Consider the path sum in algebraic form
+
+\[
+P = \langle \mathbf{y},\; p(\mathbf{x},\mathbf{y}),\;
+f(\mathbf{x},\mathbf{y}) \rangle,
+\]
+
+where \(\mathbf{y}=(y_0,\ldots,y_{m-1})\). Fix \(k<m\) and a Boolean
+polynomial \(Q(\mathbf{x},\mathbf{y}_{\ne k})\) that does not depend on
+\(y_k\). For an input \(\mathbf{x}\), define
+\(\tau_{k,Q,\mathbf{x}}:\mathbb{F}_2^m\to\mathbb{F}_2^m\) by
+
+\[
+\tau_{k,Q,\mathbf{x}}(\mathbf{y})_i =
+\begin{cases}
+y_i & \text{if } i\ne k,\\
+y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}) & \text{if } i=k.
+\end{cases}
+\]
+
+The associated path-variable change is
+
+\[
+P^{(k,Q)} =
+\langle \mathbf{y},\;
+p(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y})),\;
+f(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y}))\rangle.
+\]
+
+The substitution in the output signature \(f\) is Boolean. In the phase
+\(p\), it uses the Boolean-to-arithmetic polynomial transformation from
+Definition 2.3.2. In particular,
+
+\[
+\overline{a\oplus b}=\bar a+\bar b-2\bar a\bar b.
+\]
+
+This distinction is necessary: directly replacing \(y_k\) with an arithmetic
+sum would lose the correction terms introduced by XOR.
+
+#### Lemma (preservation of concretization)
+
+If \(Q\) does not depend on \(y_k\), then the variable change preserves the
+path-sum concretization:
+
+\[
+\mathcal{V}(P^{(k,Q)})=\mathcal{V}(P).
+\]
+
+**Proof.** Fix an input \(\mathbf{x}\). Since \(Q\) does not depend on
+\(y_k\), the map \(\tau=\tau_{k,Q,\mathbf{x}}\) is an involution. Its
+coordinates other than \(k\) are unchanged, and
+
+\[
+\tau(\tau(\mathbf{y}))_k
+= (y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}))
+  \oplus Q(\mathbf{x},\mathbf{y}_{\ne k})
+=y_k.
+\]
+
+Therefore, \(\tau\) is a bijection of \(\mathbb{F}_2^m\). Using Definition
+2.3.4 of concretization and then the reindexing
+\(\mathbf{z}=\tau(\mathbf{y})\), we obtain
+
+\[
+\begin{aligned}
+\mathcal{V}(P^{(k,Q)})(\mathbf{x})
+&=2^{-m/2}\sum_{\mathbf{y}\in\mathbb{F}_2^m}
+e^{2\pi i\,p(\mathbf{x},\tau(\mathbf{y}))}
+\lvert f(\mathbf{x},\tau(\mathbf{y}))\rangle\\
+&=2^{-m/2}\sum_{\mathbf{z}\in\mathbb{F}_2^m}
+e^{2\pi i\,p(\mathbf{x},\mathbf{z})}
+\lvert f(\mathbf{x},\mathbf{z})\rangle\\
+&=\mathcal{V}(P)(\mathbf{x}).
+\end{aligned}
+\]
+
+The equality holds for every input, so the two path sums concretize the same
+linear map. This is a semantic equality of concretizations, not necessarily a
+syntactic equality of the OCaml structures or the path-variable renaming
+relation. \(\square\)
+
+#### Corollary (isolating a path variable in the output)
+
+If an output component satisfies
+
+\[
+f_j(\mathbf{x},\mathbf{y})=
+y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}),
+\]
+
+then its transformed component is \(f_j^{(k,Q)}=y_k\), and
+\(P^{(k,Q)}\) has the same concretization as \(P\).
+
+**Proof.** Coordinates other than \(k\) are not modified by \(\tau\).
+Independence of \(Q\) from \(y_k\) therefore gives
+
+\[
+f_j(\mathbf{x},\tau(\mathbf{y}))
+=(y_k\oplus Q)\oplus Q
+=y_k.
+\]
+
+Preservation of concretization follows from the lemma. \(\square\)
+
+The lemma allows any Boolean polynomial \(Q\) independent of \(y_k\). The
+first implementation intended for
+`Rules.Variable_replacement.replace_not_path_var_by_var` is deliberately
+narrower: it must only recognize an affine form built from input variables,
+
+\[
+Q(\mathbf{x})=c\oplus\bigoplus_{i\in I}x_i,
+\qquad c\in\mathbb{F}_2.
+\]
+
+Boolean products and shifts that contain another path variable remain outside
+this first scope. A recognized substitution must, however, be applied to the
+whole phase and the whole ket, not only to the component in which it was
+detected.
+
+Two examples define the results expected by the tests:
+
+1. For the `owm-vs-qiskit/dqc_teleportation` case, consider
+
+   \[
+   \begin{aligned}
+   P=\langle (y_0,y_1),\;&\tfrac12x_1y_0+\tfrac12x_2y_1,\\
+   &(y_0,\;x_0\oplus x_1\oplus y_1,\;x_0\oplus x_1)\rangle.
+   \end{aligned}
+   \]
+
+   The change \(y_1\leftarrow y_1\oplus x_0\oplus x_1\) gives, after
+   simplifying the phase modulo polynomials with integer coefficients,
+
+   \[
+   \begin{aligned}
+   P'=\langle (y_0,y_1),\;&\tfrac12x_0x_2+\tfrac12x_1x_2
+   +\tfrac12x_1y_0+\tfrac12x_2y_1,\\
+   &(y_0,\;y_1,\;x_0\oplus x_1)\rangle.
+   \end{aligned}
+   \]
+
+2. For
+
+   \[
+   P=\langle y_0,\;\tfrac14y_0,\;(x_0\oplus y_0,\;y_0)\rangle,
+   \]
+
+   the change \(y_0\leftarrow y_0\oplus x_0\) gives
+
+   \[
+   P'=\langle y_0,\;\tfrac14x_0+\tfrac14y_0
+   +\tfrac12x_0y_0,\;(y_0,\;x_0\oplus y_0)\rangle.
+   \]
+
+   The coefficient \(+\tfrac12\) is equivalent to \(-\tfrac12\) modulo an
+   integer coefficient. This example checks that the substitution preserves
+   the \(\tfrac14\) coefficient from its phase context.
+
 Path-variable ordering is typed with `Path_sum.Ket.path_var_order_result`. It
 reconstructs the temporary and final order of path variables present in a ket.
 It returns `Error InvalidPathVariableCount` when the declared path-variable
@@ -563,6 +734,14 @@ The validated typed constructors are:
 - controlled gates: `ch_result`, `cx_result`, `crz_result`, `cz_result`,
   `cs_result`, `ct_result`;
 - double-controlled gates: `ccx_result`, `ccz_result`.
+
+For `u1_result`, `rz_result`, `rx_result`, and `ry_result`, the coefficient `s`
+is an integer. An exponent `k < 0` therefore gives the exact identity: the phase
+is zero, the target remains unchanged, and no path variable is introduced.
+`u1_result` is also the identity for `k = 0`. This case is distinct from a
+coefficient `s < 0`, which remains a valid negative angle. The tests cover all
+four constructors and specifically check that `rx_result` and `ry_result`
+return `path_var = []`.
 
 The internal helpers that depended on index validation were also typed,
 including `normalisation_factor`, `q2`, and `ccrz`. They
