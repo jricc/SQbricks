@@ -364,7 +364,13 @@ val substitute :
 (** {1 Path Sum Library} *)
 
 module Path_sum_library : sig
-  (** Quantum gate constructors as path sums. *)
+  (** Quantum gate constructors as path sums.
+
+      The rotation coefficient [s] is an integer. Consequently, a negative
+      exponent [k] makes [u1], [rz], [rx], and [ry] exact identities. These
+      constructors return the unchanged target without path variables in that
+      case. [u1] is also the identity for [k = 0]. This is distinct from a
+      negative coefficient [s], which represents a valid opposite angle. *)
 
   type gate_error = TargetIndexOutOfWidth
   (** Errors that can prevent a gate path sum from being constructed.
