@@ -2,9 +2,6 @@
 
 ## Next
 
-- [ ] Validate, then add to the pedagogical documentation, the new
-  `Path_sum_library` behavior for negative rotation exponents `k`; this remains
-  distinct from a valid negative angle coefficient.
 - [ ] Add real OpenQASM include handling instead of only accepting
   `include "...";` as a compatibility no-op.
 - [ ] Fix the `Equiv.parallel` behavior behind
@@ -17,6 +14,8 @@
   tests before or with each fix.
 - [x] Make direct `Program.t` execution report non-dyadic angles explicitly,
   preserve valid negative angles, and normalize valid dyadic angles modulo one.
+- [x] Treat negative rotation exponents in `Path_sum_library` as exact
+  identities while keeping negative angle coefficients valid.
 - [x] Reject missing baselines and incomplete performance samples in light
   check mode.
 - [x] Refuse to write an invalid light baseline and replace valid baselines

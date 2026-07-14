@@ -26,6 +26,9 @@
 - Use simple vocabulary.
 - Avoid unnecessary context.
 - Prefer clear explanations over jargon.
+- When discussing a specific benchmark, benchmark family, mode, or test case,
+  name that context explicitly. If it was introduced earlier, briefly remind
+  the reader instead of relying on implicit context.
 - Act as a senior scientist and senior software engineer.
 - Prioritize correctness, rigor, reproducibility, and simplicity.
 
