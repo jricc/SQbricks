@@ -538,165 +538,170 @@ preuves ci-dessous.
 
 #### Définition (changement d'une variable de chemin)
 
-Soit le path-sum en forme algébrique
+Soit le path-sum en forme algébrique suivant :
 
-\[
-P = \langle \mathbf{y},\; p(\mathbf{x},\mathbf{y}),\;
-f(\mathbf{x},\mathbf{y}) \rangle,
-\]
+```text
+P = <y, p(x, y), f(x, y)>
+y = (y0, ..., y_(m-1))
+```
 
-où \(\mathbf{y}=(y_0,\ldots,y_{m-1})\). Fixons \(k<m\) et un polynôme
-booléen \(Q(\mathbf{x},\mathbf{y}_{\ne k})\) qui ne dépend pas de \(y_k\).
-Pour une entrée \(\mathbf{x}\), on définit
-\(\tau_{k,Q,\mathbf{x}}:\mathbb{F}_2^m\to\mathbb{F}_2^m\) par
+Fixons un indice `k < m` et un polynôme booléen `Q(x, y_except_k)` qui ne
+dépend pas de `yk`. Pour une entrée `x`, on définit la fonction
+`tau_(k,Q,x) : F_2^m -> F_2^m` par :
 
-\[
-\tau_{k,Q,\mathbf{x}}(\mathbf{y})_i =
-\begin{cases}
-y_i & \text{si } i\ne k,\\
-y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}) & \text{si } i=k.
-\end{cases}
-\]
+```text
+tau_(k,Q,x)(y)_i = yi                              si i != k
+tau_(k,Q,x)(y)_i = yk xor Q(x, y_except_k)         si i = k
+```
 
-Le changement de variable de chemin associé est
+Le changement de variable de chemin associé est :
 
-\[
-P^{(k,Q)} =
-\langle \mathbf{y},\;
-p(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y})),\;
-f(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y}))\rangle.
-\]
+```text
+P^(k,Q) = <y,
+           p(x, tau_(k,Q,x)(y)),
+           f(x, tau_(k,Q,x)(y))>
+```
 
-Dans la signature de sortie \(f\), la substitution est booléenne. Dans la
-phase \(p\), elle utilise la transformation d'un polynôme booléen en polynôme
-arithmétique de la définition 2.3.2. En particulier,
+Dans la signature de sortie `f`, la substitution est booléenne. Dans la phase
+`p`, elle utilise la transformation d'un polynôme booléen en polynôme
+arithmétique de la définition 2.3.2. En notant `lift` cette transformation :
 
-\[
-\overline{a\oplus b}=\bar a+\bar b-2\bar a\bar b.
-\]
+```text
+lift(a xor b) = lift(a) + lift(b) - 2 lift(a) lift(b)
+```
 
-Cette distinction est nécessaire : remplacer directement \(y_k\) par une
+Cette distinction est nécessaire : remplacer directement `yk` par une
 somme arithmétique ferait perdre les termes correctifs produits par le XOR.
 
-#### Lemme (préservation de la concrétisation)
+On note `P' ≡ P` lorsque les deux path-sums sont sémantiquement équivalents,
+c'est-à-dire lorsque :
 
-Si \(Q\) ne dépend pas de \(y_k\), alors le changement de variable préserve la
-concrétisation du path-sum :
+```text
+pour toute entrée x, V(P')(x) = V(P)(x)
+```
 
-\[
-\mathcal{V}(P^{(k,Q)})=\mathcal{V}(P).
-\]
+#### Lemme de correction du changement de variable
 
-**Preuve.** Fixons une entrée \(\mathbf{x}\). Comme \(Q\) ne dépend pas de
-\(y_k\), l'application \(\tau=\tau_{k,Q,\mathbf{x}}\) est une involution. Ses
-coordonnées autres que \(k\) sont inchangées et
+Si `Q` ne dépend pas de `yk`, alors le changement de variable produit un
+path-sum sémantiquement équivalent :
 
-\[
-\tau(\tau(\mathbf{y}))_k
-= (y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}))
-  \oplus Q(\mathbf{x},\mathbf{y}_{\ne k})
-=y_k.
-\]
+```text
+P^(k,Q) ≡ P
+```
 
-Ainsi, \(\tau\) est une bijection de \(\mathbb{F}_2^m\). En utilisant la
+**Preuve.** Fixons une entrée `x`. Comme `Q` ne dépend pas de `yk`,
+l'application `tau = tau_(k,Q,x)` est une involution. Ses coordonnées autres
+que `k` sont inchangées et :
+
+```text
+tau(tau(y))_k
+  = (yk xor Q(x, y_except_k)) xor Q(x, y_except_k)
+  = yk
+```
+
+Ainsi, `tau` est une bijection de `F_2^m`. En utilisant la
 définition 2.3.4 de la concrétisation, puis le changement d'indice
-\(\mathbf{z}=\tau(\mathbf{y})\), on obtient
+`z = tau(y)`, on obtient :
 
-\[
-\begin{aligned}
-\mathcal{V}(P^{(k,Q)})(\mathbf{x})
-&=2^{-m/2}\sum_{\mathbf{y}\in\mathbb{F}_2^m}
-e^{2\pi i\,p(\mathbf{x},\tau(\mathbf{y}))}
-\lvert f(\mathbf{x},\tau(\mathbf{y}))\rangle\\
-&=2^{-m/2}\sum_{\mathbf{z}\in\mathbb{F}_2^m}
-e^{2\pi i\,p(\mathbf{x},\mathbf{z})}
-\lvert f(\mathbf{x},\mathbf{z})\rangle\\
-&=\mathcal{V}(P)(\mathbf{x}).
-\end{aligned}
-\]
+```text
+V(P^(k,Q))(x)
+  = 2^(-m/2) sum_(y in F_2^m)
+      exp(2 pi i p(x, tau(y))) |f(x, tau(y))>
+
+  = 2^(-m/2) sum_(z in F_2^m)
+      exp(2 pi i p(x, z)) |f(x, z)>
+
+  = V(P)(x)
+```
 
 L'égalité vaut pour toute entrée, donc les deux path-sums concrétisent la même
 application linéaire. Il s'agit d'une égalité sémantique des concrétisations,
 pas nécessairement d'une égalité syntaxique des structures OCaml ni de la
-relation de renommage des variables de chemin. \(\square\)
+relation de renommage des variables de chemin. Cela démontre le lemme.
 
-#### Corollaire (isolation d'une variable de chemin en sortie)
+#### Corollaire d'isolation correcte d'une variable de chemin
 
-Si une composante de sortie vérifie
+Si une composante de sortie vérifie :
 
-\[
-f_j(\mathbf{x},\mathbf{y})=
-y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}),
-\]
+```text
+f_j(x, y) = yk xor Q(x, y_except_k)
+```
 
-alors sa composante transformée vaut \(f_j^{(k,Q)}=y_k\), et
-\(P^{(k,Q)}\) a la même concrétisation que \(P\).
+alors :
 
-**Preuve.** Les coordonnées différentes de \(k\) ne sont pas modifiées par
-\(\tau\). L'indépendance de \(Q\) par rapport à \(y_k\) donne donc
+```text
+f_j^(k,Q)(x, y) = yk
+P^(k,Q) ≡ P
+```
 
-\[
-f_j(\mathbf{x},\tau(\mathbf{y}))
-=(y_k\oplus Q)\oplus Q
-=y_k.
-\]
+**Preuve.** Les coordonnées différentes de `k` ne sont pas modifiées par
+`tau`. L'indépendance de `Q` par rapport à `yk` donne donc :
 
-La préservation de la concrétisation découle du lemme. \(\square\)
+```text
+f_j(x, tau(y))
+  = (yk xor Q) xor Q
+  = yk
+```
 
-Le lemme autorise tout polynôme booléen \(Q\) indépendant de \(y_k\). La
-première implémentation visée dans
-`Rules.Variable_replacement.replace_not_path_var_by_var` est volontairement
-plus étroite : elle doit seulement reconnaître une forme affine construite à
-partir des variables d'entrée,
+La préservation de la concrétisation découle du lemme, ce qui démontre le
+corollaire.
 
-\[
-Q(\mathbf{x})=c\oplus\bigoplus_{i\in I}x_i,
-\qquad c\in\mathbb{F}_2.
-\]
+Le lemme autorise tout polynôme booléen `Q` indépendant de `yk`. Pour corriger
+le cas `owm-vs-qiskit/dqc_teleportation` sans généraliser prématurément,
+`Rules.Variable_replacement.replace_not_path_var_by_var` reconnaît seulement
+une forme affine construite à partir des variables d'entrée :
 
-Les produits booléens et les décalages qui contiennent une autre variable de
-chemin restent hors de ce premier périmètre. Une substitution reconnue doit en
-revanche être appliquée à toute la phase et à tout le ket, pas uniquement à la
-composante qui a permis de la détecter.
+```text
+Q(x) = c xor (xor_(i in I) xi), avec c dans F_2
+```
+
+Cela comprend par exemple `1`, `x0`, `x0 xor x2` et `1 xor x0 xor x2` ;
+`Q = 0` est l'identité et ne demande aucune réécriture. Les produits comme
+`x0 x1` et les décalages qui contiennent une autre variable de chemin restent
+hors de cette implémentation. Cette restriction est une décision
+d'implémentation, pas une condition du lemme.
+
+Une substitution reconnue est appliquée à toute la phase et à tout le ket,
+pas uniquement à la composante qui a permis de la détecter. À chaque appel, la
+fonction applique au plus un changement, et seulement s'il augmente le nombre
+de composantes de sortie exactement égales à la variable de chemin. Elle ne
+fait donc pas un changement qui déplacerait simplement la même expression vers
+une autre composante.
 
 Deux exemples fixent les résultats attendus par les tests :
 
-1. Pour le cas `owm-vs-qiskit/dqc_teleportation`, considérons
+**Exemple 1 : `owm-vs-qiskit/dqc_teleportation`.**
 
-   \[
-   \begin{aligned}
-   P=\langle (y_0,y_1),\;&\tfrac12x_1y_0+\tfrac12x_2y_1,\\
-   &(y_0,\;x_0\oplus x_1\oplus y_1,\;x_0\oplus x_1)\rangle.
-   \end{aligned}
-   \]
+```text
+P = <(y0, y1),
+     1/2 x1 y0 + 1/2 x2 y1,
+     (y0, x0 xor x1 xor y1, x0 xor x1)>
 
-   Le changement \(y_1\leftarrow y_1\oplus x_0\oplus x_1\) donne, après
-   simplification de la phase modulo les polynômes à coefficients entiers,
+Changement : y1 <- y1 xor x0 xor x1
 
-   \[
-   \begin{aligned}
-   P'=\langle (y_0,y_1),\;&\tfrac12x_0x_2+\tfrac12x_1x_2
-   +\tfrac12x_1y_0+\tfrac12x_2y_1,\\
-   &(y_0,\;y_1,\;x_0\oplus x_1)\rangle.
-   \end{aligned}
-   \]
+P' = <(y0, y1),
+      1/2 x0 x2 + 1/2 x1 x2 + 1/2 x1 y0 + 1/2 x2 y1,
+      (y0, y1, x0 xor x1)>
+```
 
-2. Pour
+La phase de `P'` est simplifiée modulo les polynômes à coefficients entiers.
 
-   \[
-   P=\langle y_0,\;\tfrac14y_0,\;(x_0\oplus y_0,\;y_0)\rangle,
-   \]
+**Exemple 2 : simplification avec un coefficient de phase `1/4`.**
 
-   le changement \(y_0\leftarrow y_0\oplus x_0\) donne
+```text
+P = <y0,
+     1/4 x0 + 1/4 y0 + 1/2 x0 y0,
+     (x0 xor y0)>
 
-   \[
-   P'=\langle y_0,\;\tfrac14x_0+\tfrac14y_0
-   +\tfrac12x_0y_0,\;(y_0,\;x_0\oplus y_0)\rangle.
-   \]
+Changement : y0 <- y0 xor x0
 
-   Le coefficient \(+\tfrac12\) est équivalent à \(-\tfrac12\) modulo un
-   coefficient entier. Cet exemple vérifie que la substitution conserve le
-   coefficient \(\tfrac14\) du contexte de phase.
+P' = <y0, 1/4 y0, (y0)>
+```
+
+Dans la phase de `P`, le coefficient `+1/2` est équivalent à `-1/2` modulo un
+coefficient entier. Cet exemple vérifie que la substitution utilise bien le
+coefficient `1/4` du contexte : la phase et le ket sont tous les deux
+simplifiés.
 
 La lecture de l'ordre des variables de chemin est typée avec
 `Path_sum.Ket.path_var_order_result`. Elle reconstruit l'ordre temporaire et
