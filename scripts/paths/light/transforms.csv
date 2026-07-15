@@ -2,6 +2,8 @@ Suite;Case;Kind;ExpectedSequence;ExpectedParallel;TrackPerformance;Path
 owm;tof_3;owm;EQ;EQ;no;benchmarks/Feynman/tof_3.qasm
 owm;barenco_tof_3;owm;EQ;EQ;no;benchmarks/Feynman/barenco_tof_3.qasm
 owm;qft_4;owm;NC;NC;no;benchmarks/Feynman/qft_4.qasm
+owm;grover_3;owm;EQ;EQ;no;benchmarks/VeriQbench/combinational/grover/grover_3.qasm
+owm;grover_5;owm;EQ;NC;no;benchmarks/VeriQbench/combinational/grover/grover_5.qasm
 owm;gf2^6_mult;owm;EQ;-;yes;benchmarks/Feynman/gf2^6_mult.qasm
 owm;qft_15;owm;EQ;-;yes;benchmarks/VeriQbench/combinational/qft/qft_15.qasm
 owm;hwb6;owm;-;EQ;yes;benchmarks/Feynman/hwb6.qasm
@@ -14,5 +16,6 @@ tele;qft_98;tele;-;EQ;yes;benchmarks/VeriQbench/combinational/qft/qft_98.qasm
 owm-vs-tele;tof_3;owm_vs_tele;-;EQ;no;benchmarks/Feynman/tof_3.qasm
 owm-vs-tele;barenco_tof_3;owm_vs_tele;-;EQ;no;benchmarks/Feynman/barenco_tof_3.qasm
 owm-vs-tele;qft_4;owm_vs_tele;-;NC;no;benchmarks/Feynman/qft_4.qasm
+owm-vs-tele;grover_3;owm_vs_tele;-;EQ;no;benchmarks/VeriQbench/combinational/grover/grover_3.qasm
 owm-vs-tele;gf2^7_mult;owm_vs_tele;-;EQ;yes;benchmarks/Feynman/gf2^7_mult.qasm
 owm-vs-tele;hwb6;owm_vs_tele;-;EQ;yes;benchmarks/Feynman/hwb6.qasm
