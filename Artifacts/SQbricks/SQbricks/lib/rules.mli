@@ -242,6 +242,11 @@ module Variable_replacement : sig
     ?debug:bool -> Path_sum.t -> Path_sum.t
 
   val replace_not_path_var_by_var : ?debug:bool -> Path_sum.t -> Path_sum.t
+  (** [replace_not_path_var_by_var ?debug ps] applies at most one change
+      [y <- y xor Q] when [Q] is affine, contains only input variables, and the
+      change increases the number of output components equal to [y]. The
+      substitution is applied to the complete phase and ket. If no useful
+      change exists, [ps] is returned unchanged. *)
 
   val poly_normalized :
     ?debug:bool -> Path_sum.t -> (Path_sum.t, reduction_error) result

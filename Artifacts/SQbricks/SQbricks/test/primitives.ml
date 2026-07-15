@@ -1476,7 +1476,12 @@ let test_variable_replacement_reports_malformed_path_sum () =
   | Error (Rules.MalformedPathSum _) -> check bool "malformed path sum" true true
   | Ok _ -> check bool "malformed path sum expected" true false
 
+(* In the path sums below, [+] denotes XOR in a ket or a substitution, and
+   arithmetic addition in a phase. *)
 let test_replace_not_path_var_by_var_does_not_mutate_input () =
+  (* Input:    phase = 0, ket = |1 + y0>
+     Change:   y0 <- 1 + y0
+     Expected: phase = 0, ket = |y0> *)
   let input : Path_sum.t =
     {
       phase = Poly.zero;
@@ -1492,12 +1497,46 @@ let test_replace_not_path_var_by_var_does_not_mutate_input () =
   check string "input unchanged" input_before (PSS.exact input);
   check string "replacement result" (PSS.exact expected_output) (PSS.exact output)
 
+let test_replace_not_path_var_by_var_normalizes_constant_shift () =
+  (* Input:    phase = 1/2 y0, ket = |1 + y0>
+     Change:   y0 <- 1 + y0
+     Expected: phase = 1/2 + 1/2 y0, ket = |y0> *)
+  let half_path_var =
+    Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 1))
+  in
+  let input : Path_sum.t =
+    {
+      phase = to_poly half_path_var;
+      ket = [| Qubit.One ++ Qubit.Var 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Monome.Scal div2 +++ to_poly half_path_var;
+      ket = [| Qubit.Var 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  let input_before = PSS.exact input in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  let expected = Rules.Simplification.simplify expected in
+  check string "input unchanged" input_before (PSS.exact input);
+  check string "constant shift" (PSS.exact expected) (PSS.exact output)
+
 let v i = Qubit.Var i
 let mdiv s = Monome.Scal s
 
 let test_replace_not_path_var_by_var_normalizes_input_shift () =
-  (* This is the relevant part of the two path sums produced for the
-     owm-vs-qiskit/dqc_teleportation benchmark case. *)
+  (* Relevant part of the owm-vs-qiskit/dqc_teleportation path sums:
+     Input:
+       phase = 1/2 x1y0 + 1/2 x2y1
+       ket   = |y0, x0 + x1 + y1, x0 + x1>
+     Change:
+       y1 <- y1 + x0 + x1
+     Expected:
+       phase = 1/2 x0x2 + 1/2 x1x2 + 1/2 x1y0 + 1/2 x2y1
+       ket   = |y0, y1, x0 + x1> *)
   let half_product left_variable right_variable =
     Monome.Prod
       ( Monome.Scal div2,
@@ -1529,40 +1568,69 @@ let test_replace_not_path_var_by_var_normalizes_input_shift () =
   check string "input-dependent path-variable shift" (PSS.exact expected)
     (PSS.exact output)
 
-let test_replace_not_path_var_by_var_preserves_phase_coefficient () =
-  (* The first path variable has index [width]. The quarter coefficient must
-     multiply the complete arithmetic lift of [x0 ++ y0]. *)
+let test_replace_not_path_var_by_var_simplifies_quarter_phase () =
+  (* Input:    phase = 1/4 x0 + 1/4 y0 + 1/2 x0y0,
+               ket = |x0 + y0>
+     Change:   y0 <- y0 + x0
+     Expected: phase = 1/4 y0, ket = |y0>
+
+     The first path variable has index [width]. The quarter coefficient must
+     multiply the complete arithmetic lift of [x0 + y0]. *)
+  let quarter_var variable =
+    Monome.Prod (Monome.Scal div4, Monome.Qubit (v variable))
+  in
+  let half_product left_variable right_variable =
+    Monome.Prod
+      ( Monome.Scal div2,
+        Monome.Prod
+          ( Monome.Qubit (v left_variable),
+            Monome.Qubit (v right_variable) ) )
+  in
   let input : Path_sum.t =
     {
       phase =
-        to_poly (Monome.Prod (Monome.Scal div4, Monome.Qubit (v 2)));
-      ket = [| v 0 ++ v 2; v 2 |];
-      path_var = [ 2 ];
+        quarter_var 0
+        +++ (quarter_var 1 +++ to_poly (half_product 0 1));
+      ket = [| v 0 ++ v 1 |];
+      path_var = [ 1 ];
     }
   in
   let expected : Path_sum.t =
     {
-      phase =
-        Monome.Prod (Monome.Scal div4, Monome.Qubit (v 0))
-        +++ (Monome.Prod (Monome.Scal div4, Monome.Qubit (v 2))
-            +++ to_poly
-                  (Monome.Prod
-                     ( Monome.Scal div2,
-                       Monome.Prod
-                         (Monome.Qubit (v 0), Monome.Qubit (v 2)) )));
-      ket = [| v 2; v 0 ++ v 2 |];
-      path_var = [ 2 ];
+      phase = to_poly (quarter_var 1);
+      ket = [| v 1 |];
+      path_var = [ 1 ];
     }
   in
   let input_before = PSS.exact input in
   let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
   let expected = Rules.Simplification.simplify expected in
   check string "input unchanged" input_before (PSS.exact input);
-  check string "phase coefficient preserved" (PSS.exact expected)
+  check string "quarter phase simplified" (PSS.exact expected)
+    (PSS.exact output)
+
+let test_replace_not_path_var_by_var_ignores_non_simplifying_shift () =
+  (* Input:    phase = 0, ket = |x0 + y0, y0>
+     Change:   y0 <- y0 + x0
+     Result:   phase = 0, ket = |y0, x0 + y0>
+     Expected: unchanged, because the change only moves the shifted output. *)
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| v 0 ++ v 2; v 2 |];
+      path_var = [ 2 ];
+    }
+  in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  check string "non-simplifying shift unchanged" (PSS.exact input)
     (PSS.exact output)
 
 let test_replace_not_path_var_by_var_ignores_nonlinear_shift () =
-  (* Products are valid in the lemma, but deliberately outside the first
+  (* Input:            phase = 0, ket = |x0x1 + y0, x1>
+     Candidate change: y0 <- y0 + x0x1
+     Expected:         unchanged
+
+     Products are valid in the lemma, but deliberately outside the first
      implementation scope. *)
   let input : Path_sum.t =
     {
@@ -1575,7 +1643,11 @@ let test_replace_not_path_var_by_var_ignores_nonlinear_shift () =
   check string "nonlinear shift unchanged" (PSS.exact input) (PSS.exact output)
 
 let test_replace_not_path_var_by_var_ignores_path_dependent_shift () =
-  (* A shift containing another path variable is also outside the first
+  (* Input:            phase = 0, ket = |y0 + y1>
+     Candidate change: y1 <- y1 + y0
+     Expected:         unchanged
+
+     A shift containing another path variable is also outside the first
      implementation scope. *)
   let input : Path_sum.t =
     { phase = Poly.zero; ket = [| v 1 ++ v 2 |]; path_var = [ 1; 2 ] }
@@ -1600,12 +1672,18 @@ let variable_replacement =
     ( "replace_not_path_var_by_var does not mutate input",
       `Quick,
       test_replace_not_path_var_by_var_does_not_mutate_input );
+    ( "replace_not_path_var_by_var normalizes constant shift",
+      `Quick,
+      test_replace_not_path_var_by_var_normalizes_constant_shift );
     ( "replace_not_path_var_by_var normalizes input shift",
       `Quick,
       test_replace_not_path_var_by_var_normalizes_input_shift );
-    ( "replace_not_path_var_by_var preserves phase coefficient",
+    ( "replace_not_path_var_by_var simplifies quarter phase",
       `Quick,
-      test_replace_not_path_var_by_var_preserves_phase_coefficient );
+      test_replace_not_path_var_by_var_simplifies_quarter_phase );
+    ( "replace_not_path_var_by_var ignores non-simplifying shift",
+      `Quick,
+      test_replace_not_path_var_by_var_ignores_non_simplifying_shift );
     ( "replace_not_path_var_by_var ignores nonlinear shift",
       `Quick,
       test_replace_not_path_var_by_var_ignores_nonlinear_shift );

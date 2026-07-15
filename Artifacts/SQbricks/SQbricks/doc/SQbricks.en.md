@@ -527,164 +527,166 @@ and proofs below.
 
 #### Definition (change of one path variable)
 
-Consider the path sum in algebraic form
+Consider the following path sum in algebraic form:
 
-\[
-P = \langle \mathbf{y},\; p(\mathbf{x},\mathbf{y}),\;
-f(\mathbf{x},\mathbf{y}) \rangle,
-\]
+```text
+P = <y, p(x, y), f(x, y)>
+y = (y0, ..., y_(m-1))
+```
 
-where \(\mathbf{y}=(y_0,\ldots,y_{m-1})\). Fix \(k<m\) and a Boolean
-polynomial \(Q(\mathbf{x},\mathbf{y}_{\ne k})\) that does not depend on
-\(y_k\). For an input \(\mathbf{x}\), define
-\(\tau_{k,Q,\mathbf{x}}:\mathbb{F}_2^m\to\mathbb{F}_2^m\) by
+Fix an index `k < m` and a Boolean polynomial `Q(x, y_except_k)` that does not
+depend on `yk`. For an input `x`, define the function
+`tau_(k,Q,x) : F_2^m -> F_2^m` by:
 
-\[
-\tau_{k,Q,\mathbf{x}}(\mathbf{y})_i =
-\begin{cases}
-y_i & \text{if } i\ne k,\\
-y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}) & \text{if } i=k.
-\end{cases}
-\]
+```text
+tau_(k,Q,x)(y)_i = yi                              if i != k
+tau_(k,Q,x)(y)_i = yk xor Q(x, y_except_k)         if i = k
+```
 
-The associated path-variable change is
+The associated path-variable change is:
 
-\[
-P^{(k,Q)} =
-\langle \mathbf{y},\;
-p(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y})),\;
-f(\mathbf{x},\tau_{k,Q,\mathbf{x}}(\mathbf{y}))\rangle.
-\]
+```text
+P^(k,Q) = <y,
+           p(x, tau_(k,Q,x)(y)),
+           f(x, tau_(k,Q,x)(y))>
+```
 
-The substitution in the output signature \(f\) is Boolean. In the phase
-\(p\), it uses the Boolean-to-arithmetic polynomial transformation from
-Definition 2.3.2. In particular,
+The substitution in the output signature `f` is Boolean. In the phase `p`, it
+uses the Boolean-to-arithmetic polynomial transformation from Definition
+2.3.2. Writing this transformation as `lift`:
 
-\[
-\overline{a\oplus b}=\bar a+\bar b-2\bar a\bar b.
-\]
+```text
+lift(a xor b) = lift(a) + lift(b) - 2 lift(a) lift(b)
+```
 
-This distinction is necessary: directly replacing \(y_k\) with an arithmetic
+This distinction is necessary: directly replacing `yk` with an arithmetic
 sum would lose the correction terms introduced by XOR.
 
-#### Lemma (preservation of concretization)
+Write `P' ≡ P` when the two path sums are semantically equivalent, that is,
+when:
 
-If \(Q\) does not depend on \(y_k\), then the variable change preserves the
-path-sum concretization:
+```text
+for every input x, V(P')(x) = V(P)(x)
+```
 
-\[
-\mathcal{V}(P^{(k,Q)})=\mathcal{V}(P).
-\]
+#### Correctness lemma for the variable change
 
-**Proof.** Fix an input \(\mathbf{x}\). Since \(Q\) does not depend on
-\(y_k\), the map \(\tau=\tau_{k,Q,\mathbf{x}}\) is an involution. Its
-coordinates other than \(k\) are unchanged, and
+If `Q` does not depend on `yk`, then the variable change produces a
+semantically equivalent path sum:
 
-\[
-\tau(\tau(\mathbf{y}))_k
-= (y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}))
-  \oplus Q(\mathbf{x},\mathbf{y}_{\ne k})
-=y_k.
-\]
+```text
+P^(k,Q) ≡ P
+```
 
-Therefore, \(\tau\) is a bijection of \(\mathbb{F}_2^m\). Using Definition
-2.3.4 of concretization and then the reindexing
-\(\mathbf{z}=\tau(\mathbf{y})\), we obtain
+**Proof.** Fix an input `x`. Since `Q` does not depend on `yk`, the map
+`tau = tau_(k,Q,x)` is an involution. Its coordinates other than `k` are
+unchanged, and:
 
-\[
-\begin{aligned}
-\mathcal{V}(P^{(k,Q)})(\mathbf{x})
-&=2^{-m/2}\sum_{\mathbf{y}\in\mathbb{F}_2^m}
-e^{2\pi i\,p(\mathbf{x},\tau(\mathbf{y}))}
-\lvert f(\mathbf{x},\tau(\mathbf{y}))\rangle\\
-&=2^{-m/2}\sum_{\mathbf{z}\in\mathbb{F}_2^m}
-e^{2\pi i\,p(\mathbf{x},\mathbf{z})}
-\lvert f(\mathbf{x},\mathbf{z})\rangle\\
-&=\mathcal{V}(P)(\mathbf{x}).
-\end{aligned}
-\]
+```text
+tau(tau(y))_k
+  = (yk xor Q(x, y_except_k)) xor Q(x, y_except_k)
+  = yk
+```
+
+Therefore, `tau` is a bijection of `F_2^m`. Using Definition 2.3.4 of
+concretization and then the reindexing `z = tau(y)`, we obtain:
+
+```text
+V(P^(k,Q))(x)
+  = 2^(-m/2) sum_(y in F_2^m)
+      exp(2 pi i p(x, tau(y))) |f(x, tau(y))>
+
+  = 2^(-m/2) sum_(z in F_2^m)
+      exp(2 pi i p(x, z)) |f(x, z)>
+
+  = V(P)(x)
+```
 
 The equality holds for every input, so the two path sums concretize the same
 linear map. This is a semantic equality of concretizations, not necessarily a
 syntactic equality of the OCaml structures or the path-variable renaming
-relation. \(\square\)
+relation. This proves the lemma.
 
-#### Corollary (isolating a path variable in the output)
+#### Corollary for correct isolation of a path variable
 
-If an output component satisfies
+If an output component satisfies:
 
-\[
-f_j(\mathbf{x},\mathbf{y})=
-y_k\oplus Q(\mathbf{x},\mathbf{y}_{\ne k}),
-\]
+```text
+f_j(x, y) = yk xor Q(x, y_except_k)
+```
 
-then its transformed component is \(f_j^{(k,Q)}=y_k\), and
-\(P^{(k,Q)}\) has the same concretization as \(P\).
+then:
 
-**Proof.** Coordinates other than \(k\) are not modified by \(\tau\).
-Independence of \(Q\) from \(y_k\) therefore gives
+```text
+f_j^(k,Q)(x, y) = yk
+P^(k,Q) ≡ P
+```
 
-\[
-f_j(\mathbf{x},\tau(\mathbf{y}))
-=(y_k\oplus Q)\oplus Q
-=y_k.
-\]
+**Proof.** Coordinates other than `k` are not modified by `tau`. Independence
+of `Q` from `yk` therefore gives:
 
-Preservation of concretization follows from the lemma. \(\square\)
+```text
+f_j(x, tau(y))
+  = (yk xor Q) xor Q
+  = yk
+```
 
-The lemma allows any Boolean polynomial \(Q\) independent of \(y_k\). The
-first implementation intended for
-`Rules.Variable_replacement.replace_not_path_var_by_var` is deliberately
-narrower: it must only recognize an affine form built from input variables,
+Preservation of concretization follows from the lemma, which proves the
+corollary.
 
-\[
-Q(\mathbf{x})=c\oplus\bigoplus_{i\in I}x_i,
-\qquad c\in\mathbb{F}_2.
-\]
+The lemma allows any Boolean polynomial `Q` independent of `yk`. To fix the
+`owm-vs-qiskit/dqc_teleportation` case without generalizing prematurely,
+`Rules.Variable_replacement.replace_not_path_var_by_var` only recognizes an
+affine form built from input variables:
 
-Boolean products and shifts that contain another path variable remain outside
-this first scope. A recognized substitution must, however, be applied to the
-whole phase and the whole ket, not only to the component in which it was
-detected.
+```text
+Q(x) = c xor (xor_(i in I) xi), with c in F_2
+```
+
+This includes, for example, `1`, `x0`, `x0 xor x2`, and `1 xor x0 xor x2`;
+`Q = 0` is the identity and requires no rewrite. Products such as `x0 x1` and
+shifts that contain another path variable remain outside this implementation.
+This restriction is an implementation decision, not a condition of the lemma.
+
+A recognized substitution is applied to the whole phase and the whole ket,
+not only to the component in which it was detected. On each call, the function
+applies at most one change, and only when it increases the number of output
+components exactly equal to the path variable. It therefore does not perform a
+change that would merely move the same expression to another component.
 
 Two examples define the results expected by the tests:
 
-1. For the `owm-vs-qiskit/dqc_teleportation` case, consider
+**Example 1: `owm-vs-qiskit/dqc_teleportation`.**
 
-   \[
-   \begin{aligned}
-   P=\langle (y_0,y_1),\;&\tfrac12x_1y_0+\tfrac12x_2y_1,\\
-   &(y_0,\;x_0\oplus x_1\oplus y_1,\;x_0\oplus x_1)\rangle.
-   \end{aligned}
-   \]
+```text
+P = <(y0, y1),
+     1/2 x1 y0 + 1/2 x2 y1,
+     (y0, x0 xor x1 xor y1, x0 xor x1)>
 
-   The change \(y_1\leftarrow y_1\oplus x_0\oplus x_1\) gives, after
-   simplifying the phase modulo polynomials with integer coefficients,
+Change: y1 <- y1 xor x0 xor x1
 
-   \[
-   \begin{aligned}
-   P'=\langle (y_0,y_1),\;&\tfrac12x_0x_2+\tfrac12x_1x_2
-   +\tfrac12x_1y_0+\tfrac12x_2y_1,\\
-   &(y_0,\;y_1,\;x_0\oplus x_1)\rangle.
-   \end{aligned}
-   \]
+P' = <(y0, y1),
+      1/2 x0 x2 + 1/2 x1 x2 + 1/2 x1 y0 + 1/2 x2 y1,
+      (y0, y1, x0 xor x1)>
+```
 
-2. For
+The phase of `P'` is simplified modulo polynomials with integer coefficients.
 
-   \[
-   P=\langle y_0,\;\tfrac14y_0,\;(x_0\oplus y_0,\;y_0)\rangle,
-   \]
+**Example 2: simplification with a `1/4` phase coefficient.**
 
-   the change \(y_0\leftarrow y_0\oplus x_0\) gives
+```text
+P = <y0,
+     1/4 x0 + 1/4 y0 + 1/2 x0 y0,
+     (x0 xor y0)>
 
-   \[
-   P'=\langle y_0,\;\tfrac14x_0+\tfrac14y_0
-   +\tfrac12x_0y_0,\;(y_0,\;x_0\oplus y_0)\rangle.
-   \]
+Change: y0 <- y0 xor x0
 
-   The coefficient \(+\tfrac12\) is equivalent to \(-\tfrac12\) modulo an
-   integer coefficient. This example checks that the substitution preserves
-   the \(\tfrac14\) coefficient from its phase context.
+P' = <y0, 1/4 y0, (y0)>
+```
+
+In the phase of `P`, the coefficient `+1/2` is equivalent to `-1/2` modulo an
+integer coefficient. This example checks that the substitution uses the `1/4`
+coefficient from its context: both the phase and the ket are simplified.
 
 Path-variable ordering is typed with `Path_sum.Ket.path_var_order_result`. It
 reconstructs the temporary and final order of path variables present in a ket.
