@@ -2,6 +2,10 @@
 
 ## Next
 
+- [ ] After validating the light regression, recenter the fork on SQbricks:
+  leave the original repository untouched, preserve the current full tree on
+  an archive branch, and decide how to migrate active branches based on the
+  current `main` before replacing it.
 - [ ] Create or switch to a dedicated branch before continuing the Equiv
   corrections.
 - [ ] Finish the remaining phase 3 audit targets: parser, AST, deferred
