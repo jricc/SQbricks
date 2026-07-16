@@ -19,11 +19,7 @@ Avoid large feature additions before the benchmark and regression setup are reli
 
 ## Current checkpoint
 
-<<<<<<< HEAD
 As of 2026-07-12:
-=======
-As of 2026-07-05:
->>>>>>> origin/prototype-inspection-workflow
 
 - the light non-regression benchmark exists and checks both functional status
   and tracked performance;
@@ -34,19 +30,16 @@ As of 2026-07-05:
   memory failure, while continuing other series;
 - the large regression path selection exists and has a separate baseline/check
   workflow;
-<<<<<<< HEAD
 - phases 1, 2, and 3 are done;
 - phase 3 covered reduction, equivalence checking, separation, projection,
   benchmark scripts, AST/Program invariants, OpenQASM parser behavior,
   deferred measurement translation, and path-sum generation.
-=======
 - phases 1 and 2 are done;
 - phase 3 has covered reduction, equivalence checking, separation, projection,
   and benchmark scripts.
 - phase 9 has a first prototype script for inspecting two QASM files, collecting
   SQV traces, path-sums, final path-sums, and prototype LaTeX/PDF path-sum
   exports.
->>>>>>> origin/prototype-inspection-workflow
 
 ## ~~Phase 1 — Minimal regression benchmark~~
 
