@@ -764,57 +764,89 @@ module Variable_replacement = struct
   let replace_not_path_var_by_var ?(debug = false) (input_state : Path_sum.t) =
     let width = Array.length input_state.ket in
 
-    let rec replace_qubits (qubit_index : int) (current_state : Path_sum.t) =
-      if qubit_index = width then current_state
-      else
-        let current_ket = current_state.ket in
-        match current_ket.(qubit_index) with
-        | Qubit.SumMod2 (Qubit.One, Qubit.Var path_var) when width < path_var ->
-            let ket_after_replacement = Array.copy current_ket in
-            ket_after_replacement.(qubit_index) <- Qubit.Var path_var;
-            let phase_replacement : Poly.t =
-              Poly.insert
-                Monome.(Scal (Q.of_int 1))
-                (Poly.insert
-                   (Prod (Scal (Q.of_int (-1)), Qubit (Qubit.Var path_var)))
-                   Poly.empty)
-            in
-            if debug then
-              printf
-                "Rules.replace_not_path_var_by_var, input_state.phase = %s\n\n\
-                 %!"
-                (PS.pretty current_state.phase width);
-            if debug then
-              printf "Rules.replace_not_path_var_by_var, v = %d\n\n%!" path_var;
-            if debug then
-              printf "Rules.replace_not_path_var_by_var, p_from_q = %s\n\n%!"
-                (PS.pretty phase_replacement width);
-            let phase_after_replacement =
-              Poly.substitute_poly ~debug current_state.phase path_var
-                phase_replacement
-            in
-            let output_state : Path_sum.t =
-              {
-                phase = phase_after_replacement;
-                ket = ket_after_replacement;
-                path_var = current_state.path_var;
-              }
-            in
-            if debug then
-              printf
-                "Rules.replace_not_path_var_by_var, output_state =\n%s\n\n%!"
-                (PSS.pretty output_state);
-            let simplified_state = Simplification.simplify output_state in
-            if debug then
-              printf
-                "Rules.replace_not_path_var_by_var, simplified_state =\n\
-                 %s\n\n\
-                 %!"
-                (PSS.pretty simplified_state);
-            replace_qubits (qubit_index + 1) simplified_state
-        | _ -> replace_qubits (qubit_index + 1) current_state
+    let is_declared_path_var variable =
+      width <= variable
+      && ListBis.member variable input_state.path_var Int.equal
     in
-    replace_qubits 0 input_state
+
+    (* Return the path variables, whether a non-path term is present, and the
+       Boolean polynomial represented by an affine XOR expression. *)
+    let rec affine_xor_expression = function
+      | Qubit.Zero -> Some ([], false, Poly.empty)
+      | Qubit.One -> Some ([], true, Poly.one)
+      | Qubit.Var variable when is_declared_path_var variable ->
+          Some ([ variable ], false, Poly.q variable)
+      | Qubit.Var variable when 0 <= variable && variable < width ->
+          Some ([], true, Poly.q variable)
+      | Qubit.SumMod2 (left_qubit, right_qubit) -> (
+          match
+            ( affine_xor_expression left_qubit,
+              affine_xor_expression right_qubit )
+          with
+          | ( Some (left_path_vars, left_has_shift, left_poly),
+              Some (right_path_vars, right_has_shift, right_poly) ) ->
+              Some
+                ( left_path_vars @ right_path_vars,
+                  left_has_shift || right_has_shift,
+                  Poly.merge left_poly right_poly )
+          | _ -> None)
+      | Qubit.Prod _ | Qubit.Var _ -> None
+    in
+
+    let count_direct_path_var ket path_var =
+      Array.fold_left
+        (fun count qubit ->
+          if
+            Qubit.equal ~wq1:width ~wq2:width (Qubit.simplify qubit)
+              (Qubit.Var path_var)
+          then
+            count + 1
+          else count)
+        0 ket
+    in
+
+    let apply_change path_var shifted_path_var shifted_path_var_poly =
+      let output_state : Path_sum.t =
+        {
+          (* This helper lifts the Boolean XOR separately for each phase
+             monomial, preserving coefficients such as 1/4. *)
+          phase =
+            Poly.substitute_rules_hh ~debug input_state.phase path_var
+              shifted_path_var_poly;
+          ket =
+            Path_sum.Ket.substitute ~debug input_state.ket path_var
+              shifted_path_var;
+          path_var = input_state.path_var;
+        }
+      in
+      Simplification.simplify ~debug output_state
+    in
+
+    let rec try_qubits qubit_index =
+      if qubit_index = width then input_state
+      else
+        let shifted_path_var =
+          Qubit.simplify input_state.ket.(qubit_index)
+        in
+        match affine_xor_expression shifted_path_var with
+        | Some ([ path_var ], true, shifted_path_var_poly) ->
+            let output_state =
+              apply_change path_var shifted_path_var shifted_path_var_poly
+            in
+            let direct_before =
+              count_direct_path_var input_state.ket path_var
+            in
+            let direct_after = count_direct_path_var output_state.ket path_var in
+            if debug then
+              printf
+                "Rules.replace_not_path_var_by_var, path_var = %d, \
+                 direct_before = %d, direct_after = %d\n\n%!"
+                path_var direct_before direct_after;
+            if direct_before < direct_after then output_state
+            else try_qubits (qubit_index + 1)
+        | _ -> try_qubits (qubit_index + 1)
+    in
+    try_qubits 0
 
   module Ket = Path_sum.Ket
   module ArrayBis = Common.ArrayBis

@@ -249,7 +249,7 @@ let nb_gate_and_gates_decomposition p =
     | Apply (U1 (s, k), [ _; _ ], [ _ ])
       when Q.equal (Q.div_2exp s k) div2 || Q.equal (Q.div_2exp s k) divm2 ->
         (* CCZ or CCZinv *)
-        (nb_ch, nb_cs, nb_cz, nb_ccz + 1, nb_ccx, nb_cu1, nb_total)
+        (nb_ch, nb_cs, nb_cz, nb_ccz + 1, nb_ccx, nb_cu1, nb_total + 1)
     | Apply (X, [ _; _ ], [ _ ]) ->
         (nb_ch, nb_cs, nb_cz, nb_ccz, nb_ccx + 1, nb_cu1, nb_total + 1)
     | Apply (U1 _, [ _ ], [ _ ]) ->
@@ -270,9 +270,48 @@ let nb_gate_and_gates_decomposition p =
     @param ps initial path-sum
     @param incr activate incremental reduction *)
 
-let execution ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
+type execution_error =
+  | EmptyTargetList of t
+  | InvalidGateApplication of int * t
+  | InputStateTooSmall of int * int
+  | HybridProgram of t
+  | NonDyadicRotationAngle of t
+
+let execution_error_message = function
+  | EmptyTargetList p ->
+      sprintf "Program.execution_aux.Apply, empty target list, p = %s"
+        (String.pretty p)
+  | InvalidGateApplication (width, p) ->
+      sprintf "Program.execution_aux.Apply, width = %d, p =%s" width
+        (String.pretty p)
+  | InputStateTooSmall (program_width, input_width) ->
+      sprintf
+        "Program.execution, input state width %d is smaller than program width \
+         %d"
+        input_width program_width
+  | HybridProgram p ->
+      sprintf "Program.execution_aux, p = %s forbidden" (String.pretty p)
+  | NonDyadicRotationAngle p ->
+      sprintf "Program.execution.GP/U1, non-dyadic angle, p = %s"
+        (String.pretty p)
+
+let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let _, wq = widths p in
-  let width = Int.max wq (Array.length input_state.ket) in
+  let input_width = Array.length input_state.ket in
+  let width = Int.max wq input_width in
+
+  let canonical_rotation_angle (s : Q.t) (k : int) : Q.t option =
+    let angle = if k < 0 then Q.mul_2exp s (-k) else Q.div_2exp s k in
+    let denominator = Q.den angle in
+    if
+      Z.gt denominator Z.zero
+      && Z.(equal (logand denominator (denominator - one)) zero)
+    then
+      (* Phase coefficients are modulo 1. The non-negative remainder gives the
+         representative in [0, 1), including for negative angles. *)
+      Some (Q.make (Z.erem (Q.num angle) denominator) denominator)
+    else None
+  in
 
   let execution_aux (p : t) (ps : Path_sum.t) =
     let rec apply_forall apply (ps : Path_sum.t) co (ta : int list) =
@@ -305,38 +344,48 @@ let execution ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       if debug then
         printf "Program.execution_aux.aux, ps =\n%s\n\n" (PSS.pretty ps);
       match p with
+      | Apply ((H | X | U1 _), _, []) ->
+          Error (EmptyTargetList p)
       | Apply (_, co, ta) when error_apply co ta ->
-          failwith
-            (sprintf "Program.execution_aux.Apply, width = %d, p =%s" width
-               (String.pretty p))
-      | Measure _ | It _ | InitQ _ | Not _ ->
-          failwith
-            (sprintf "Program.execution_aux, p = %s forbidden" (String.pretty p))
-      | Apply (H, co, ta) -> apply_forall Apply_gates.apply_hadamard ps co ta
-      | Apply (X, co, ta) -> apply_forall Apply_gates.apply_not ps co ta
-      | (Apply (GP (_, k), _, _) | Apply (U1 (_, k), _, _)) when k < 0 ->
-          failwith "Program.execution.GP/U1, k < 0, forbidden"
-      | (Apply (GP (s, _), _, _) | Apply (U1 (s, _), _, _))
-        when Q.equal Q.zero s ->
-          ps
-      | Apply (GP (s, k), co, _) -> Apply_gates.apply_gp (Q.div_2exp s k) ps co
-      | Apply (U1 (s, k), co, ta) ->
-          if debug then
-            printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
-          apply_forall (Apply_gates.apply_u1 ~debug (Q.div_2exp s k)) ps co ta
-      | E -> ps
-      | Sequence (p1, p2) -> aux p2 (aux p1 ps)
+          Error (InvalidGateApplication (width, p))
+      | Measure _ | It _ | InitQ _ | Not _ -> Error (HybridProgram p)
+      | Apply (H, co, ta) -> Ok (apply_forall Apply_gates.apply_hadamard ps co ta)
+      | Apply (X, co, ta) -> Ok (apply_forall Apply_gates.apply_not ps co ta)
+      | Apply (GP (s, k), co, _) -> (
+          match canonical_rotation_angle s k with
+          | None -> Error (NonDyadicRotationAngle p)
+          | Some angle when Q.equal angle Q.zero -> Ok ps
+          | Some angle ->
+              (* GP is targetless: targets are tolerated in Program.t but ignored. *)
+              Ok (Apply_gates.apply_gp angle ps co))
+      | Apply (U1 (s, k), co, ta) -> (
+          match canonical_rotation_angle s k with
+          | None -> Error (NonDyadicRotationAngle p)
+          | Some angle when Q.equal angle Q.zero -> Ok ps
+          | Some angle ->
+              if debug then
+                printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
+              Ok (apply_forall (Apply_gates.apply_u1 ~debug angle) ps co ta))
+      | E -> Ok ps
+      | Sequence (p1, p2) -> (
+          match aux p1 ps with Error error -> Error error | Ok ps' -> aux p2 ps')
     in
     aux p ps
   in
 
   if debug then printf "Program.execution, width = %d\n\n" width;
 
-  if width < 1 then Path_sum.ofSize 0
-  else if p = E || p = Sequence (E, E) then input_state
+  if width < 1 then Ok (Path_sum.ofSize 0)
+  else if p = E || p = Sequence (E, E) then Ok input_state
   else if input_state = Path_sum.ofSize 0 then
     execution_aux (format p) (Path_sum.ofSize width)
+  else if input_width < wq then Error (InputStateTooSmall (wq, input_width))
   else execution_aux (format p) input_state
+
+let execution ?debug ?input_state p =
+  match execution_result ?debug ?input_state p with
+  | Ok path_sum -> path_sum
+  | Error error -> failwith (execution_error_message error)
 
 type inverse_error = NonReversibleProgram of t
 

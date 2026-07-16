@@ -25,10 +25,12 @@ open Parser_OpenQASM
 
 rule token = parse
   | [' ' '\t' '\r' '\n'] { token lexbuf }
-  | "barrier" { comment lexbuf }
+  | "barrier" { barrier lexbuf }
   | "//" { comment lexbuf }
   | "OPENQASM" { OPENQASM }
   | "2.0" { VERSION }
+  (* Some legacy QASM 2-style benchmark files are marked 3.0. This accepts the
+     header only; it is not full OpenQASM 3 support. *)
   | "3.0" { VERSION }
   | "include" { INCLUDE }
   | "qreg" { QREG }
@@ -95,4 +97,10 @@ rule token = parse
 
 and comment = parse 
   | "\n" { token lexbuf } (* Ignore the comment and continue tokenizing *) 
+  | eof { EOF }
   | _ { comment lexbuf } 
+
+and barrier = parse
+  | ';' { token lexbuf }
+  | eof { failwith "Lexer_OpenQASM.barrier, missing semicolon" }
+  | _ { barrier lexbuf }

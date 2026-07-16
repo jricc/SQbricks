@@ -105,6 +105,240 @@ let test_inverse_result_reports_non_reversible_program () =
       check bool "non reversible program" true true
   | Ok _ -> check bool "non reversible program expected" true false
 
+let test_widths_returns_classical_and_quantum_extents () =
+  (* Widths are max-index extents, not a full Program.t well-formedness check. *)
+  let empty_wc, empty_wq = Program.widths Program.E in
+  let wc, wq = Program.widths (h 2 -- m 2 3 -- notC 4) in
+  check int "empty classical width" 0 empty_wc;
+  check int "empty quantum width" 0 empty_wq;
+  check int "classical width" 5 wc;
+  check int "quantum width" 3 wq
+
+let test_nb_gate_decomposition_counts_ccz_in_total () =
+  (* CCZ is both a specialized gate category and one physical gate in total. *)
+  let _, _, _, nb_ccz, _, _, nb_total =
+    Program.nb_gate_and_gates_decomposition (ccz 0 1 2)
+  in
+  check int "ccz count" 1 nb_ccz;
+  check int "total gate count" 1 nb_total
+
+let test_execution_ignores_global_phase_targets () =
+  (* GP is targetless; a target list is tolerated but does not affect execution. *)
+  match
+    ( Program.execution_result (gp 1),
+      Program.execution_result (Program.Apply (Gates.GP (Q.of_int 1, 1), [], [ 0 ]))
+    )
+  with
+  | Ok without_target, Ok with_target ->
+      check string "global phase target ignored" (PSS.exact without_target)
+        (PSS.exact with_target)
+  | _ -> check bool "global phase target accepted" true false
+
+let test_execution_result_reports_empty_gate_targets () =
+  (* H/X/U1 are target gates; only GP is targetless. *)
+  let check_rejected name program =
+    match Program.execution_result program with
+    | Error (Program.EmptyTargetList _) -> check bool name true true
+    | _ -> check bool name true false
+  in
+  check_rejected "h empty target" (Program.Apply (Gates.H, [], []));
+  check_rejected "x empty target" (Program.Apply (Gates.X, [], []));
+  check_rejected "u1 empty target"
+    (Program.Apply (Gates.U1 (Q.of_int 1, 1), [], []))
+
+let test_execution_normalizes_rotation_angles () =
+  (* Compare exact path sums so the tests check the canonical representation,
+     not only semantic equivalence modulo a full turn. *)
+  let check_same_execution name program expected_program =
+    match
+      ( Program.execution_result program,
+        Program.execution_result expected_program )
+    with
+    | Ok path_sum, Ok expected_path_sum ->
+        check string name (PSS.exact expected_path_sum) (PSS.exact path_sum)
+    | _ -> check bool name true false
+  in
+  let quarter = Q.make (Z.of_int 1) (Z.of_int 4) in
+  check_same_execution "negative exponent with rational coefficient"
+    (Program.Apply (Gates.U1 (quarter, -1), [], [ 0 ]))
+    (Program.Apply (Gates.U1 (Q.one, 1), [], [ 0 ]));
+  check_same_execution "negative angle"
+    (Program.Apply (Gates.U1 (Q.minus_one, 2), [], [ 0 ]))
+    (Program.Apply (Gates.U1 (Q.of_int 3, 2), [], [ 0 ]));
+  check_same_execution "angle above one"
+    (Program.Apply (Gates.GP (Q.of_int 5, 2), [], []))
+    (Program.Apply (Gates.GP (Q.one, 2), [], []));
+  check_same_execution "integer angle"
+    (Program.Apply (Gates.GP (Q.one, -1), [], []))
+    (Program.Apply (Gates.GP (Q.zero, 0), [], []))
+
+let test_execution_result_reports_other_errors () =
+  (* execution_result classifies the other direct execution failures explicitly. *)
+  let check_invalid_gate () =
+    match Program.execution_result (cx 0 0) with
+    | Error (Program.InvalidGateApplication _) ->
+        check bool "invalid gate application" true true
+    | _ -> check bool "invalid gate application" true false
+  in
+  let check_hybrid_program () =
+    match Program.execution_result (iq0 0) with
+    | Error (Program.HybridProgram _) -> check bool "hybrid program" true true
+    | _ -> check bool "hybrid program" true false
+  in
+  let check_non_dyadic_rotation () =
+    let angle = Q.make (Z.of_int 1) (Z.of_int 3) in
+    let check_rejected name program =
+      match Program.execution_result program with
+      | Error (Program.NonDyadicRotationAngle _) -> check bool name true true
+      | _ -> check bool name true false
+    in
+    check_rejected "non-dyadic u1 angle"
+      (Program.Apply (Gates.U1 (angle, 0), [], [ 0 ]));
+    check_rejected "non-dyadic global phase angle"
+      (Program.Apply (Gates.GP (angle, 0), [], []))
+  in
+  let check_input_state_too_small () =
+    match Program.execution_result ~input_state:(Path_sum.ofSize 1) (h 1) with
+    | Error (Program.InputStateTooSmall (2, 1)) ->
+        check bool "input state too small" true true
+    | _ -> check bool "input state too small" true false
+  in
+  check_invalid_gate ();
+  check_hybrid_program ();
+  check_non_dyadic_rotation ();
+  check_input_state_too_small ()
+
+let test_unitary_is_only_a_hybrid_syntax_check () =
+  (* Program.unitary does not validate malformed gate applications. *)
+  check bool "hybrid operation rejected" false (Program.unitary (iq0 0));
+  check bool "malformed unitary-shaped gate accepted" true
+    (Program.unitary (Program.Apply (Gates.H, [], [])))
+
+let test_deferred_measurement_reports_not_without_measurement () =
+  match To_deferred_measurement.to_deferred_measurements_result (notC 0) with
+  | Error (To_deferred_measurement.ClassicalControlWithoutMeasurement 0) ->
+      check bool "classical bit without measurement" true true
+  | _ -> check bool "classical bit without measurement expected" true false
+
+let test_deferred_measurement_reports_it_without_measurement () =
+  match To_deferred_measurement.to_deferred_measurements_result (it 0 (x 1)) with
+  | Error (To_deferred_measurement.ClassicalControlWithoutMeasurement 0) ->
+      check bool "conditional bit without measurement" true true
+  | _ -> check bool "conditional bit without measurement expected" true false
+
+let test_deferred_measurement_reports_invalid_measurement_bit () =
+  match To_deferred_measurement.to_deferred_measurements_result (m 0 (-1)) with
+  | Error (To_deferred_measurement.InvalidClassicalBit (0, -1)) ->
+      check bool "invalid measurement bit" true true
+  | _ -> check bool "invalid measurement bit expected" true false
+
+let test_deferred_measurement_translates_simple_condition () =
+  match
+    To_deferred_measurement.to_deferred_measurements_result
+      (m 0 0 -- it 0 (x 1))
+  with
+  | Ok (program, inits, meas) ->
+      check string "deferred program" (ProgS.exact (cx 0 1))
+        (ProgS.exact program);
+      check string "deferred inits" "[]" (ListBis.string_int inits);
+      check string "deferred meas" "[0]" (ListBis.string_int meas)
+  | Error _ -> check bool "simple condition expected" true false
+
+let test_deferred_measurement_keeps_all_measured_qubits_unavailable () =
+  match
+    To_deferred_measurement.to_deferred_measurements_result
+      (m 0 0 -- m 1 0 -- x 0)
+  with
+  | Error
+      (To_deferred_measurement.MeasuredQubitUsedAfterMeasurement
+        (Program.Apply (Gates.X, [], [ 0 ]))) ->
+      check bool "measured qubit remains unavailable" true true
+  | _ -> check bool "measured qubit unavailable expected" true false
+
+let test_deferred_measurement_accepts_initial_reset () =
+  match To_deferred_measurement.to_deferred_measurements_result (iq0 0 -- x 0) with
+  | Ok (program, inits, meas) ->
+      check string "initial reset program" (ProgS.exact (x 0))
+        (ProgS.exact program);
+      check string "initial reset inits" "[0]" (ListBis.string_int inits);
+      check string "initial reset meas" "[]" (ListBis.string_int meas)
+  | Error _ -> check bool "initial reset expected" true false
+
+let test_deferred_measurement_accepts_fresh_ancilla_after_operation () =
+  match
+    To_deferred_measurement.to_deferred_measurements_result
+      (iq0 1 -- h 1 -- iq0 2 -- h 2)
+  with
+  | Ok (program, inits, meas) ->
+      check string "fresh ancilla program" (ProgS.exact (h 1 -- h 2))
+        (ProgS.exact program);
+      check string "fresh ancilla inits" "[1;2]"
+        (ListBis.string_int (List.sort Int.compare inits));
+      check string "fresh ancilla meas" "[]" (ListBis.string_int meas)
+  | Error _ -> check bool "fresh ancilla expected" true false
+
+let test_deferred_measurement_rejects_reset_of_used_qubit () =
+  match To_deferred_measurement.to_deferred_measurements_result (x 0 -- iq0 0) with
+  | Error (To_deferred_measurement.ResetOfUsedQubitUnsupported 0) ->
+      check bool "reset of used qubit rejected" true true
+  | _ -> check bool "reset of used qubit expected" true false
+
+let test_parser_den_to_k_uses_structural_equality () =
+  (* pi / 2^100 is represented internally as 2*pi / 2^101. *)
+  let denominator = Z.pow (Z.of_int 2) 100 in
+  check int "large power-of-two denominator" 101
+    (Parser_help.den_to_k denominator)
+
+let test_parser_barrier_does_not_hide_next_statement () =
+  (* OpenQASM barriers are no-ops, not line comments. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];\nbarrier q[0]; h q[0];\n"
+  in
+  let lexbuf = Lexing.from_string qasm in
+  let parsed = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+  check string "barrier skipped" (ProgS.exact (h 0))
+    (ProgS.exact (Program.format parsed))
+
+let test_parser_keeps_distinct_qreg_offsets () =
+  (* Named qregs are laid out consecutively in SQbricks indices. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];\nqreg r[1];\nh r[0];\ncx q[0], r[0];\n"
+  in
+  let lexbuf = Lexing.from_string qasm in
+  let parsed = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+  check string "qreg offsets" (ProgS.exact (h 1 -- cx 0 1))
+    (ProgS.exact (Program.format parsed))
+
+let test_parser_accepts_zero_width_qreg_for_compatibility () =
+  (* Some QASM libraries contain malformed zero-width qregs; warn and parse. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[0];\nh q[0];\n"
+  in
+  let lexbuf = Lexing.from_string qasm in
+  let parsed = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+  check string "zero-width qreg fallback" (ProgS.exact (h 0))
+    (ProgS.exact (Program.format parsed))
+
+let test_parser_accepts_out_of_range_qreg_for_compatibility () =
+  (* Out-of-range qreg accesses keep the flat offset+index interpretation. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];\nh q[1];\n"
+  in
+  let lexbuf = Lexing.from_string qasm in
+  let parsed = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+  check string "out-of-range qreg fallback" (ProgS.exact (h 1))
+    (ProgS.exact (Program.format parsed))
+
+let test_parser_keeps_distinct_creg_offsets () =
+  (* Classical registers use the same consecutive-index convention. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[2];\ncreg c[1];\ncreg d[1];\nmeasure q[1] -> d[0];\nif (d == 1) x q[0];\n"
+  in
+  let lexbuf = Lexing.from_string qasm in
+  let parsed = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+  check string "creg offsets" (ProgS.exact (m 1 1 -- it 1 (x 0)))
+    (ProgS.exact (Program.format parsed))
+
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
     (p2' : string) () =
@@ -448,11 +682,12 @@ let unitary =
       test_sqv_result Equiv.ErrorInvalidProgram
         (Program.Apply (Gates.H, [], []))
         (h 0) );
-    ( "seq negative u1 exponent",
+    ( "seq negative u1 exponent is normalized",
       `Quick,
-      test_sqv_result Equiv.ErrorInvalidProgram
-        (Program.Apply (Gates.U1 (Q.of_int 1, -1), [], [ 0 ]))
-        (h 0) );
+      let quarter = Q.make (Z.of_int 1) (Z.of_int 4) in
+      test_prog_equiv
+        (Program.Apply (Gates.U1 (quarter, -1), [], [ 0 ]))
+        (zz 0) );
     ( "seq controlled global phase target overlap is invalid",
       `Quick,
       let controlled_global_phase_with_same_target =
@@ -476,6 +711,69 @@ let unitary =
     ( "inverse result non reversible",
       `Quick,
       test_inverse_result_reports_non_reversible_program );
+    ( "widths returns classical and quantum extents",
+      `Quick,
+      test_widths_returns_classical_and_quantum_extents );
+    ( "nb_gate_and_gates_decomposition counts ccz in total",
+      `Quick,
+      test_nb_gate_decomposition_counts_ccz_in_total );
+    ( "execution ignores global phase targets",
+      `Quick,
+      test_execution_ignores_global_phase_targets );
+    ( "execution_result reports empty gate targets",
+      `Quick,
+      test_execution_result_reports_empty_gate_targets );
+    ( "execution_result reports other execution errors",
+      `Quick,
+      test_execution_result_reports_other_errors );
+    ( "execution normalizes rotation angles",
+      `Quick,
+      test_execution_normalizes_rotation_angles );
+    ( "unitary is only a hybrid syntax check",
+      `Quick,
+      test_unitary_is_only_a_hybrid_syntax_check );
+    ( "deferred measurement reports not without measurement",
+      `Quick,
+      test_deferred_measurement_reports_not_without_measurement );
+    ( "deferred measurement reports it without measurement",
+      `Quick,
+      test_deferred_measurement_reports_it_without_measurement );
+    ( "deferred measurement reports invalid measurement bit",
+      `Quick,
+      test_deferred_measurement_reports_invalid_measurement_bit );
+    ( "deferred measurement translates simple condition",
+      `Quick,
+      test_deferred_measurement_translates_simple_condition );
+    ( "deferred measurement keeps all measured qubits unavailable",
+      `Quick,
+      test_deferred_measurement_keeps_all_measured_qubits_unavailable );
+    ( "deferred measurement accepts initial reset",
+      `Quick,
+      test_deferred_measurement_accepts_initial_reset );
+    ( "deferred measurement accepts fresh ancilla after operation",
+      `Quick,
+      test_deferred_measurement_accepts_fresh_ancilla_after_operation );
+    ( "deferred measurement rejects reset of used qubit",
+      `Quick,
+      test_deferred_measurement_rejects_reset_of_used_qubit );
+    ( "parser denominator uses structural equality",
+      `Quick,
+      test_parser_den_to_k_uses_structural_equality );
+    ( "parser barrier does not hide next statement",
+      `Quick,
+      test_parser_barrier_does_not_hide_next_statement );
+    ( "parser keeps distinct qreg offsets",
+      `Quick,
+      test_parser_keeps_distinct_qreg_offsets );
+    ( "parser accepts zero-width qreg for compatibility",
+      `Quick,
+      test_parser_accepts_zero_width_qreg_for_compatibility );
+    ( "parser accepts out-of-range qreg for compatibility",
+      `Quick,
+      test_parser_accepts_out_of_range_qreg_for_compatibility );
+    ( "parser keeps distinct creg offsets",
+      `Quick,
+      test_parser_keeps_distinct_creg_offsets );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );
@@ -767,11 +1065,11 @@ let parallel =
       test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
         controlled_global_phase_with_same_target
         (h 0) );
-    ( "parallel negative gp exponent",
+    ( "parallel negative gp exponent is normalized",
       `Quick,
-      test_sqv_result ~algo:Parallel Equiv.ErrorInvalidProgram
+      test_prog_equiv ~algo:Parallel
         (Program.Apply (Gates.GP (Q.of_int 1, -1), [], []))
-        (h 0) );
+        (gp ~s:0 0) );
     ( "parallel unit vs hybrid",
       `Quick,
       test_prog_equiv ~algo:Parallel ~not_equiv:true (m 0 0) (h 0) );

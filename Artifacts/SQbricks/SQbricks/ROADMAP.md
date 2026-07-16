@@ -19,7 +19,7 @@ Avoid large feature additions before the benchmark and regression setup are reli
 
 ## Current checkpoint
 
-As of 2026-07-03:
+As of 2026-07-12:
 
 - the light non-regression benchmark exists and checks both functional status
   and tracked performance;
@@ -30,9 +30,10 @@ As of 2026-07-03:
   memory failure, while continuing other series;
 - the large regression path selection exists and has a separate baseline/check
   workflow;
-- phases 1 and 2 are done;
-- phase 3 has covered reduction, equivalence checking, separation, projection,
-  and benchmark scripts.
+- phases 1, 2, and 3 are done;
+- phase 3 covered reduction, equivalence checking, separation, projection,
+  benchmark scripts, AST/Program invariants, OpenQASM parser behavior,
+  deferred measurement translation, and path-sum generation.
 
 ## ~~Phase 1 — Minimal regression benchmark~~
 
@@ -83,16 +84,16 @@ Expected output:
 - documented configuration;
 - result file with explicit statuses.
 
-## Phase 3 — Correctness audit
+## ~~Phase 3 — Correctness audit~~
 
 Goal: identify bugs and fragile assumptions before feature work.
 
 Audit targets:
 
-- parser;
-- AST;
-- deferred measurement;
-- path-sum generation;
+- ~~parser~~;
+- ~~AST~~;
+- ~~deferred measurement~~;
+- ~~path-sum generation~~;
 - ~~reduction~~;
 - ~~equivalence checking~~;
 - ~~separation~~;
@@ -294,6 +295,8 @@ Tasks:
 - distinguish accepted syntax from supported semantics;
 - reject unsupported constructs explicitly;
 - improve tests;
+- handle OpenQASM `include` files instead of only accepting include statements
+  as compatibility no-ops;
 - consider separating OpenQASM AST from SQbricks core AST.
 
 Possible constructs to clarify:
@@ -302,6 +305,8 @@ Possible constructs to clarify:
 - opaque gates;
 - barriers;
 - resets;
+- measured-qubit reuse, first with explicit reset semantics and later with a
+  clearer discard/reuse model;
 - measurements;
 - classical conditionals;
 - parameterized gates;
