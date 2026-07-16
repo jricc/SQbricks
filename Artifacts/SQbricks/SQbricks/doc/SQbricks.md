@@ -811,3 +811,66 @@ typés, notamment `normalisation_factor`, `q2` et `ccrz`.
 Ils ne sont pas exposés dans l'interface publique, mais ils permettent aux
 constructeurs publics typés de propager l'erreur au lieu de déclencher un
 échec non maîtrisé.
+
+## Prototype d'inspection
+
+Le prototype d'inspection de la phase 9 est fourni par
+`scripts/inspect-sqbricks.sh`. Il ne modifie pas le coeur OCaml : il orchestre
+les commandes existantes de SQbricks pour rendre une comparaison plus facile à
+lire.
+
+Le script prend deux fichiers QASM et fonctionne en deux modes :
+
+- `--mode auto` appelle le workflow SQbricks automatique avec `-sq` ;
+- `--mode manual` appelle `-sqv` avec les métadonnées explicites
+  (`inputs`, `outputs`, `meas`, algorithme et relation d'équivalence).
+
+SQV est lancé avec `verbose=true` parce que l'objectif du script est
+l'inspection, pas la mesure compacte. La trace complète est conservée dans
+`sqv.stdout`. Le script extrait aussi les path-sums finaux depuis cette trace.
+Cette extraction dépend donc encore du format texte de debug actuel ; ce n'est
+pas une interface OCaml stable.
+
+Par défaut, les résultats sont écrits dans `_tmp/inspection/<timestamp>/`.
+Les fichiers importants sont :
+
+- `report.txt` : résumé lisible de l'exécution ;
+- `commands.sh` : commandes rejouables ;
+- `sqv.stdout` et `sqv.stderr` : trace complète de SQV ;
+- `pathsum-left.stdout` et `pathsum-right.stdout` : path-sums des deux entrées ;
+- `final-path-sums.txt` : path-sums finaux extraits de SQV ;
+- `circuit-left.tex`, `circuit-right.tex`, `circuits.tex` et `circuits.pdf` :
+  export prototype des circuits avec Quantikz2 quand ils sont assez petits ;
+- `pathsum-left.tex`, `pathsum-right.tex`, `final-path-sums.tex` et
+  `path-sums.tex` : export LaTeX prototype ;
+- `path-sums.pdf` : PDF compilé si `pdflatex` est disponible.
+
+L'export LaTeX sépare chaque path-sum en trois parties :
+
+- `p`, affiché comme un tableau de monômes numérotés sur deux colonnes ;
+- `f`, affiché comme un tableau de composantes de sortie numérotées par qubit ;
+- `Y`, affiché séparément pour les variables de chemin.
+
+Les path-sums trop grands peuvent être ignorés par l'export LaTeX afin d'éviter
+de saturer LaTeX. Le seuil est contrôlé par
+`SQBRICKS_INSPECT_LATEX_MAX_CHARS` et vaut `30000` caractères par défaut.
+
+L'export circuit est volontairement limité. Il lit les circuits OpenQASM 2
+simples, produit du LaTeX Quantikz2, et saute le dessin si le nombre de qubits
+ou de portes dépasse les seuils `SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS` et
+`SQBRICKS_INSPECT_CIRCUIT_MAX_GATES`. Cette limite évite de produire des PDF
+illisibles ou trop lourds pendant l'inspection.
+Les circuits trop larges sont coupés en plusieurs blocs Quantikz2 dans un
+document paysage. Le nombre maximal de colonnes par bloc est contrôlé par
+`SQBRICKS_INSPECT_CIRCUIT_WRAP_GATES`, avec une valeur par défaut de `12`.
+Les bits classiques écrits par les mesures simples `measure q[i] -> c[j]` sont
+dessinés comme des fils classiques et reliés à leur mesure.
+Les définitions de portes personnalisées ne sont pas développées ; le script
+se contente d'ignorer leur corps et de simplifier les appels qu'il ne sait pas
+dessiner précisément.
+L'image Docker installe la bibliothèque TikZ Quantikz2 courante depuis CTAN
+dans une couche finale.
+
+La suite prévue de cette phase est une interface graphique qui permettra de
+charger deux fichiers QASM, modifier les métadonnées, choisir le mode
+auto/manual, lancer SQV et parcourir les artefacts générés.

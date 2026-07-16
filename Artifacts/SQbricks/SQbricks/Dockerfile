@@ -27,6 +27,11 @@ RUN sudo apt-get update && sudo apt-get install -y \
   python3-venv \
   libgmp-dev pkg-config \
   bash-completion \
+  texlive-latex-base \
+  texlive-latex-recommended \
+  texlive-fonts-recommended \
+  texlive-pictures \
+  texlive-science \
   && sudo apt-get clean 
 
 RUN git clone https://github.com/Z3Prover/z3.git && \
@@ -79,5 +84,22 @@ RUN sudo mv /usr/lib/libz3.so /usr/lib/libz3.so.4.12
 RUN eval $(opam env) && opam install . --deps-only -y
 
 RUN eval $(opam env) && dune build
+
+# Quantikz needs xargs/environ, provided by texlive-latex-extra on Ubuntu 22.04.
+RUN sudo apt-get update && sudo apt-get install -y \
+  texlive-latex-extra \
+  && sudo apt-get clean
+
+# Install the current Quantikz2 TikZ library from CTAN without rebuilding the
+# heavier OCaml/Python layers above.
+RUN tmp="$(mktemp -d)" && \
+  python3 -c "import urllib.request; urllib.request.urlretrieve('https://mirrors.ctan.org/graphics/pgf/contrib/quantikz.zip', '$tmp/quantikz.zip')" && \
+  python3 -m zipfile -e "$tmp/quantikz.zip" "$tmp" && \
+  sudo mkdir -p /usr/local/share/texmf/tex/latex/quantikz && \
+  sudo install -m 0644 "$tmp/quantikz/tikzlibraryquantikz.code.tex" /usr/local/share/texmf/tex/latex/quantikz/ && \
+  sudo install -m 0644 "$tmp/quantikz/tikzlibraryquantikz2.code.tex" /usr/local/share/texmf/tex/latex/quantikz/ && \
+  sudo texhash && \
+  kpsewhich tikzlibraryquantikz2.code.tex && \
+  rm -rf "$tmp"
 
 CMD ["/bin/bash"]

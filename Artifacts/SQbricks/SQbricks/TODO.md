@@ -18,11 +18,21 @@
   traversing larger qubit expressions may increase reduction time.
 - [ ] Start phase 4 bug fixes one issue at a time, with focused regression
   tests before or with each fix.
+<<<<<<< HEAD
 - [ ] Add real OpenQASM include handling instead of only accepting
   `include "...";` as a compatibility no-op.
 - [ ] Fix the `Equiv.parallel` behavior behind
   `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
   `SubCircuitInconclusive` instead of a timed equivalence result.
+=======
+- [ ] Make Docker containers work from any worktree by adding a disposable
+  shell target based on `docker run --rm -it -v "$(pwd):/sqbricks" -w
+  /sqbricks sqbricks`, instead of relying only on persistent containers created
+  from one fixed worktree path.
+- [ ] Turn the phase 9 inspection prototype into a graphical interface for
+  loading two QASM files, editing metadata, choosing auto/manual mode, running
+  SQV, and browsing generated artifacts.
+>>>>>>> origin/prototype-inspection-workflow
 
 ## Done
 
@@ -105,6 +115,7 @@
   preparation errors do not escape as `failwith`.
 - [x] Add `Program.inverse_result` and use it from Equiv so non-reversible
   programs are reported explicitly.
+<<<<<<< HEAD
 - [x] Document and test that `Program.widths` computes classical and quantum
   index extents without validating full program well-formedness.
 - [x] Count `CCZ` and `CCZinv` in the total gate count reported by
@@ -142,6 +153,17 @@
   qubits.
 - [x] Allow `InitQ` on fresh ancilla qubits during deferred measurement, but
   reject reset/init on qubits that have already been used.
+=======
+- [x] Start roadmap phase 9 with a CLI inspection prototype for two QASM files,
+  auto/manual SQV runs, captured traces, input path-sums, final path-sums, and
+  replayable commands.
+- [x] Add prototype LaTeX/PDF path-sum export to the inspection workflow, with
+  compact tables for phase monomials, output qubits, and path variables.
+- [x] Add prototype Quantikz2 LaTeX/PDF circuit export to the inspection
+  workflow for circuits below configurable size limits.
+- [x] Add LaTeX packages to the Docker image so inspection PDFs can be built in
+  the container.
+>>>>>>> origin/prototype-inspection-workflow
 
 ## Notes
 
@@ -195,3 +217,8 @@
   wrappers should preserve the old path sums and failure order, but this broad
   mechanical pass may expose a mismatch in one gate formula or target-index
   validation path.
+- The phase 9 inspection prototype is in `scripts/inspect-sqbricks.sh`. Its
+  path-sum LaTeX export is intentionally simple and still depends on SQbricks'
+  current textual path-sum/debug output.
+- Circuit LaTeX export in the inspection prototype uses Quantikz2 and is
+  intentionally limited to small OpenQASM 2 circuits.
