@@ -1483,7 +1483,12 @@ let test_variable_replacement_reports_malformed_path_sum () =
   | Error (Rules.MalformedPathSum _) -> check bool "malformed path sum" true true
   | Ok _ -> check bool "malformed path sum expected" true false
 
+(* In the path sums below, [+] denotes XOR in a ket or a substitution, and
+   arithmetic addition in a phase. *)
 let test_replace_not_path_var_by_var_does_not_mutate_input () =
+  (* Input:    phase = 0, ket = |1 + y0>
+     Change:   y0 <- 1 + y0
+     Expected: phase = 0, ket = |y0> *)
   let input : Path_sum.t =
     {
       phase = Poly.zero;
@@ -1499,8 +1504,164 @@ let test_replace_not_path_var_by_var_does_not_mutate_input () =
   check string "input unchanged" input_before (PSS.exact input);
   check string "replacement result" (PSS.exact expected_output) (PSS.exact output)
 
+let test_replace_not_path_var_by_var_normalizes_constant_shift () =
+  (* Input:    phase = 1/2 y0, ket = |1 + y0>
+     Change:   y0 <- 1 + y0
+     Expected: phase = 1/2 + 1/2 y0, ket = |y0> *)
+  let half_path_var =
+    Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 1))
+  in
+  let input : Path_sum.t =
+    {
+      phase = to_poly half_path_var;
+      ket = [| Qubit.One ++ Qubit.Var 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Monome.Scal div2 +++ to_poly half_path_var;
+      ket = [| Qubit.Var 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  let input_before = PSS.exact input in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  let expected = Rules.Simplification.simplify expected in
+  check string "input unchanged" input_before (PSS.exact input);
+  check string "constant shift" (PSS.exact expected) (PSS.exact output)
+
 let v i = Qubit.Var i
 let mdiv s = Monome.Scal s
+
+let test_replace_not_path_var_by_var_normalizes_input_shift () =
+  (* Relevant part of the owm-vs-qiskit/dqc_teleportation path sums:
+     Input:
+       phase = 1/2 x1y0 + 1/2 x2y1
+       ket   = |y0, x0 + x1 + y1, x0 + x1>
+     Change:
+       y1 <- y1 + x0 + x1
+     Expected:
+       phase = 1/2 x0x2 + 1/2 x1x2 + 1/2 x1y0 + 1/2 x2y1
+       ket   = |y0, y1, x0 + x1> *)
+  let half_product left_variable right_variable =
+    Monome.Prod
+      ( Monome.Scal div2,
+        Monome.Prod
+          ( Monome.Qubit (v left_variable),
+            Monome.Qubit (v right_variable) ) )
+  in
+  let input : Path_sum.t =
+    {
+      phase = half_product 1 3 +++ to_poly (half_product 2 4);
+      ket = [| v 3; v 0 ++ v 1 ++ v 4; v 0 ++ v 1 |];
+      path_var = [ 3; 4 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase =
+        half_product 0 2
+        +++ (half_product 1 2
+            +++ (half_product 1 3 +++ to_poly (half_product 2 4)));
+      ket = [| v 3; v 4; v 0 ++ v 1 |];
+      path_var = [ 3; 4 ];
+    }
+  in
+  let input_before = PSS.exact input in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  let expected = Rules.Simplification.simplify expected in
+  check string "input unchanged" input_before (PSS.exact input);
+  check string "input-dependent path-variable shift" (PSS.exact expected)
+    (PSS.exact output)
+
+let test_replace_not_path_var_by_var_simplifies_quarter_phase () =
+  (* Input:    phase = 1/4 x0 + 1/4 y0 + 1/2 x0y0,
+               ket = |x0 + y0>
+     Change:   y0 <- y0 + x0
+     Expected: phase = 1/4 y0, ket = |y0>
+
+     The first path variable has index [width]. The quarter coefficient must
+     multiply the complete arithmetic lift of [x0 + y0]. *)
+  let quarter_var variable =
+    Monome.Prod (Monome.Scal div4, Monome.Qubit (v variable))
+  in
+  let half_product left_variable right_variable =
+    Monome.Prod
+      ( Monome.Scal div2,
+        Monome.Prod
+          ( Monome.Qubit (v left_variable),
+            Monome.Qubit (v right_variable) ) )
+  in
+  let input : Path_sum.t =
+    {
+      phase =
+        quarter_var 0
+        +++ (quarter_var 1 +++ to_poly (half_product 0 1));
+      ket = [| v 0 ++ v 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = to_poly (quarter_var 1);
+      ket = [| v 1 |];
+      path_var = [ 1 ];
+    }
+  in
+  let input_before = PSS.exact input in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  let expected = Rules.Simplification.simplify expected in
+  check string "input unchanged" input_before (PSS.exact input);
+  check string "quarter phase simplified" (PSS.exact expected)
+    (PSS.exact output)
+
+let test_replace_not_path_var_by_var_ignores_non_simplifying_shift () =
+  (* Input:    phase = 0, ket = |x0 + y0, y0>
+     Change:   y0 <- y0 + x0
+     Result:   phase = 0, ket = |y0, x0 + y0>
+     Expected: unchanged, because the change only moves the shifted output. *)
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| v 0 ++ v 2; v 2 |];
+      path_var = [ 2 ];
+    }
+  in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  check string "non-simplifying shift unchanged" (PSS.exact input)
+    (PSS.exact output)
+
+let test_replace_not_path_var_by_var_ignores_nonlinear_shift () =
+  (* Input:            phase = 0, ket = |x0x1 + y0, x1>
+     Candidate change: y0 <- y0 + x0x1
+     Expected:         unchanged
+
+     Products are valid in the lemma, but deliberately outside the first
+     implementation scope. *)
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| Qubit.Prod (v 0, v 1) ++ v 2; v 1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  check string "nonlinear shift unchanged" (PSS.exact input) (PSS.exact output)
+
+let test_replace_not_path_var_by_var_ignores_path_dependent_shift () =
+  (* Input:            phase = 0, ket = |y0 + y1>
+     Candidate change: y1 <- y1 + y0
+     Expected:         unchanged
+
+     A shift containing another path variable is also outside the first
+     implementation scope. *)
+  let input : Path_sum.t =
+    { phase = Poly.zero; ket = [| v 1 ++ v 2 |]; path_var = [ 1; 2 ] }
+  in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  check string "path-dependent shift unchanged" (PSS.exact input)
+    (PSS.exact output)
 
 (* TODO : restore variable replacement without reordening *)
 
@@ -1518,6 +1679,24 @@ let variable_replacement =
     ( "replace_not_path_var_by_var does not mutate input",
       `Quick,
       test_replace_not_path_var_by_var_does_not_mutate_input );
+    ( "replace_not_path_var_by_var normalizes constant shift",
+      `Quick,
+      test_replace_not_path_var_by_var_normalizes_constant_shift );
+    ( "replace_not_path_var_by_var normalizes input shift",
+      `Quick,
+      test_replace_not_path_var_by_var_normalizes_input_shift );
+    ( "replace_not_path_var_by_var simplifies quarter phase",
+      `Quick,
+      test_replace_not_path_var_by_var_simplifies_quarter_phase );
+    ( "replace_not_path_var_by_var ignores non-simplifying shift",
+      `Quick,
+      test_replace_not_path_var_by_var_ignores_non_simplifying_shift );
+    ( "replace_not_path_var_by_var ignores nonlinear shift",
+      `Quick,
+      test_replace_not_path_var_by_var_ignores_nonlinear_shift );
+    ( "replace_not_path_var_by_var ignores path-dependent shift",
+      `Quick,
+      test_replace_not_path_var_by_var_ignores_path_dependent_shift );
     ( "|x0> -> |x0>",
       `Quick,
       test_variable_replacement
@@ -2300,6 +2479,11 @@ let check_gate_invalid_target = function
       check bool "invalid target rejected" true true
   | Ok _ -> check bool "invalid target expected" true false
 
+let test_path_sum_library_result_reports_negative_target () =
+  (* Public typed gate constructors reject negative indices before building Vars. *)
+  check_gate_invalid_target (Path_sum_library.h_result (-1) 1);
+  check_gate_invalid_target (Path_sum_library.cx_result (-1) 0 2)
+
 let one_qubit_phase_path_sum scalar : Path_sum.t =
   {
     phase =
@@ -2370,6 +2554,36 @@ let test_path_sum_library_ry_result_returns_path_sum () =
 let test_path_sum_library_ry_result_reports_invalid_target () =
   (* ry_result still validates the target even when s=0 makes the phase trivial. *)
   check_gate_invalid_target (Path_sum_library.ry_result ~s:0 1 1 1)
+
+let test_path_sum_library_negative_rotation_exponents_are_identity () =
+  (* With integer s, k < 0 gives an exact identity and needs no path variables. *)
+  let expected : Path_sum.t =
+    {
+      phase = Monome.Scal Q.zero +++ Poly.empty;
+      ket = [| Qubit.Var 0 |];
+      path_var = [];
+    }
+  in
+  check_gate_result "negative-exponent u1" expected
+    (Path_sum_library.u1_result (-1) 0 1);
+  check_gate_result "negative-exponent rz" expected
+    (Path_sum_library.rz_result (-1) 0 1);
+  check_gate_result "negative-exponent rx" expected
+    (Path_sum_library.rx_result (-1) 0 1);
+  check_gate_result "negative-exponent ry" expected
+    (Path_sum_library.ry_result (-1) 0 1)
+
+let test_path_sum_library_rotation_path_vars_are_width_offset () =
+  (* RX/RY introduce y0 and y1, represented as Var width and Var (width + 1). *)
+  let check_path_vars name = function
+    | Ok path_sum ->
+        check string name (ListBis.string_int [ 3; 4 ])
+          (ListBis.string_int path_sum.path_var)
+    | Error Path_sum_library.TargetIndexOutOfWidth ->
+        check bool "valid target expected" true false
+  in
+  check_path_vars "rx path vars" (Path_sum_library.rx_result 1 2 3);
+  check_path_vars "ry path vars" (Path_sum_library.ry_result 1 2 3)
 
 let test_path_sum_library_ch_result_returns_path_sum () =
   (* CH introduces one path variable y0 = Var 2 for width 2. The phase is the
@@ -2552,6 +2766,9 @@ let gates_apply =
     ( "h_result reports invalid target",
       `Quick,
       test_path_sum_library_h_result_reports_invalid_target );
+    ( "gate results report negative target",
+      `Quick,
+      test_path_sum_library_result_reports_negative_target );
     ( "x_result returns path sum",
       `Quick,
       test_path_sum_library_x_result_returns_path_sum );
@@ -2618,6 +2835,12 @@ let gates_apply =
     ( "ry_result reports invalid target",
       `Quick,
       test_path_sum_library_ry_result_reports_invalid_target );
+    ( "negative rotation exponents are identity",
+      `Quick,
+      test_path_sum_library_negative_rotation_exponents_are_identity );
+    ( "rotation path vars are width-offset",
+      `Quick,
+      test_path_sum_library_rotation_path_vars_are_width_offset );
     ( "ch_result returns path sum",
       `Quick,
       test_path_sum_library_ch_result_returns_path_sum );

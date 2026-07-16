@@ -22,6 +22,36 @@
 (** This module translates quantum programs to deferred measurement form, where
     all measurements are moved to the end of the program. *)
 
+type deferred_measurement_error =
+  | InvalidClassicalBit of int * int
+      (** A classical bit is outside the computed classical width. The integers
+          are [(width, bit)]. *)
+  | InvalidQubitIndex of int * int
+      (** A qubit index is outside the computed quantum width. The integers are
+          [(width, qubit)]. *)
+  | ResetOfUsedQubitUnsupported of int
+      (** A reset/initialization targets a qubit that was already used.
+          SQbricks currently supports [InitQ] only for fresh qubits, not as
+          dynamic reset or discard/reuse. *)
+  | ClassicalControlWithoutMeasurement of int
+      (** A classical control bit is used before any measurement stored a result
+          in that bit. *)
+  | MeasuredQubitUsedAfterMeasurement of Program.t
+      (** A quantum operation uses a qubit after it has been measured. *)
+  | UnsupportedConditionalProgram of Program.t
+      (** The conditional program shape is not supported by this translation. *)
+
+val deferred_measurement_error_message : deferred_measurement_error -> string
+(** [deferred_measurement_error_message error] explains why deferred
+    measurement translation failed. *)
+
+val to_deferred_measurements_result :
+  ?debug:bool ->
+  Program.t ->
+  (Program.t * int list * int list, deferred_measurement_error) result
+(** [to_deferred_measurements_result ?debug prog] converts [prog] to deferred
+    measurement form, or reports the first unsupported or malformed construct. *)
+
 val to_deferred_measurements :
   ?debug:bool -> Program.t -> Program.t * int list * int list
 (** [to_deferred_measurements ?debug prog] converts [prog] to deferred
@@ -37,4 +67,6 @@ val to_deferred_measurements :
     ]}
 
     {b Note}: The transformation preserves program semantics while restructuring
-    measurement operations. *)
+    measurement operations. It is the historical wrapper around
+    [to_deferred_measurements_result] and raises [Failure] on translation
+    errors. *)

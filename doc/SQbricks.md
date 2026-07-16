@@ -258,6 +258,147 @@ Le fichier Feynman `benchmarks/Feynman/grover_5.qasm` conserve son nom et sa
 provenance sur disque. Le runner utilise toutefois `grover_5_feynman` comme nom
 de programme dans les CSV, afin de ne pas créer la même clé que le circuit
 VeriQbench également nommé `grover_5`.
+## Parser OpenQASM
+
+Le parser OpenQASM traduit les circuits vers `Program.t`, qui utilise des
+indices entiers plats pour les qubits et les bits classiques. OpenQASM permet
+au contraire plusieurs registres nommés, par exemple :
+
+```qasm
+qreg q[1];
+qreg r[1];
+qreg s[2];
+```
+
+Le parser aplatit ces registres en donnant à chacun un offset global :
+
+| Registre | Offset | Taille | Indices SQbricks |
+| --- | --- | --- | --- |
+| `q` | `0` | `1` | `q[0] -> 0` |
+| `r` | `1` | `1` | `r[0] -> 1` |
+| `s` | `2` | `2` | `s[0] -> 2`, `s[1] -> 3` |
+
+Le même principe est utilisé pour les registres classiques déclarés avec
+`creg`. Les tables `qreg_offsets` et `creg_offsets` stockent donc, pour chaque
+nom de registre, le couple `(offset, taille)`.
+
+Les helpers ajoutés dans `Parser_OpenQASM.mly` ont chacun un rôle limité :
+
+- `reset_registers` vide les tables de registres au début d'un parsing, afin
+  qu'un fichier QASM ne réutilise pas les déclarations du fichier précédent ;
+- `declare_register` enregistre une déclaration `qreg` ou `creg`, réserve une
+  tranche consécutive d'indices, puis avance le prochain offset disponible ;
+- `register_offset` récupère l'offset d'un registre classique entier, utilisé
+  notamment pour les conditions `if (c == n)` ;
+- `register_index` traduit `nom[index]` vers `offset + index`.
+
+Par compatibilité avec des bibliothèques QASM existantes, SQbricks accepte aussi
+certains registres mal formés au lieu de bloquer immédiatement. Par exemple,
+`qreg q[0]; h q[0];` et `qreg q[1]; h q[1];` sont signalés par un warning sur
+`stderr`, puis traduits avec l'indice plat `offset + index`. Ce comportement est
+une tolérance d'entrée : le circuit reste mal formé, mais SQbricks essaye de le
+traiter pour ne pas altérer les jeux de benchmarks externes.
+
+Les instructions `include "...";` sont acceptées pour la compatibilité avec les
+fichiers OpenQASM usuels, mais SQbricks ne charge pas le fichier inclus à cette
+étape. Les portes supportées sont celles codées directement dans le lexer et le
+parser. Si une porte inconnue dépend réellement d'un fichier inclus, elle reste
+non supportée.
+
+L'en-tête `OPENQASM 3.0;` est toléré pour certains fichiers de benchmark qui
+utilisent en pratique le sous-ensemble legacy ci-dessus. Cela ne signifie pas
+que le parser supporte OpenQASM 3 en général.
+
+Les instructions `barrier ...;` sont traitées comme des no-op OpenQASM :
+le lexer ignore seulement jusqu'au prochain `;`, puis reprend le parsing. Ce
+n'est pas un commentaire `//`, qui ignore tout jusqu'à la fin de la ligne.
+
+La conversion des angles `pi/den` utilise `Parser_help.den_to_k`. Cette
+fonction vérifie que `den` est une puissance de deux et retourne l'exposant
+correspondant au format SQbricks `2*pi/2^k`. La comparaison des entiers Zarith
+se fait avec `Z.equal`, c'est-à-dire par valeur mathématique, pas par identité
+mémoire.
+
+## Traduction en mesures différées
+
+`To_deferred_measurement.to_deferred_measurements_result` transforme un
+programme hybride en programme sans mesures intermédiaires. Elle retourne :
+
+- le programme traduit ;
+- la liste des qubits initialisés ;
+- la liste des qubits mesurés ;
+- ou une erreur typée si la traduction n'est pas supportée.
+
+`to_deferred_measurements` reste le wrapper historique : il appelle la version
+typée et lève `Failure` en cas d'erreur, pour garder la compatibilité avec les
+anciens appels.
+
+La traduction garde trois états importants :
+
+- `bit_to_qubit` indique quel qubit porte actuellement la valeur classique d'un
+  bit. Cette table peut être écrasée quand un même bit classique est réutilisé ;
+- `meas` garde tous les qubits déjà mesurés. Cette liste ne doit pas être
+  déduite de `bit_to_qubit`, car une réutilisation de bit classique effacerait
+  l'information d'une mesure précédente ;
+- `used_qubits` garde les qubits déjà utilisés par une porte, une mesure ou une
+  correction traduite.
+
+La réutilisation d'un bit classique est donc acceptée. Par exemple, si `c0`
+reçoit successivement les mesures de `q0` puis de `q1`, les prochains contrôles
+sur `c0` dépendent toujours de la dernière mesure stockée dans ce bit. En
+revanche, les deux qubits mesurés restent dans `meas`.
+
+Les corrections classiques sont traduites en contrôles quantiques. Par exemple :
+
+```text
+measure q0 -> c0;
+if c0 then x q2;
+measure q1 -> c0;
+if c0 then x q2;
+```
+
+devient conceptuellement :
+
+```text
+cx q0 q2;
+cx q1 q2;
+```
+
+Le second `measure` écrase le bit classique `c0`, mais il n'annule pas l'effet
+déjà appliqué sur `q2`.
+
+`InitQ` est traité comme l'initialisation d'un qubit frais. Cette forme est
+nécessaire pour les traductions MBQC/OWM, qui introduisent des ancillas pendant
+la construction du programme. Par exemple :
+
+```text
+iq0 1; h 1; iq0 2; h 2
+```
+
+est accepté, car `q2` n'a pas encore servi quand il est initialisé. En revanche,
+un reset dynamique d'un qubit déjà utilisé n'est pas encore supporté :
+
+```text
+x 0; iq0 0
+```
+
+retourne `ResetOfUsedQubitUnsupported 0`.
+
+Les erreurs typées actuellement exposées sont :
+
+- `InvalidClassicalBit`, pour un bit classique hors largeur ;
+- `InvalidQubitIndex`, pour un qubit hors largeur ;
+- `ClassicalControlWithoutMeasurement`, quand un contrôle classique ne contient
+  aucun résultat de mesure ;
+- `MeasuredQubitUsedAfterMeasurement`, quand une porte réutilise un qubit déjà
+  mesuré ;
+- `ResetOfUsedQubitUnsupported`, quand `InitQ` vise un qubit déjà utilisé ;
+- `UnsupportedConditionalProgram`, pour une forme de conditionnel non traduite.
+
+Le vrai `reset` dynamique OpenQASM et le modèle général `discard` / réutilisation
+de qubit restent des points de roadmap. Le comportement validé ici est
+conservateur : SQbricks accepte les ancillas fraîches, mais ne prétend pas encore
+réinitialiser correctement un qubit déjà actif.
 
 ## Audit Equiv
 
@@ -367,7 +508,7 @@ Les applications de portes unitaires doivent ensuite être bien formées :
 - une porte qui agit sur une cible, comme `H`, `X` ou `U1`, doit avoir au moins
   une cible ;
 - pour ces portes, un contrôle ne doit pas être aussi une cible ;
-- l'exposant de `GP` et `U1` doit être positif ou nul.
+- l'angle effectif de `GP` et `U1` doit être dyadique.
 
 Une violation de ces contraintes retourne `ErrorInvalidProgram`. Une phase
 globale `GP` est un cas particulier : elle peut porter des cibles,
@@ -376,9 +517,18 @@ n'ont pas d'effet sur l'exécution symbolique. Si `GP` porte à la fois des
 contrôles et des cibles, ces listes doivent rester disjointes comme pour les
 autres portes.
 
-Les programmes mal formés restent affichables pour le diagnostic :
-`Program.String.pretty` utilise une forme générique pour `GP` et `U1` quand
-l'exposant est négatif, au lieu de lever une exception pendant l'affichage.
+`Program.execution_result` calcule l'angle effectif `s / 2^k`, puis normalise
+les angles dyadiques modulo un dans l'intervalle `[0, 1)`. Les coefficients et
+les exposants négatifs restent donc valides : `-1/4` devient `3/4`, `5/4`
+devient `1/4`, et un angle entier devient `0`, c'est-à-dire l'identité. Un angle
+non dyadique retourne `NonDyadicRotationAngle`, converti par `Equiv` en
+`ErrorInvalidProgram`.
+
+Le `Program.t` stocké n'est pas réécrit : la normalisation a lieu seulement au
+moment de l'exécution symbolique. `Program.String.pretty` conserve donc une
+forme générique pour `GP` et `U1` quand l'exposant est négatif, sans lever
+d'exception pendant l'affichage. Les macros historiques de `Program.Macros`
+continuent toutefois à refuser `k < 0` avant de construire le `Program.t`.
 
 La comparaison symbolique suit maintenant le même principe. Les fonctions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
@@ -420,6 +570,183 @@ substituée comme une variable libre. Si la cible est une path variable, la
 fonction renvoie `Error CannotSubstitutePathVariable`; avec
 `except_path_var=true`, elle protège cette variable et renvoie le path-sum
 inchangé. L'ancien `Path_sum.substitute` reste un wrapper de compatibilité.
+
+### Changement de variable de chemin
+
+Cette section suit le formalisme des définitions 2.3.2 à 2.3.4 de la thèse de
+Jérôme Ricciardi, *Practical verification of quantum circuit transformations*
+([HAL tel-05681895](https://theses.hal.science/tel-05681895)). Cette thèse est
+le socle théorique de SQbricks et sert de référence pour la notation et les
+preuves ci-dessous.
+
+*Statut : cette formalisation doit encore être relue mathématiquement.*
+
+#### Définition (changement d'une variable de chemin)
+
+Soit le path-sum en forme algébrique suivant :
+
+```text
+P = <y, p(x, y), f(x, y)>
+y = (y0, ..., y_(m-1))
+```
+
+Fixons un indice `k < m` et un polynôme booléen `Q(x, y_except_k)` qui ne
+dépend pas de `yk`. Pour une entrée `x`, on définit la fonction
+`tau_(k,Q,x) : F_2^m -> F_2^m` par :
+
+```text
+tau_(k,Q,x)(y)_i = yi                              si i != k
+tau_(k,Q,x)(y)_i = yk xor Q(x, y_except_k)         si i = k
+```
+
+Le changement de variable de chemin associé est :
+
+```text
+P^(k,Q) = <y,
+           p(x, tau_(k,Q,x)(y)),
+           f(x, tau_(k,Q,x)(y))>
+```
+
+Dans la signature de sortie `f`, la substitution est booléenne. Dans la phase
+`p`, elle utilise la transformation d'un polynôme booléen en polynôme
+arithmétique de la définition 2.3.2. En notant `lift` cette transformation :
+
+```text
+lift(a xor b) = lift(a) + lift(b) - 2 lift(a) lift(b)
+```
+
+Cette distinction est nécessaire : remplacer directement `yk` par une
+somme arithmétique ferait perdre les termes correctifs produits par le XOR.
+
+On note `P' ≡ P` lorsque les deux path-sums sont sémantiquement équivalents,
+c'est-à-dire lorsque :
+
+```text
+pour toute entrée x, V(P')(x) = V(P)(x)
+```
+
+#### Lemme de correction du changement de variable
+
+Si `Q` ne dépend pas de `yk`, alors le changement de variable produit un
+path-sum sémantiquement équivalent :
+
+```text
+P^(k,Q) ≡ P
+```
+
+**Preuve.** Fixons une entrée `x`. Comme `Q` ne dépend pas de `yk`,
+l'application `tau = tau_(k,Q,x)` est une involution. Ses coordonnées autres
+que `k` sont inchangées et :
+
+```text
+tau(tau(y))_k
+  = (yk xor Q(x, y_except_k)) xor Q(x, y_except_k)
+  = yk
+```
+
+Ainsi, `tau` est une bijection de `F_2^m`. En utilisant la
+définition 2.3.4 de la concrétisation, puis le changement d'indice
+`z = tau(y)`, on obtient :
+
+```text
+V(P^(k,Q))(x)
+  = 2^(-m/2) sum_(y in F_2^m)
+      exp(2 pi i p(x, tau(y))) |f(x, tau(y))>
+
+  = 2^(-m/2) sum_(z in F_2^m)
+      exp(2 pi i p(x, z)) |f(x, z)>
+
+  = V(P)(x)
+```
+
+L'égalité vaut pour toute entrée, donc les deux path-sums concrétisent la même
+application linéaire. Il s'agit d'une égalité sémantique des concrétisations,
+pas nécessairement d'une égalité syntaxique des structures OCaml ni de la
+relation de renommage des variables de chemin. Cela démontre le lemme.
+
+#### Corollaire d'isolation correcte d'une variable de chemin
+
+Si une composante de sortie vérifie :
+
+```text
+f_j(x, y) = yk xor Q(x, y_except_k)
+```
+
+alors :
+
+```text
+f_j^(k,Q)(x, y) = yk
+P^(k,Q) ≡ P
+```
+
+**Preuve.** Les coordonnées différentes de `k` ne sont pas modifiées par
+`tau`. L'indépendance de `Q` par rapport à `yk` donne donc :
+
+```text
+f_j(x, tau(y))
+  = (yk xor Q) xor Q
+  = yk
+```
+
+La préservation de la concrétisation découle du lemme, ce qui démontre le
+corollaire.
+
+Le lemme autorise tout polynôme booléen `Q` indépendant de `yk`. Pour corriger
+le cas `owm-vs-qiskit/dqc_teleportation` sans généraliser prématurément,
+`Rules.Variable_replacement.replace_not_path_var_by_var` reconnaît seulement
+une forme affine construite à partir des variables d'entrée :
+
+```text
+Q(x) = c xor (xor_(i in I) xi), avec c dans F_2
+```
+
+Cela comprend par exemple `1`, `x0`, `x0 xor x2` et `1 xor x0 xor x2` ;
+`Q = 0` est l'identité et ne demande aucune réécriture. Les produits comme
+`x0 x1` et les décalages qui contiennent une autre variable de chemin restent
+hors de cette implémentation. Cette restriction est une décision
+d'implémentation, pas une condition du lemme.
+
+Une substitution reconnue est appliquée à toute la phase et à tout le ket,
+pas uniquement à la composante qui a permis de la détecter. À chaque appel, la
+fonction applique au plus un changement, et seulement s'il augmente le nombre
+de composantes de sortie exactement égales à la variable de chemin. Elle ne
+fait donc pas un changement qui déplacerait simplement la même expression vers
+une autre composante.
+
+Deux exemples fixent les résultats attendus par les tests :
+
+**Exemple 1 : `owm-vs-qiskit/dqc_teleportation`.**
+
+```text
+P = <(y0, y1),
+     1/2 x1 y0 + 1/2 x2 y1,
+     (y0, x0 xor x1 xor y1, x0 xor x1)>
+
+Changement : y1 <- y1 xor x0 xor x1
+
+P' = <(y0, y1),
+      1/2 x0 x2 + 1/2 x1 x2 + 1/2 x1 y0 + 1/2 x2 y1,
+      (y0, y1, x0 xor x1)>
+```
+
+La phase de `P'` est simplifiée modulo les polynômes à coefficients entiers.
+
+**Exemple 2 : simplification avec un coefficient de phase `1/4`.**
+
+```text
+P = <y0,
+     1/4 x0 + 1/4 y0 + 1/2 x0 y0,
+     (x0 xor y0)>
+
+Changement : y0 <- y0 xor x0
+
+P' = <y0, 1/4 y0, (y0)>
+```
+
+Dans la phase de `P`, le coefficient `+1/2` est équivalent à `-1/2` modulo un
+coefficient entier. Cet exemple vérifie que la substitution utilise bien le
+coefficient `1/4` du contexte : la phase et le ket sont tous les deux
+simplifiés.
 
 La lecture de l'ordre des variables de chemin est typée avec
 `Path_sum.Ket.path_var_order_result`. Elle reconstruit l'ordre temporaire et
@@ -470,6 +797,14 @@ Les constructeurs typés validés sont :
 - portes contrôlées : `ch_result`, `cx_result`, `crz_result`, `cz_result`,
   `cs_result`, `ct_result` ;
 - portes doublement contrôlées : `ccx_result`, `ccz_result`.
+
+Pour `u1_result`, `rz_result`, `rx_result` et `ry_result`, le coefficient `s`
+est un entier. Un exposant `k < 0` donne donc exactement l'identité : la phase
+est nulle, la cible reste inchangée et aucune variable de chemin n'est créée.
+`u1_result` donne aussi l'identité pour `k = 0`. Ce cas est distinct d'un
+coefficient `s < 0`, qui reste un angle négatif valide. Les tests couvrent les
+quatre constructeurs et vérifient notamment que `rx_result` et `ry_result`
+retournent `path_var = []`.
 
 Les helpers internes qui dépendaient de la validation d'indices ont aussi été
 typés, notamment `normalisation_factor`, `q2` et `ccrz`.

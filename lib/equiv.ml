@@ -112,6 +112,16 @@ let inverse_for_equiv program =
   | Ok inverse -> Ok inverse
   | Error (Program.NonReversibleProgram _) -> Error ErrorCircuitNotUnitary
 
+let execution_for_equiv ?debug ?input_state program =
+  match Program.execution_result ?debug ?input_state program with
+  | Ok state -> Ok state
+  | Error (Program.EmptyTargetList _)
+  | Error (Program.InvalidGateApplication _)
+  | Error (Program.InputStateTooSmall _)
+  | Error (Program.NonDyadicRotationAngle _) ->
+      Error ErrorInvalidProgram
+  | Error (Program.HybridProgram _) -> Error ErrorCircuitNotUnitary
+
 let program_has_valid_gate_applications width program =
   let gate_indices_are_valid controls targets =
     ListBis.valid_indices width controls && ListBis.valid_indices width targets
@@ -123,13 +133,11 @@ let program_has_valid_gate_applications width program =
          controls)
   in
   let rec aux = function
-    | Program.Apply (Gates.GP (_, k), controls, targets) ->
-        0 <= k
-        && gate_indices_are_valid controls targets
+    | Program.Apply (Gates.GP _, controls, targets) ->
+        gate_indices_are_valid controls targets
         && controls_are_distinct_from_targets controls targets
-    | Program.Apply (Gates.U1 (_, k), controls, targets) ->
-        0 <= k
-        && (not (List.is_empty targets))
+    | Program.Apply (Gates.U1 _, controls, targets) ->
+        (not (List.is_empty targets))
         && gate_indices_are_valid controls targets
         && controls_are_distinct_from_targets controls targets
     | Program.Apply (_, controls, targets) ->
@@ -432,14 +440,15 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                     (ProgS.pretty unitary1_swap);
 
                 (* Check Separability just after 1st circuit *)
-                let state1 = Program.execution ~input_state unitary1_swap in
-
-                if debug then
-                  printf "Equiv.seq, state1 =\n%s\n\n%!" (PSS.pretty state1);
-
-                match reduction_for_equiv ~debug state1 with
+                match execution_for_equiv ~debug ~input_state unitary1_swap with
                 | Error result -> result
-                | Ok state1_reduced ->
+                | Ok state1 -> (
+                    if debug then
+                      printf "Equiv.seq, state1 =\n%s\n\n%!" (PSS.pretty state1);
+
+                    match reduction_for_equiv ~debug state1 with
+                    | Error result -> result
+                    | Ok state1_reduced ->
                     if debug then
                       printf "Equiv.seq, state1_reduced =\n%s\n\n"
                         (PSS.pretty (Rename.rename state1_reduced));
@@ -474,24 +483,26 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                       (ProgS.pretty unitary2_swap);
 
                                   (* `[|unit1--unit2^(-1)|] : |x>|0>_init1 -> |output_state>` *)
-                                  let output_state =
-                                    if length_inputs1 = 0 then
-                                      Program.execution ~input_state:state1
-                                        unitary2_inv
-                                    else
-                                      Program.execution ~input_state:state1
-                                        unitary2_swap
-                                  in
-
-                                  if debug then
-                                    printf "Equiv.seq, output_state =\n%s\n\n%!"
-                                      (PSS.pretty output_state);
-
                                   match
-                                    reduction_for_equiv ~debug output_state
+                                    if length_inputs1 = 0 then
+                                      execution_for_equiv ~debug
+                                        ~input_state:state1 unitary2_inv
+                                    else
+                                      execution_for_equiv ~debug
+                                        ~input_state:state1 unitary2_swap
                                   with
                                   | Error result -> result
-                                  | Ok output_state_reduced ->
+                                  | Ok output_state ->
+                                      if debug then
+                                        printf
+                                          "Equiv.seq, output_state =\n%s\n\n%!"
+                                          (PSS.pretty output_state);
+
+                                      match
+                                        reduction_for_equiv ~debug output_state
+                                      with
+                                      | Error result -> result
+                                      | Ok output_state_reduced ->
                                       if debug then
                                         printf
                                           "Equiv.seq, output_state_reduced =\n%s\n\n"
@@ -586,7 +597,7 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                                       GlobalPhaseInconclusive
                                                   | FullCircuit ->
                                                       ErrorFullCircuitNotImplemented))))
-                else Entanglement1
+                        else Entanglement1)
 
 let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
     ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
@@ -625,19 +636,23 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
             | Error result -> result
             | Ok input_state2 ->
 
-                let output_state1 =
-                  Program.execution ~input_state:input_state1 unitary1
-                in
-                let output_state2 =
-                  Program.execution ~input_state:input_state2 unitary2
-                in
-
-                match reduction_for_equiv ~debug output_state1 with
+                match
+                  execution_for_equiv ~debug ~input_state:input_state1 unitary1
+                with
                 | Error result -> result
-                | Ok output_state_reduced1 -> (
-                    match reduction_for_equiv ~debug output_state2 with
+                | Ok output_state1 -> (
+                    match
+                      execution_for_equiv ~debug ~input_state:input_state2
+                        unitary2
+                    with
                     | Error result -> result
-                    | Ok output_state_reduced2 ->
+                    | Ok output_state2 -> (
+                        match reduction_for_equiv ~debug output_state1 with
+                        | Error result -> result
+                        | Ok output_state_reduced1 -> (
+                            match reduction_for_equiv ~debug output_state2 with
+                            | Error result -> result
+                            | Ok output_state_reduced2 ->
                 match
                   Rules.Variable_replacement.poly_normalized
                     ~debug output_state_reduced1
@@ -709,7 +724,7 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                 | Error result -> result
                                 | Ok true -> GlobalPhaseEquivalent
                                 | Ok false -> GlobalPhaseInconclusive))
-                        | FullCircuit -> ErrorFullCircuitNotImplemented)))
+                        | FullCircuit -> ErrorFullCircuitNotImplemented)))))
 
 (* Defines the type 'algo' representing the algorithm type to use. *)
 type algo = Parallel | Sequence

@@ -26,6 +26,67 @@ module ProgS = Program.String
 include Program.Macros
 let debug _ = ()
 (*let debug msg = print_endline ("Debug: " ^ msg)*)
+
+let qreg_offsets : (string, int * int) Hashtbl.t = Hashtbl.create 16
+let creg_offsets : (string, int * int) Hashtbl.t = Hashtbl.create 16
+let next_qreg_offset = ref 0
+let next_creg_offset = ref 0
+
+(* The parser translates named OpenQASM registers to SQbricks' flat integer
+   indices. These tables store, for each register name, its global offset and
+   declared size. *)
+let reset_registers () =
+  Hashtbl.clear qreg_offsets;
+  Hashtbl.clear creg_offsets;
+  next_qreg_offset := 0;
+  next_creg_offset := 0
+
+(* Register declarations reserve a consecutive slice of SQbricks indices.
+   Example, starting with next_qreg_offset = 1:
+   declare_register "qreg" qreg_offsets next_qreg_offset "r" 2
+   returns 1, stores r -> (1, 2), and updates next_qreg_offset to 3. *)
+let declare_register kind registers next_offset name width =
+  if Hashtbl.mem registers name then
+    failwith (sprintf "Parser.%s, register %s already declared" kind name);
+  if width <= 0 then
+    eprintf
+      "Warning: malformed OpenQASM %s %s[%d]; SQbricks keeps parsing for \
+       compatibility.\n\
+       %!"
+      kind name width;
+  let offset = !next_offset in
+  Hashtbl.add registers name (offset, width);
+  next_offset := offset + width;
+  offset
+
+(* Qubit-register declaration used by the grammar; hides the global qreg table. *)
+let declare_qreg name width =
+  declare_register "qreg" qreg_offsets next_qreg_offset name width
+
+(* Classical-register declaration used by the grammar; hides the global creg table. *)
+let declare_creg name width =
+  declare_register "creg" creg_offsets next_creg_offset name width
+
+(* A whole classical register in "if (c == n)" starts at its declared offset. *)
+let register_offset kind registers name =
+  match Hashtbl.find_opt registers name with
+  | Some (offset, _) -> offset
+  | None -> failwith (sprintf "Parser.%s, undeclared register %s" kind name)
+
+(* A register cell name[index] is converted to offset + index. Out-of-range
+   indices are malformed OpenQASM, but some benchmark libraries contain them;
+   SQbricks warns and keeps parsing the flat fallback index. *)
+let register_index kind registers name index =
+  match Hashtbl.find_opt registers name with
+  | Some (offset, width) ->
+      if index < 0 || width <= index then
+        eprintf
+          "Warning: malformed OpenQASM %s access %s[%d] outside declared width \
+           %d; using flat index %d.\n\
+           %!"
+          kind name index width (offset + index);
+      offset + index
+  | None -> failwith (sprintf "Parser.%s, undeclared register %s" kind name)
 %}
 
 %token <string>  IDENT STRING
@@ -46,16 +107,22 @@ let debug _ = ()
 %type <Q.t * Z.t> angle
 %type <int> qubit creg 
 %type <int> qreg_declaration creg_declaration 
+%type <unit> reset_parser_state
 
 %%
 
 program:
-  | program_aux EOF { debug "Fin du programme principal"; $1 }
+  | reset_parser_state program_aux EOF { debug "Fin du programme principal"; $2 }
+
+reset_parser_state:
+  | { reset_registers () }
 
 program_aux:
   | OPENQASM VERSION SEMICOLON include_statement statements { debug "Début du programme QASM"; $5 }
 
 include_statement:
+  // Includes are accepted for QASM compatibility, but SQbricks does not load
+  // external gate libraries here. Supported gates are hard-coded below.
   | INCLUDE STRING SEMICOLON { debug ("Inclusion de " ^ $2); Program.E }
 
 statements:
@@ -215,22 +282,26 @@ statement:
 
 creg:
   | IDENT { 
-    let co = Parser_help.classical_register_to_int $1 in
+    let co = register_offset "creg" creg_offsets $1 in
     debug((sprintf "1. 1 = %s, creg, co = %d\n" $1 (co) ));
     co}
   | IDENT LBRACKET INT RBRACKET { 
-    let co = Parser_help.classical_register_to_int $1 + $3 in
+    let co = register_index "creg" creg_offsets $1 $3 in
     debug((sprintf "2. creg, 1 = %s, 3 = %d, co = %d\n" $1 $3 co ));
     co}
 
 qreg_declaration:
-  | QREG IDENT LBRACKET INT RBRACKET { $4 }
+  | QREG IDENT LBRACKET INT RBRACKET {
+    declare_qreg $2 $4
+    }
 
 creg_declaration:
-  | CREG IDENT LBRACKET INT RBRACKET { $4 }
+  | CREG IDENT LBRACKET INT RBRACKET {
+    declare_creg $2 $4
+    }
 
 qubit:
-  | IDENT LBRACKET INT RBRACKET { $3 }
+  | IDENT LBRACKET INT RBRACKET { register_index "qreg" qreg_offsets $1 $3 }
 
 angle:
   // (pi/den)
@@ -252,5 +323,3 @@ angle:
   | LRBRACKET INT MUL PI RRBRACKET { (Q.of_int $2,Z.of_int 1) }
   // e^0 = e^(2 pi/2^0)
   | LRBRACKET INT RRBRACKET { if $2 = 0 then (Q.zero,Z.zero) else failwith "Parser.angle\n" }
-
-

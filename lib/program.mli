@@ -54,6 +54,8 @@ val format : t -> t
 
 val widths : t -> int * int
 (** [widths prog] returns (classical width, quantum width) of the program.
+    It computes widths from the largest indices used by [prog]; it does not
+    validate that gate applications are well formed.
 
     Example: [widths (Apply (H, [], [0]))] returns [(0, 1)]. *)
 
@@ -73,9 +75,38 @@ end
 
 (** {2 Program Execution} *)
 
+type execution_error =
+  | EmptyTargetList of t
+      (** A target gate such as [H], [X], or [U1] has no target. *)
+  | InvalidGateApplication of int * t
+      (** A gate uses invalid indices or overlaps controls and targets.
+          The integer is the execution width used for validation. *)
+  | InputStateTooSmall of int * int
+      (** The provided input path-sum is smaller than the program to execute.
+          The integers are [(program_width, input_width)]. *)
+  | HybridProgram of t
+      (** A hybrid construct was sent to unitary symbolic execution. *)
+  | NonDyadicRotationAngle of t
+      (** A [GP] or [U1] angle has a denominator that is not a power of two.
+          Negative angles remain valid when their denominator is dyadic. *)
+
+val execution_result :
+  ?debug:bool -> ?input_state:Path_sum.t -> t -> (Path_sum.t, execution_error) result
+(** [execution_result ?debug ?input_state prog] runs [prog] on the optional
+    [input_state] path-sum or an initialized path sum, or reports why execution
+    cannot proceed.
+
+    [H], [X], and [U1] applications require a non-empty target list.
+    [Apply (GP _, controls, targets)] ignores [targets]: [GP] is semantically
+    targetless, even when a target list is present in the program value.
+
+    Dyadic [GP] and [U1] angles are normalized modulo one, from zero included
+    to one excluded. Negative coefficients and negative exponents are therefore
+    valid when their effective angle is dyadic. *)
+
 val execution : ?debug:bool -> ?input_state:Path_sum.t -> t -> Path_sum.t
-(** [execution ?debug ?input_state prog] runs [prog] on the optional
-    [input_state] path-sum or an initialized path sum. *)
+(** [execution ?debug ?input_state prog] is the historical wrapper around
+    [execution_result]. It raises [Failure] on execution errors. *)
 
 type inverse_error = NonReversibleProgram of t
 
@@ -92,7 +123,9 @@ val inverse : ?debug:bool -> t -> t
 (** {2 Program Analysis} *)
 
 val unitary : t -> bool
-(** [unitary prog] checks if [prog] is unitary (no measurements/classical ops).
+(** [unitary prog] checks only that [prog] has no measurements or classical
+    operations. It does not validate gate indices, target lists, control/target
+    overlaps, or whether rotation angles are dyadic.
 
     Example: [unitary (h 0)] returns [true]. *)
 

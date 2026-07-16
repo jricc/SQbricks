@@ -46,7 +46,7 @@ let den_to_k ?(debug = false) (den : Z.t) : int =
   if debug then
     printf "Parser_help.den_to_k, den = %s, k = %d, den_from_k = %s\n\n"
       (Z.to_string den) k (Z.to_string den_from_k);
-  if den != den_from_k then
+  if not (Z.equal den den_from_k) then
     failwith
       (sprintf "Parser_help.den_to_k, den = %s != den_from_k = %s"
          (Z.to_string den) (Z.to_string den_from_k));
