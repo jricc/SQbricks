@@ -8,25 +8,11 @@
   current `main` before replacing it.
 - [ ] Create or switch to a dedicated branch before continuing the Equiv
   corrections.
-- [ ] Finish the remaining phase 3 audit targets: parser, AST, deferred
-  measurement, and path-sum generation.
-- [ ] Fix the `Equiv.parallel` behavior behind
-  `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
-  `SubCircuitInconclusive` instead of a timed equivalence result.
 - [ ] Measure the performance impact of recursive variable substitution under
   `Qubit.Prod`; it unlocks additional reductions and equivalence proofs, but
   traversing larger qubit expressions may increase reduction time.
-- [ ] Start phase 4 bug fixes one issue at a time, with focused regression
-  tests before or with each fix.
 - [ ] Add real OpenQASM include handling instead of only accepting
   `include "...";` as a compatibility no-op.
-- [ ] Fix the `Equiv.parallel` behavior behind
-  `owm-vs-qiskit/dqc_teleportation`, where `Parallel` now returns
-  `SubCircuitInconclusive` instead of a timed equivalence result.
-- [ ] Make Docker containers work from any worktree by adding a disposable
-  shell target based on `docker run --rm -it -v "$(pwd):/sqbricks" -w
-  /sqbricks sqbricks`, instead of relying only on persistent containers created
-  from one fixed worktree path.
 - [ ] Turn the phase 9 inspection prototype into a graphical interface for
   loading two QASM files, editing metadata, choosing auto/manual mode, running
   SQV, and browsing generated artifacts.
@@ -39,6 +25,8 @@
   preserve valid negative angles, and normalize valid dyadic angles modulo one.
 - [x] Treat negative rotation exponents in `Path_sum_library` as exact
   identities while keeping negative angle coefficients valid.
+- [x] Restore a timed `Equiv.parallel` result for
+  `owm-vs-qiskit/dqc_teleportation`, validated by the large regression check.
 - [x] Reject missing baselines and incomplete performance samples in light
   check mode.
 - [x] Refuse to write an invalid light baseline and replace valid baselines
@@ -158,6 +146,8 @@
   workflow for circuits below configurable size limits.
 - [x] Add LaTeX packages to the Docker image so inspection PDFs can be built in
   the container.
+- [x] Run Docker containers from the current worktree with a disposable
+  `docker run --rm` invocation.
 
 ## Notes
 
@@ -191,6 +181,9 @@
 - The large regression selection is in `scripts/paths/regression-large/`.
   It now has per-family baselines in `benchmarks/baseline/regression-large/`
   and check targets separate from the light benchmark.
+- The large baseline intentionally keeps `tele/adder_n34 Sequence` and
+  `owm-vs-tele/qft_29 Parallel` as `OutOfMemory`: their successful runs around
+  `600s` are too close to the timeout to promote as stable capabilities.
 - Size-ordered families in the large regression keep up to the three largest
   representatives, plus isolated watchlist cases.
 - The current Equiv cleanup introduces typed reduction failures so malformed

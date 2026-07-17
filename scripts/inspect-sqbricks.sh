@@ -77,7 +77,7 @@ latex_max_chars="${SQBRICKS_INSPECT_LATEX_MAX_CHARS:-30000}"
 circuit_max_qubits="${SQBRICKS_INSPECT_CIRCUIT_MAX_QUBITS:-16}"
 circuit_max_gates="${SQBRICKS_INSPECT_CIRCUIT_MAX_GATES:-80}"
 circuit_wrap_gates="${SQBRICKS_INSPECT_CIRCUIT_WRAP_GATES:-12}"
-declare -a qasm_files
+declare -a qasm_files=()
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -234,15 +234,16 @@ run_and_capture() {
 	local stdout_file="$out_dir/$name.stdout"
 	local stderr_file="$out_dir/$name.stderr"
 	local status_file="$out_dir/$name.status"
+	local status
 
 	write_command "$@"
 
 	if "$@" >"$stdout_file" 2>"$stderr_file"; then
-		printf "0\n" >"$status_file"
-		return 0
+		status=0
+	else
+		status=$?
 	fi
 
-	local status=$?
 	printf "%s\n" "$status" >"$status_file"
 	return "$status"
 }

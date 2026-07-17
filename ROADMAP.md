@@ -34,9 +34,6 @@ As of 2026-07-12:
 - phase 3 covered reduction, equivalence checking, separation, projection,
   benchmark scripts, AST/Program invariants, OpenQASM parser behavior,
   deferred measurement translation, and path-sum generation.
-- phases 1 and 2 are done;
-- phase 3 has covered reduction, equivalence checking, separation, projection,
-  and benchmark scripts.
 - phase 9 has a first prototype script for inspecting two QASM files, collecting
   SQV traces, path-sums, final path-sums, and prototype LaTeX/PDF path-sum
   exports.
