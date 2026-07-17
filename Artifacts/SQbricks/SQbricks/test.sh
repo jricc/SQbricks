@@ -1,1 +1,0 @@
-./scripts/inspect-sqbricks.sh --mode auto benchmarks/VeriQbench/combinational/qft/qft_4.qasm benchmarks/VeriQbench/dynamic/qft/dqc_qft_4.qasm

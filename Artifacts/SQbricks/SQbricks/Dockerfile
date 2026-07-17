@@ -24,7 +24,6 @@ RUN sudo apt-get update && sudo apt-get install -y \
   python3-pip \
   python3-venv \
   python3-tk \
-  python3-venv \
   libgmp-dev pkg-config \
   bash-completion \
   texlive-latex-base \
@@ -62,7 +61,7 @@ RUN opam init --disable-sandboxing -y && \
   odoc
 
 RUN opam env >> ~/.bashrc
-ENV PATH="/home/opam/sqbricks-python/bin:/home/opam/.opam/default/bin:$PATH"
+ENV PATH="/home/opam/.opam/default/bin:$PATH"
 
 ENV VIRTUAL_ENV="/home/opam/.venv/sqbricks"
 RUN python3 -m venv "$VIRTUAL_ENV"
@@ -81,19 +80,21 @@ RUN chmod +x /sqbricks/scripts/benchmarks.sh
 
 RUN sudo mv /usr/lib/libz3.so /usr/lib/libz3.so.4.12
 
-RUN eval $(opam env) && opam install . --deps-only -y
-
 RUN eval $(opam env) && dune build
 
-# Quantikz needs xargs/environ, provided by texlive-latex-extra on Ubuntu 22.04.
+# Quantikz needs xargs/environ, provided by texlive-latex-extra.
 RUN sudo apt-get update && sudo apt-get install -y \
+  ca-certificates \
+  curl \
   texlive-latex-extra \
   && sudo apt-get clean
 
 # Install the current Quantikz2 TikZ library from CTAN without rebuilding the
 # heavier OCaml/Python layers above.
 RUN tmp="$(mktemp -d)" && \
-  python3 -c "import urllib.request; urllib.request.urlretrieve('https://mirrors.ctan.org/graphics/pgf/contrib/quantikz.zip', '$tmp/quantikz.zip')" && \
+  curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors \
+    --output "$tmp/quantikz.zip" \
+    "https://mirrors.ctan.org/graphics/pgf/contrib/quantikz.zip" && \
   python3 -m zipfile -e "$tmp/quantikz.zip" "$tmp" && \
   sudo mkdir -p /usr/local/share/texmf/tex/latex/quantikz && \
   sudo install -m 0644 "$tmp/quantikz/tikzlibraryquantikz.code.tex" /usr/local/share/texmf/tex/latex/quantikz/ && \
