@@ -89,6 +89,51 @@ let test_hh_reports_malformed_path_sum () =
   in
   check bool "malformed path sum" true malformed
 
+let test_hh_keeps_unmatched_path_variable () =
+  (* An unused path variable alone cannot be removed from a canonical path sum:
+     its presence determines the implicit normalization factor. *)
+  let input : Path_sum.t =
+    { phase = p0; ket = [| x0 |]; path_var = [ 1 ] }
+  in
+  let output =
+    match Rules.HH.hh input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "unmatched path variable is preserved" (PSS.exact input)
+    (PSS.exact output)
+
+let test_reduction_keeps_unmatched_path_variable () =
+  let input : Path_sum.t =
+    { phase = p0; ket = [| x0 |]; path_var = [ 1 ] }
+  in
+  let output = reduce_valid_path_sum input in
+  check string "reduction preserves unmatched path variable" (PSS.exact input)
+    (PSS.exact output)
+
+let test_hh_explicitly_removes_matched_pair () =
+  (* phase = 1/2 y0(x0 + y1), ket = |y1>.
+     Summing over y0 imposes y1 = x0, so HH must remove y0 and y1 together. *)
+  let phase =
+    Prod (Scal div2, Prod (Qubit (v 1), Qubit x0))
+    +++ (Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2))) +++ Poly.empty)
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| v 2 |]; path_var = [ 1; 2 ] }
+  in
+  let expected : Path_sum.t =
+    { phase = p0; ket = [| x0 |]; path_var = [] }
+  in
+  let output =
+    match Rules.HH.hh ~y0_to_remove:1 input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "matched path variables are removed together"
+    (PSS.exact expected) (PSS.exact output)
+
 let test_reduction_algorithm_reports_malformed_path_sum () =
   let malformed =
     match
@@ -104,6 +149,15 @@ let hh =
     ( "hh reports malformed path sum",
       `Quick,
       test_hh_reports_malformed_path_sum );
+    ( "hh keeps an unmatched path variable",
+      `Quick,
+      test_hh_keeps_unmatched_path_variable );
+    ( "reduction keeps an unmatched path variable",
+      `Quick,
+      test_reduction_keeps_unmatched_path_variable );
+    ( "hh explicitly removes its matched pair",
+      `Quick,
+      test_hh_explicitly_removes_matched_pair );
     ( "reduction_algorithm reports malformed path sum",
       `Quick,
       test_reduction_algorithm_reports_malformed_path_sum );

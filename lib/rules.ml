@@ -222,6 +222,14 @@ module HH = struct
     let condition_poly = lazy (not (y0_member_unauthorized y0 ps.phase)) in
     if condition_ket then Lazy.force condition_poly else false
 
+  (* HH removes the summation variable y0 and the constrained variable yi in
+     one canonical-to-canonical transformation. *)
+  let remove_matched_path_variables path_variables y0 yi =
+    List.filter
+      (fun path_variable ->
+        not (Int.equal path_variable y0 || Int.equal path_variable yi))
+      path_variables
+
   let hh_aux y0 ?(debug = false) (ps : Path_sum.t) :
       (Path_sum.t option, reduction_error) result =
     if debug then
@@ -256,7 +264,8 @@ module HH = struct
                     ket =
                       Path_sum.Ket.substitute ps.ket yi
                         (qsimplify (Poly.to_qubit q));
-                    path_var = ps.path_var;
+                    path_var =
+                      remove_matched_path_variables ps.path_var y0 yi;
                   }
                 in
                 Ok (Some ps_output_simplified)
@@ -265,7 +274,8 @@ module HH = struct
                   {
                     phase = zero;
                     ket = Path_sum.Ket.substitute ps.ket yi (Poly.to_qubit q);
-                    path_var = ps.path_var;
+                    path_var =
+                      remove_matched_path_variables ps.path_var y0 yi;
                   }
                 in
                 Ok (Some ps_output))
@@ -296,14 +306,10 @@ module HH = struct
                         %s\n\n\
                         %!"
                        (PSS.pretty acc_reduced);
-                   aux
-                     (Path_sum.remove_path_var
-                        (Simplification.simplify acc_reduced)
-                        y0))
-                    y0_remain
+                   aux (Simplification.simplify acc_reduced) y0_remain)
               | Ok None -> aux acc y0_remain)
             else aux acc y0_remain
-        | _ -> Ok (Elim.elim acc)
+        | _ -> Ok acc
       in
       aux ps ps.path_var
     else if
@@ -312,15 +318,7 @@ module HH = struct
     then
       match hh_aux y0_to_remove ps with
       | Error reduction_error -> Error reduction_error
-      | Ok (Some ps_output) ->
-          let ps_output : Path_sum.t =
-            {
-              phase = ps_output.phase;
-              ket = ps_output.ket;
-              path_var = ListBis.remove y0_to_remove ps_output.path_var;
-            }
-          in
-          Ok ps_output
+      | Ok (Some ps_output) -> Ok ps_output
       | Ok None -> Ok ps
     else Ok ps
 

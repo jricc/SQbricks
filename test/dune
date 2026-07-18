@@ -23,7 +23,7 @@
 (rule
  (alias primitives)
  (action
-  (run ./primitives.exe --bail)))
+  (run ./primitives.exe)))
 
 (rule
  (alias verif)

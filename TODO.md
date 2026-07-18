@@ -15,6 +15,23 @@
 - [ ] Replace the circuit images generated with Qiskit in the documentation
   with images produced by the SQbricks Quantikz2 PDF generator.
 
+## Before phase 5
+
+- [ ] Make `HH` remove its matched path-variable pair atomically, and stop
+  applying `Elim` as an independent reduction on canonical path sums. Audit
+  the remaining calls after `HH` and variable-replacement factorisation.
+- [ ] Restrict `variable_replacement` to the proved form `y xor Q`, where `y`
+  does not occur in `Q`.
+- [ ] Make `Path_sum.equal_result` require equal ket widths only when no
+  explicit output lists are supplied.
+- [ ] Normalize negative rational phase coefficients modulo one with a direct
+  Euclidean remainder.
+- [ ] Preserve already collected variables in `Qubit.extract_path_var` and
+  `Qubit.extract_var` when a constant node is visited.
+- [ ] Make `ListBis.remove` preserve list order.
+- [ ] Confirm that `ListBis.remove_list` has no internal caller, then remove it
+  instead of retaining unused code.
+
 ## Done
 
 - [x] Recenter the fork on SQbricks, preserve the former full tree on

@@ -52,15 +52,9 @@ let reduction_algorithm ?(debug = false) input =
     | Ok state_hh ->
         if debug then
           printf "Reduction_algorithm, state_hh =\n%s\n\n" (PSS.pretty state_hh);
-
-        let state_elim = Rules.Elim.elim state_hh in
-        if debug then
-          printf "Reduction_algorithm, state_elim =\n%s\n\n"
-            (PSS.pretty state_elim);
-        (* state_elim *)
         match
           Rules.Variable_replacement.variable_replacement ~debug
-            state_elim
+            state_hh
         with
         | Error reduction_error -> Error reduction_error
         | Ok (Some state_replace) ->
@@ -85,7 +79,7 @@ let reduction_algorithm ?(debug = false) input =
                   printf "Reduction_algorithm.aux, condition = %b\n\n" condition;
                 if condition then aux state_out else state_in
               in
-              aux state_elim
+              aux state_hh
             in
             if debug then
               printf "Reduction_algorithm, state_fact =\n%s\n\n"
