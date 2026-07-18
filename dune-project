@@ -9,7 +9,7 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github jricc/SQbricks))
 
 (authors "Jerome Ricciardi")
 
@@ -17,7 +17,7 @@
 
 (license LICENSE)
 
-(documentation https://url/to/documentation)
+(documentation https://github.com/jricc/SQbricks/tree/main/doc)
 
 (package
  (name sQbricks)

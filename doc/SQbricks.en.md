@@ -35,6 +35,30 @@ The long SQbricks-only benchmark reuses the historical families from
 `scripts/benchmarks.sh`, but keeps only SQbricks verification rows in the
 generated CSV files.
 
+## Provenance and references
+
+SQbricks was initially developed in the
+[Qbricks repository](https://github.com/Qbricks/qbricks.github.io), under
+`Artifacts/SQbricks/SQbricks`. This repository places SQbricks at its root
+while preserving the history of the subproject, its copyright notices, and its
+LGPL 2.1 license.
+
+The main scientific references are:
+
+- Jérome Ricciardi, Sébastien Bardin, Christophe Chareton, and Benoît Valiron,
+  [*Quantum Circuit Equivalence Checking: A Tractable Bridge From Unitary to
+  Hybrid Circuits*](https://arxiv.org/abs/2511.22523), arXiv:2511.22523, 2025;
+- Jérome Ricciardi,
+  [*Practical verification of quantum circuit
+  transformations*](https://theses.hal.science/tel-05681895v1/document),
+  doctoral thesis, 2026.
+
+The inspection prototype uses Quantikz2 for LaTeX circuit diagrams. Its
+reference is Alastair Kay,
+[*Tutorial on the Quantikz Package*](https://arxiv.org/abs/1809.03842),
+arXiv:1809.03842. [`CITATION.cff`](../CITATION.cff) provides SQbricks citation
+metadata.
+
 ## Light benchmark commands
 
 The entry points are in the `Makefile`:

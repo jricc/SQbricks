@@ -16,6 +16,8 @@
 - [ ] Turn the phase 9 inspection prototype into a graphical interface for
   loading two QASM files, editing metadata, choosing auto/manual mode, running
   SQV, and browsing generated artifacts.
+- [ ] Replace the circuit images generated with Qiskit in the documentation
+  with images produced by the SQbricks Quantikz2 PDF generator.
 
 ## Done
 

@@ -20,9 +20,9 @@ tags: [
   "quantum circuits"
   "hybrid circuits"
 ]
-homepage: "https://github.com/username/reponame"
-doc: "https://url/to/documentation"
-bug-reports: "https://github.com/username/reponame/issues"
+homepage: "https://github.com/jricc/SQbricks"
+doc: "https://github.com/jricc/SQbricks/tree/main/doc"
+bug-reports: "https://github.com/jricc/SQbricks/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.17"}
@@ -42,4 +42,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
-dev-repo: "git+https://github.com/username/reponame.git"
+dev-repo: "git+https://github.com/jricc/SQbricks.git"

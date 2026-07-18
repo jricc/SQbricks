@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: >-
+  If you use SQbricks in academic work, please cite the preferred publication.
+title: SQbricks
+abstract: >-
+  SQbricks is a research prototype for automated equivalence checking of
+  hybrid quantum circuits.
+type: software
+authors:
+  - family-names: Ricciardi
+    given-names: Jerome
+version: 0.1.0
+license: LGPL-2.1-only
+repository-code: https://github.com/jricc/SQbricks
+url: https://github.com/jricc/SQbricks
+keywords:
+  - quantum computing
+  - quantum circuits
+  - equivalence checking
+  - formal verification
+  - hybrid quantum circuits
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Ricciardi
+      given-names: Jérome
+    - family-names: Bardin
+      given-names: Sébastien
+    - family-names: Chareton
+      given-names: Christophe
+    - family-names: Valiron
+      given-names: Benoît
+  title: >-
+    Quantum Circuit Equivalence Checking: A Tractable Bridge From Unitary to
+    Hybrid Circuits
+  year: 2025
+  url: https://arxiv.org/abs/2511.22523
