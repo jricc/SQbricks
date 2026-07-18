@@ -1424,8 +1424,8 @@ let variable_replacement_factorisation =
           path_var = [ 1; 2 ];
         } );
     (* Here + is modulo 2. The bijection (y0, y1) -> (u = y0 + y1, y1)
-       preserves all path assignments. The now-unused y1 can be eliminated and
-       u renamed y0, provided the substitution also descends under Prod. *)
+       preserves all path assignments and the two-variable normalization. The
+       now-unused y1 must therefore remain declared after u is renamed y0. *)
     ( "1/2 x0y0 + 1/2 x0y1 |x0*(y0+y1)> -> 1/2 x0y0 |x0*y0>",
       `Quick,
       let p =
@@ -1441,7 +1441,11 @@ let variable_replacement_factorisation =
         }
       in
       let ps' : Path_sum.t =
-        { phase = p'; ket = [| Qubit.Prod (x0, Var 1) |]; path_var = [ 1 ] }
+        {
+          phase = p';
+          ket = [| Qubit.Prod (x0, Var 1) |];
+          path_var = [ 1; 2 ];
+        }
       in
       test_variable_replacement_factorisation ps ps' );
     ( "1/2 x0y0 + 1/2 x0y1 |x0+y0+y1> -> 1/2 x0y0 |x0+y0>",
@@ -1455,7 +1459,7 @@ let variable_replacement_factorisation =
         { phase = p; ket = [| x0 ++ Var 1 ++ Var 2 |]; path_var = [ 1; 2 ] }
       in
       let ps' : Path_sum.t =
-        { phase = p'; ket = [| x0 ++ Var 1 |]; path_var = [ 1 ] }
+        { phase = p'; ket = [| x0 ++ Var 1 |]; path_var = [ 1; 2 ] }
       in
       test_variable_replacement_factorisation ps ps' );
     ( "factorisation does not mutate input",

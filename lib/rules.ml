@@ -756,7 +756,7 @@ module Variable_replacement = struct
     in
 
     match factorize_step state.phase state with
-    | Some new_state -> Elim.elim new_state
+    | Some new_state -> new_state
     | None -> state
 
   let replace_not_path_var_by_var ?(debug = false) (input_state : Path_sum.t) =
