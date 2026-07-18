@@ -2,10 +2,6 @@
 
 ## Next
 
-- [ ] After validating the light regression, recenter the fork on SQbricks:
-  leave the original repository untouched, preserve the current full tree on
-  an archive branch, and decide how to migrate active branches based on the
-  current `main` before replacing it.
 - [ ] Create or switch to a dedicated branch before continuing the Equiv
   corrections.
 - [ ] Measure the performance impact of recursive variable substitution under
@@ -21,6 +17,9 @@
 
 ## Done
 
+- [x] Recenter the fork on SQbricks, preserve the former full tree on
+  `archive/full-qbricks-main`, and leave the original Qbricks repository
+  untouched.
 - [x] Start phase 4 bug fixes one issue at a time, with focused regression
   tests before or with each fix.
 - [x] Make direct `Program.t` execution report non-dyadic angles explicitly,
