@@ -617,6 +617,12 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
   let yy n w : Qubit.t = Var (n + w)
 
+  (* Build the complete output ket: untouched wires keep their input variable,
+     while the selected target receives the gate's transformed expression. *)
+  let ket_with_target target_index width transformed_target =
+    Array.init width (fun index ->
+        if index = target_index then transformed_target else Var index)
+
   (* \( 1 / \sqrt{2} \sum_{y_0 \in \{0,1\}} e^{2 \pi i (x_0 y_0) / 2} \ket{y_0} \) *)
   let h_result ta w =
     match xx ta w with
@@ -626,7 +632,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
           {
             phase =
               Prod (Scal div2, Prod (Qubit target, Qubit (yy 0 w))) ++ empty;
-            ket = [| yy 0 w |];
+            ket = ket_with_target ta w (yy 0 w);
             path_var = [ w ];
           }
 
@@ -642,7 +648,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
         Ok
           {
             phase = Scal Q.zero ++ empty;
-            ket = [| SumMod2 (One, target) |];
+            ket = ket_with_target ta w (SumMod2 (One, target));
             path_var = [];
           }
 
@@ -669,7 +675,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
                 Qubit target )
             ++ empty
         in
-        Ok { phase = p; ket = [| target |]; path_var = [] }
+        Ok { phase = p; ket = ket_with_target ta w target; path_var = [] }
 
   let u1 ?(s = 1) k ta w =
     match u1_result ~s k ta w with
@@ -732,7 +738,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
             ++ (Prod (Scal (Q.div_2exp (apply_angle sQ k) k), Qubit target)
                ++ empty)
         in
-        Ok { phase = p; ket = [| target |]; path_var = [] }
+        Ok { phase = p; ket = ket_with_target ta w target; path_var = [] }
 
   let rz ?(s = 1) k ta w =
     match rz_result ~s k ta w with
@@ -768,7 +774,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
 
         let q = if is_identity || k = 0 then target else yy 1 w in
         let pv = if is_identity then [] else [ w; w + 1 ] in
-        Ok { phase = p; ket = [| q |]; path_var = pv }
+        Ok { phase = p; ket = ket_with_target ta w q; path_var = pv }
 
   let rx ?(s = 1) k ta w =
     match rx_result ~s k ta w with
@@ -818,7 +824,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
           if is_identity || k = 0 then target else SumMod2 (One, yy 1 w)
         in
         let pv = if is_identity then [] else [ w; w + 1 ] in
-        Ok { phase = p; ket = [| q |]; path_var = pv }
+        Ok { phase = p; ket = ket_with_target ta w q; path_var = pv }
 
   let ry ?(s = 1) k ta w =
     match ry_result ~s k ta w with
@@ -873,7 +879,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
                              Prod (Qubit control, Prod (Qubit target, Qubit (yy 0 w)))
                            )
                         ++ normalisation);
-                    ket = Ket.simplify [| control; target_qubit |];
+                    ket = Ket.simplify (ket_with_target ta w target_qubit);
                     path_var = [ w ];
                   }))
 
@@ -889,7 +895,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
         Ok
           {
             phase = Scal Q.zero ++ empty;
-            ket = [| control; SumMod2 (control, target) |];
+            ket = ket_with_target ta w (SumMod2 (control, target));
             path_var = [];
           }
 
@@ -906,7 +912,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
           {
             phase =
               Prod (Scal (divk k), Prod (Qubit control, Qubit target)) ++ empty;
-            ket = [| control; target |];
+            ket = ket_with_target ta w target;
             path_var = [];
           }
 
@@ -944,7 +950,8 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
           {
             phase = Scal Q.zero ++ empty;
             ket =
-              [| control1; control2; SumMod2 (Prod (control1, control2), target) |];
+              ket_with_target ta w
+                (SumMod2 (Prod (control1, control2), target));
             path_var = [];
           }
 
@@ -964,7 +971,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
                 ( Scal (divk k),
                   Prod (Qubit control1, Prod (Qubit control2, Qubit target)) )
               ++ empty;
-            ket = [| control1; control2; target |];
+            ket = ket_with_target ta w target;
             path_var = [];
           }
 

@@ -2767,6 +2767,106 @@ let check_gate_invalid_target = function
       check bool "invalid target rejected" true true
   | Ok _ -> check bool "invalid target expected" true false
 
+(* A gate built for width [w] must return all [w] output qubits, including
+   untouched wires. These checks use non-canonical wire positions so a local
+   one-, two-, or three-qubit ket cannot accidentally satisfy the test. *)
+let check_gate_ket name expected_ket = function
+  | Ok path_sum ->
+      check string name (KS.exact expected_ket) (KS.exact path_sum.ket)
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      check bool "valid target expected" true false
+
+let test_path_sum_library_h_result_uses_declared_width () =
+  (* H on wire 1 replaces x1 with y0 = Var 3 and preserves wires 0 and 2. *)
+  check_gate_ket "h gate declared width"
+    [| Qubit.Var 0; Qubit.Var 3; Qubit.Var 2 |]
+    (Path_sum_library.h_result 1 3)
+
+let test_path_sum_library_x_result_uses_declared_width () =
+  (* X on wire 1 changes only x1 in the three-qubit ket. *)
+  check_gate_ket "x gate declared width"
+    [|
+      Qubit.Var 0;
+      Qubit.SumMod2 (Qubit.One, Qubit.Var 1);
+      Qubit.Var 2;
+    |]
+    (Path_sum_library.x_result 1 3)
+
+let test_path_sum_library_u1_result_uses_declared_width () =
+  (* U1 changes the phase only, so its three output qubits stay unchanged. *)
+  check_gate_ket "u1 gate declared width"
+    [| Qubit.Var 0; Qubit.Var 1; Qubit.Var 2 |]
+    (Path_sum_library.u1_result 1 1 3)
+
+let test_path_sum_library_rz_result_uses_declared_width () =
+  (* RZ changes the phase only, so its three output qubits stay unchanged. *)
+  check_gate_ket "rz gate declared width"
+    [| Qubit.Var 0; Qubit.Var 1; Qubit.Var 2 |]
+    (Path_sum_library.rz_result 1 1 3)
+
+let test_path_sum_library_rx_result_uses_declared_width () =
+  (* RX on wire 1 replaces x1 with y1 = Var 4 and preserves other wires. *)
+  check_gate_ket "rx gate declared width"
+    [| Qubit.Var 0; Qubit.Var 4; Qubit.Var 2 |]
+    (Path_sum_library.rx_result 1 1 3)
+
+let test_path_sum_library_ry_result_uses_declared_width () =
+  (* RY on wire 1 replaces x1 with 1 xor y1 and preserves other wires. *)
+  check_gate_ket "ry gate declared width"
+    [|
+      Qubit.Var 0;
+      Qubit.SumMod2 (Qubit.One, Qubit.Var 4);
+      Qubit.Var 2;
+    |]
+    (Path_sum_library.ry_result 1 1 3)
+
+let test_path_sum_library_ch_result_uses_declared_width () =
+  (* CH uses wire 2 as control and wire 0 as target; wire 1 is untouched. *)
+  let control = Qubit.Var 2 in
+  let target = Qubit.Var 0 in
+  let path_variable = Qubit.Var 3 in
+  let transformed_target =
+    Qubit.SumMod2
+      ( Qubit.Prod (control, target),
+        Qubit.SumMod2 (Qubit.Prod (control, path_variable), target) )
+  in
+  check_gate_ket "ch gate declared width"
+    (Ket.simplify [| transformed_target; Qubit.Var 1; control |])
+    (Path_sum_library.ch_result 2 0 3)
+
+let test_path_sum_library_cx_result_uses_declared_width () =
+  (* CX uses wire 2 as control and wire 0 as target; wire 1 is untouched. *)
+  check_gate_ket "cx gate declared width"
+    [|
+      Qubit.SumMod2 (Qubit.Var 2, Qubit.Var 0);
+      Qubit.Var 1;
+      Qubit.Var 2;
+    |]
+    (Path_sum_library.cx_result 2 0 3)
+
+let test_path_sum_library_crz_result_uses_declared_width () =
+  (* CRZ changes the phase only, regardless of the selected control and target. *)
+  check_gate_ket "crz gate declared width"
+    [| Qubit.Var 0; Qubit.Var 1; Qubit.Var 2 |]
+    (Path_sum_library.crz_result 1 2 0 3)
+
+let test_path_sum_library_ccx_result_uses_declared_width () =
+  (* CCX uses wires 2 and 0 as controls and wire 1 as target. *)
+  check_gate_ket "ccx gate declared width"
+    [|
+      Qubit.Var 0;
+      Qubit.SumMod2
+        (Qubit.Prod (Qubit.Var 2, Qubit.Var 0), Qubit.Var 1);
+      Qubit.Var 2;
+    |]
+    (Path_sum_library.ccx_result 2 0 1 3)
+
+let test_path_sum_library_ccz_result_uses_declared_width () =
+  (* CCZ changes the phase only, so all three output qubits stay unchanged. *)
+  check_gate_ket "ccz gate declared width"
+    [| Qubit.Var 0; Qubit.Var 1; Qubit.Var 2 |]
+    (Path_sum_library.ccz_result 2 0 1 3)
+
 let test_path_sum_library_result_reports_negative_target () =
   (* Public typed gate constructors reject negative indices before building Vars. *)
   check_gate_invalid_target (Path_sum_library.h_result (-1) 1);
@@ -3129,6 +3229,39 @@ let gates_apply =
     ( "rotation path vars are width-offset",
       `Quick,
       test_path_sum_library_rotation_path_vars_are_width_offset );
+    ( "h_result uses declared width",
+      `Quick,
+      test_path_sum_library_h_result_uses_declared_width );
+    ( "x_result uses declared width",
+      `Quick,
+      test_path_sum_library_x_result_uses_declared_width );
+    ( "u1_result uses declared width",
+      `Quick,
+      test_path_sum_library_u1_result_uses_declared_width );
+    ( "rz_result uses declared width",
+      `Quick,
+      test_path_sum_library_rz_result_uses_declared_width );
+    ( "rx_result uses declared width",
+      `Quick,
+      test_path_sum_library_rx_result_uses_declared_width );
+    ( "ry_result uses declared width",
+      `Quick,
+      test_path_sum_library_ry_result_uses_declared_width );
+    ( "ch_result uses declared width",
+      `Quick,
+      test_path_sum_library_ch_result_uses_declared_width );
+    ( "cx_result uses declared width",
+      `Quick,
+      test_path_sum_library_cx_result_uses_declared_width );
+    ( "crz_result uses declared width",
+      `Quick,
+      test_path_sum_library_crz_result_uses_declared_width );
+    ( "ccx_result uses declared width",
+      `Quick,
+      test_path_sum_library_ccx_result_uses_declared_width );
+    ( "ccz_result uses declared width",
+      `Quick,
+      test_path_sum_library_ccz_result_uses_declared_width );
     ( "ch_result returns path sum",
       `Quick,
       test_path_sum_library_ch_result_returns_path_sum );
