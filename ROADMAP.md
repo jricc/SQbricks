@@ -123,6 +123,32 @@ Expected output:
 
 Goal: fix correctness and reproducibility issues.
 
+Current correctness queue, in order:
+
+- [ ] finish scalar multiplication before modulo-one phase normalization in
+  `Poly.Monome.simplify`;
+- [ ] preserve the exact semantics of OpenQASM whole-register conditions, or
+  reject unsupported forms explicitly;
+- [ ] make `Path_sum_library` honor declared circuit widths and reject
+  overlapping gate wires;
+- [ ] make multi-wire swaps implement overlapping source/destination mappings
+  correctly;
+- [ ] compare measurements through the correspondence between observable
+  outputs;
+- [ ] implement the documented consistent renaming of path variables during
+  ket and path-sum equality.
+
+API and robustness bugs to handle after the correctness queue:
+
+- [ ] preserve the full circuit in `one_creg` OpenQASM exports and terminate
+  cleanly on unsupported controlled gates;
+- [ ] align the remaining `ListBis` helper implementations with their public
+  contracts;
+- [ ] close parser input channels on success and failure.
+
+Phase 5 starts only after the correctness queue is resolved, or after an item
+is deliberately classified as unsupported and rejected with an explicit error.
+
 Rules:
 
 - one bug per patch when possible;

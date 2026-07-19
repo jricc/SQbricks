@@ -1,9 +1,34 @@
 # TODO
 
-## Next
+## Next: phase 4 correctness bugs
 
-- [ ] Create or switch to a dedicated branch before continuing the Equiv
-  corrections.
+- [ ] Complete phase normalization in `Poly.Monome.simplify`: scalar factors
+  exposed by recursive simplification must be multiplied before reduction
+  modulo one.
+- [ ] Give OpenQASM `if (creg == value)` exact supported semantics instead of
+  keeping only the bits equal to one; unsupported conditions and oversized
+  integer literals must fail clearly rather than change circuit semantics.
+- [ ] Make `Path_sum_library` gate constructors return a ket with the declared
+  circuit width for arbitrary valid wires, and reject overlapping controls and
+  targets.
+- [ ] Make `Program.Macros.apply_swap_result` implement the requested wire
+  mapping when source and destination lists overlap.
+- [ ] Compare observable measurements in `Equiv` by corresponding output
+  positions rather than by raw physical qubit indices.
+- [ ] Implement the consistent path-variable renaming documented for
+  `Ket.equal_result` and used by `Path_sum.equal_result`.
+
+## Then: phase 4 API and robustness bugs
+
+- [ ] Fix OpenQASM export with `one_creg=true` so it keeps the quantum register
+  and circuit, and reject unsupported controlled gates without recursive
+  expansion loops.
+- [ ] Align `ListBis.check_bounds` and the bound-extraction helpers with their
+  documented return values and list order, after checking for external users.
+- [ ] Close parser input channels on both successful parses and parser errors.
+
+## Later roadmap work
+
 - [ ] Measure the performance impact of recursive variable substitution under
   `Qubit.Prod`; it unlocks additional reductions and equivalence proofs, but
   traversing larger qubit expressions may increase reduction time.
@@ -15,7 +40,7 @@
 - [ ] Replace the circuit images generated with Qiskit in the documentation
   with images produced by the SQbricks Quantikz2 PDF generator.
 
-## Before phase 5
+## Validated before phase 5
 
 - [x] Make `HH` remove its matched path-variable pair atomically, and stop
   applying `Elim` as an independent reduction on canonical path sums. Audit
