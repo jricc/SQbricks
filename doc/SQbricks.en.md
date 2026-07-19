@@ -561,7 +561,10 @@ negative phase coefficient is normalized modulo one. For example,
 `(-5/4)*(1/2)` is first computed as `-5/8`, then normalized to `3/8` with the
 Euclidean remainder. Normalizing `-5/4` before the multiplication could change
 the phase because congruence modulo one is not preserved by arbitrary rational
-multiplication.
+multiplication. The same rule applies when recursive simplification removes an
+identity and exposes another scalar factor. For example,
+`(-9/4)*(1*(1/2))` first becomes `-9/8`, then `7/8` modulo one; the `-9/4`
+factor must not be normalized before the identity is removed.
 
 Symbolic comparison now follows the same principle. The functions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,

@@ -573,7 +573,10 @@ avant de normaliser un coefficient de phase négatif modulo un. Par exemple,
 `(-5/4)*(1/2)` est d'abord calculé comme `-5/8`, puis normalisé en `3/8` avec le
 reste euclidien. Normaliser `-5/4` avant la multiplication pourrait changer la
 phase, car la congruence modulo un n'est pas préservée par une multiplication
-rationnelle arbitraire.
+rationnelle arbitraire. Cette règle s'applique aussi lorsqu'une simplification
+récursive supprime une identité et fait apparaître un nouveau facteur scalaire.
+Par exemple, `(-9/4)*(1*(1/2))` devient d'abord `-9/8`, puis `7/8` modulo un ;
+le facteur `-9/4` ne doit pas être normalisé avant la suppression de l'identité.
 
 La comparaison symbolique suit maintenant le même principe. Les fonctions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,

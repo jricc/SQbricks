@@ -2,9 +2,6 @@
 
 ## Next: phase 4 correctness bugs
 
-- [ ] Complete phase normalization in `Poly.Monome.simplify`: scalar factors
-  exposed by recursive simplification must be multiplied before reduction
-  modulo one.
 - [ ] Give OpenQASM `if (creg == value)` exact supported semantics instead of
   keeping only the bits equal to one; unsupported conditions and oversized
   integer literals must fail clearly rather than change circuit semantics.
@@ -51,6 +48,9 @@
   explicit output lists are supplied.
 - [x] Normalize negative rational phase coefficients modulo one with a direct
   Euclidean remainder.
+- [x] Complete phase normalization in `Poly.Monome.simplify` by multiplying
+  scalar factors exposed by recursive simplification before reduction modulo
+  one.
 - [x] Preserve already collected variables in `Qubit.extract_path_var` and
   `Qubit.extract_var` when a constant node is visited.
 - [x] Make `ListBis.remove` preserve list order.

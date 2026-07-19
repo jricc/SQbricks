@@ -125,7 +125,7 @@ Goal: fix correctness and reproducibility issues.
 
 Current correctness queue, in order:
 
-- [ ] finish scalar multiplication before modulo-one phase normalization in
+- [x] finish scalar multiplication before modulo-one phase normalization in
   `Poly.Monome.simplify`;
 - [ ] preserve the exact semantics of OpenQASM whole-register conditions, or
   reject unsupported forms explicitly;

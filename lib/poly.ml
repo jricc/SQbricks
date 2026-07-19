@@ -180,12 +180,19 @@ module Monome = struct
             let m2_simplified = m2 in
             let m3_simplified = m3 in
             aux (Prod (m1_simplified, Prod (m2_simplified, m3_simplified)))
-        | Prod (Scal s, m1) ->
-            let num =
-              let new_num = Z.rem s.num s.den in
-              if Z.equal new_num Z.zero then s.num else new_num
-            in
-            Prod (Scal (Q.make num s.den), aux m1)
+        | Prod (Scal s, m1) -> (
+            (* Simplifying [m1] can remove an identity and expose another
+               scalar. Combine it before reducing the coefficient modulo one. *)
+            match aux m1 with
+            | Scal s1 -> aux (Scal (Q.mul s s1))
+            | Prod (Scal s1, m1') ->
+                aux (Prod (Scal (Q.mul s s1), m1'))
+            | m1_simplified ->
+                let num =
+                  let new_num = Z.rem s.num s.den in
+                  if Z.equal new_num Z.zero then s.num else new_num
+                in
+                Prod (Scal (Q.make num s.den), m1_simplified))
         | Qubit One -> Scal Q.one
         | Qubit Zero -> Scal Q.zero
         | Qubit (Prod (q1, q2)) -> Prod (Qubit q1, Qubit q2)

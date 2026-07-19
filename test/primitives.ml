@@ -622,6 +622,17 @@ let test_monome_simplify_normalizes_complete_qubit_coefficient () =
        ( Monome.Scal (Q.make (Z.of_int 7) (Z.of_int 8)),
          Monome.Qubit (Qubit.Var 0) ))
 
+let test_monome_simplify_combines_scalars_exposed_by_identity () =
+  (* Input: (-9/4) * (1 * 1/2). Simplifying the identity exposes two scalar
+     factors, which must be multiplied before normalization: -9/8 = 7/8. *)
+  check_simplified_monome "scalars exposed by identity"
+    (Monome.Prod
+       ( Monome.Scal (Q.make (Z.of_int (-9)) (Z.of_int 4)),
+         Monome.Prod
+           ( Monome.Qubit Qubit.One,
+             Monome.Scal (Q.make (Z.of_int 1) (Z.of_int 2)) ) ))
+    (Monome.Scal (Q.make (Z.of_int 7) (Z.of_int 8)))
+
 let monome_simplification =
   [
     ( "normalizes a negative scalar",
@@ -633,6 +644,9 @@ let monome_simplification =
     ( "normalizes a complete qubit coefficient",
       `Quick,
       test_monome_simplify_normalizes_complete_qubit_coefficient );
+    ( "combines scalars exposed by identity",
+      `Quick,
+      test_monome_simplify_combines_scalars_exposed_by_identity );
   ]
 
 let monome_to_scalar_monome =
