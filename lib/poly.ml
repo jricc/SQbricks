@@ -126,22 +126,11 @@ module Monome = struct
     let rec aux m =
       match m with
       | Scal s when Q.( < ) s (Q.of_int 0) && Z.lt (Z.of_int 1) s.den ->
-          (* -2pi.1/4 -> 2pi.3/4 *)
+          let normalized_scalar = Q.make (Z.erem s.num s.den) s.den in
           if debug then
-            printf "Poly.remove_neg_scal, s = %s\n%!" (Q.to_string s);
-          if debug then
-            printf "Poly.remove_neg_scal, s.num = %s, s.den = %s\n%!"
-              (Z.to_string s.num) (Z.to_string s.den);
-          let num = Z.add s.num s.den in
-          if debug then
-            printf "Poly.remove_neg_scal, num = %s\n%!" (Z.to_string num);
-          let s = Q.make num s.den in
-          if debug then
-            printf "Poly.remove_neg_scal, s = %s\n%!" (Q.to_string s);
-          let m' = Scal s in
-          if debug then
-            printf "Poly.remove_neg_scal, m' = %s\n\n%!" (String.exact m');
-          m'
+            printf "Poly.remove_neg_scal, %s -> %s\n%!" (Q.to_string s)
+              (Q.to_string normalized_scalar);
+          Scal normalized_scalar
       | Prod (m1, m2) -> Prod (aux m1, aux m2)
       | _ -> m
     in
@@ -149,12 +138,10 @@ module Monome = struct
 
   let simplify ?(debug = false) (m : t) : t =
     if debug then printf "Phase.simplify, m = %s\n" (String.exact m);
-    let m = remove_neg_scal ~debug m in
     let rec aux' ?(debug = false) (m : t) : t =
       let continue = ref false in
       if debug then
-        printf "Phase.simplify,after remove negative scalar, m = %s\n"
-          (String.exact m);
+        printf "Phase.simplify.iteration, m = %s\n" (String.exact m);
       let rec aux m =
         match m with
         | Scal s when s = divm2 -> Scal div2
@@ -221,6 +208,8 @@ module Monome = struct
                       Prod (p2s, p1s))))
         | Qubit q -> Qubit (Qubit.simplify q)
       in
+      (* Reducing modulo one before a rational scalar multiplication can change
+         the represented phase. Normalize only after scalar factors combine. *)
       let m_simplified = remove_neg_scal ~debug (aux m) in
       if debug then
         printf "Phase.simplify, m_simplified = %s\n" (String.exact m_simplified);

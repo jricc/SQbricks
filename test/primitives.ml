@@ -570,6 +570,51 @@ let monome_equality =
       test_monome_remove_result_reports_qubit_sum );
   ]
 
+let check_simplified_monome name input expected =
+  check string name (Monome.String.exact expected)
+    (Monome.String.exact (Monome.simplify input))
+
+let test_monome_simplify_normalizes_negative_scalar () =
+  (* -5/4 = 3/4 modulo 1. *)
+  check_simplified_monome "negative scalar"
+    (Monome.Scal (Q.make (Z.of_int (-5)) (Z.of_int 4)))
+    (Monome.Scal (Q.make (Z.of_int 3) (Z.of_int 4)))
+
+let test_monome_simplify_multiplies_scalars_before_normalizing () =
+  (* (-5/4)*(1/2) = -5/8 = 3/8 modulo 1. Normalizing -5/4 first
+     would incorrectly produce 7/8 with the current implementation. *)
+  check_simplified_monome "scalar product before normalization"
+    (Monome.Prod
+       ( Monome.Scal (Q.make (Z.of_int (-5)) (Z.of_int 4)),
+         Monome.Scal (Q.make (Z.of_int 1) (Z.of_int 2)) ))
+    (Monome.Scal (Q.make (Z.of_int 3) (Z.of_int 8)))
+
+let test_monome_simplify_normalizes_complete_qubit_coefficient () =
+  (* (-9/4)*(1/2)*x0 = (-9/8)*x0 = (7/8)*x0 modulo 1. This
+     prevents normalizing the first scalar before all factors are combined. *)
+  check_simplified_monome "complete qubit coefficient"
+    (Monome.Prod
+       ( Monome.Scal (Q.make (Z.of_int (-9)) (Z.of_int 4)),
+         Monome.Prod
+           ( Monome.Scal (Q.make (Z.of_int 1) (Z.of_int 2)),
+             Monome.Qubit (Qubit.Var 0) ) ))
+    (Monome.Prod
+       ( Monome.Scal (Q.make (Z.of_int 7) (Z.of_int 8)),
+         Monome.Qubit (Qubit.Var 0) ))
+
+let monome_simplification =
+  [
+    ( "normalizes a negative scalar",
+      `Quick,
+      test_monome_simplify_normalizes_negative_scalar );
+    ( "multiplies scalars before normalizing",
+      `Quick,
+      test_monome_simplify_multiplies_scalars_before_normalizing );
+    ( "normalizes a complete qubit coefficient",
+      `Quick,
+      test_monome_simplify_normalizes_complete_qubit_coefficient );
+  ]
+
 let monome_to_scalar_monome =
   [
     ( "1/2 x0 -> 1/2, x0",
@@ -3157,6 +3202,7 @@ let () =
       ("Lift Monome", lift_monome);
       ("Lift Qubit", lift_qubit);
       ("Monome equality", monome_equality);
+      ("Monome simplification", monome_simplification);
       ("Monome to scalar monome", monome_to_scalar_monome);
       ("Variable replacement Factorisation", variable_replacement_factorisation);
       ("Variable replacement", variable_replacement);

@@ -556,6 +556,13 @@ symbolic execution. `Program.String.pretty` therefore keeps a generic form for
 The historical `Program.Macros` helpers still reject `k < 0` before constructing
 the `Program.t`.
 
+In `Poly.Monome.simplify`, rational factors are multiplied exactly before a
+negative phase coefficient is normalized modulo one. For example,
+`(-5/4)*(1/2)` is first computed as `-5/8`, then normalized to `3/8` with the
+Euclidean remainder. Normalizing `-5/4` before the multiplication could change
+the phase because congruence modulo one is not preserved by arbitrary rational
+multiplication.
+
 Symbolic comparison now follows the same principle. The functions
 `Qubit.equal_result`, `Poly.Monome.equal_result`, `Poly.equal_result`,
 `Path_sum.Ket.equal_result`, and `Path_sum.equal_result` distinguish a real

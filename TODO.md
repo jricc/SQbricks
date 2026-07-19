@@ -24,7 +24,7 @@
   does not occur in `Q`.
 - [x] Make `Path_sum.equal_result` require equal ket widths only when no
   explicit output lists are supplied.
-- [ ] Normalize negative rational phase coefficients modulo one with a direct
+- [x] Normalize negative rational phase coefficients modulo one with a direct
   Euclidean remainder.
 - [ ] Preserve already collected variables in `Qubit.extract_path_var` and
   `Qubit.extract_var` when a constant node is visited.
