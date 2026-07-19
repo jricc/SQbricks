@@ -2600,14 +2600,15 @@ let test_path_sum_library_h_result_returns_path_sum () =
   match Path_sum_library.h_result 0 1 with
   | Ok path_sum ->
       check string "h gate path sum" (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_h_result_reports_invalid_target () =
   (* Target 1 is outside width 1; the typed constructor reports that directly. *)
   match Path_sum_library.h_result 1 1 with
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
 
 let test_path_sum_library_x_result_returns_path_sum () =
@@ -2623,8 +2624,7 @@ let test_path_sum_library_x_result_returns_path_sum () =
   match Path_sum_library.x_result 0 1 with
   | Ok path_sum ->
       check string "x gate path sum" (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_x_result_reports_invalid_target () =
   (* Target indices are zero-based: target 1 is outside a width-1 path sum. *)
@@ -2632,6 +2632,8 @@ let test_path_sum_library_x_result_reports_invalid_target () =
   match Path_sum_library.x_result 1 1 with
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
 
 let test_path_sum_library_u1_result_returns_path_sum () =
@@ -2648,14 +2650,15 @@ let test_path_sum_library_u1_result_returns_path_sum () =
   match Path_sum_library.u1_result 1 0 1 with
   | Ok path_sum ->
       check string "u1 gate path sum" (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_u1_result_reports_invalid_target () =
   (* U1 also relies on xx: target 1 is outside width 1 and must be reported. *)
   match Path_sum_library.u1_result 1 1 1 with
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
 
 let test_path_sum_library_z_result_returns_path_sum () =
@@ -2672,14 +2675,15 @@ let test_path_sum_library_z_result_returns_path_sum () =
   match Path_sum_library.z_result 0 1 with
   | Ok path_sum ->
       check string "z gate path sum" (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_z_result_reports_invalid_target () =
   (* z_result delegates target validation to u1_result and reports the same error. *)
   match Path_sum_library.z_result 1 1 with
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
 
 let test_path_sum_library_s_result_returns_path_sum () =
@@ -2696,14 +2700,15 @@ let test_path_sum_library_s_result_returns_path_sum () =
   match Path_sum_library.s_result 0 1 with
   | Ok path_sum ->
       check string "s gate path sum" (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_s_result_reports_invalid_target () =
   (* s_result delegates target validation to u1_result and reports the same error. *)
   match Path_sum_library.s_result 1 1 with
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
 
 let test_path_sum_library_t_result_returns_path_sum () =
@@ -2720,14 +2725,15 @@ let test_path_sum_library_t_result_returns_path_sum () =
   match Path_sum_library.t_result 0 1 with
   | Ok path_sum ->
       check string "t gate path sum" (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_t_result_reports_invalid_target () =
   (* t_result delegates target validation to u1_result and reports the same error. *)
   match Path_sum_library.t_result 1 1 with
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
 
 let test_path_sum_library_zinv_result_returns_path_sum () =
@@ -2745,27 +2751,35 @@ let test_path_sum_library_zinv_result_returns_path_sum () =
   match Path_sum_library.zinv_result 0 1 with
   | Ok path_sum ->
       check string "zinv gate path sum" (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_zinv_result_reports_invalid_target () =
   (* zinv_result delegates target validation to u1_result and reports the same error. *)
   match Path_sum_library.zinv_result 1 1 with
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
 
 (* These helpers keep the gate-result tests focused on the expected path sum
    instead of repeating the same Ok/Error plumbing in every case. *)
 let check_gate_result name expected = function
   | Ok path_sum -> check string name (PSS.exact expected) (PSS.exact path_sum)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let check_gate_invalid_target = function
   | Error Path_sum_library.TargetIndexOutOfWidth ->
       check bool "invalid target rejected" true true
+  | Error Path_sum_library.OverlappingGateWires ->
+      check bool "invalid target error expected" true false
   | Ok _ -> check bool "invalid target expected" true false
+
+let check_gate_overlapping_wires = function
+  | Error Path_sum_library.OverlappingGateWires -> ()
+  | Error Path_sum_library.TargetIndexOutOfWidth ->
+      Alcotest.fail "in-width overlapping wires reported as an invalid index"
+  | Ok _ -> Alcotest.fail "overlapping gate wires were accepted"
 
 (* A gate built for width [w] must return all [w] output qubits, including
    untouched wires. These checks use non-canonical wire positions so a local
@@ -2773,8 +2787,7 @@ let check_gate_invalid_target = function
 let check_gate_ket name expected_ket = function
   | Ok path_sum ->
       check string name (KS.exact expected_ket) (KS.exact path_sum.ket)
-  | Error Path_sum_library.TargetIndexOutOfWidth ->
-      check bool "valid target expected" true false
+  | Error _ -> check bool "valid target expected" true false
 
 let test_path_sum_library_h_result_uses_declared_width () =
   (* H on wire 1 replaces x1 with y0 = Var 3 and preserves wires 0 and 2. *)
@@ -2866,6 +2879,39 @@ let test_path_sum_library_ccz_result_uses_declared_width () =
   check_gate_ket "ccz gate declared width"
     [| Qubit.Var 0; Qubit.Var 1; Qubit.Var 2 |]
     (Path_sum_library.ccz_result 2 0 1 3)
+
+let test_path_sum_library_ch_result_rejects_overlapping_wires () =
+  (* A controlled gate cannot use wire 0 as both control and target. *)
+  check_gate_overlapping_wires (Path_sum_library.ch_result 0 0 1)
+
+let test_path_sum_library_cx_result_rejects_overlapping_wires () =
+  (* CX has the same distinct-wire invariant as CH. *)
+  check_gate_overlapping_wires (Path_sum_library.cx_result 0 0 1)
+
+let test_path_sum_library_crz_result_rejects_overlapping_wires () =
+  (* A phase-only controlled gate still requires distinct physical wires. *)
+  check_gate_overlapping_wires (Path_sum_library.crz_result 1 0 0 1)
+
+let test_path_sum_library_ccx_result_rejects_duplicate_controls () =
+  (* The two controls of a three-wire gate must be distinct. *)
+  check_gate_overlapping_wires (Path_sum_library.ccx_result 0 0 1 2)
+
+let test_path_sum_library_ccx_result_rejects_first_control_target_overlap () =
+  (* The first control cannot also be the target. *)
+  check_gate_overlapping_wires (Path_sum_library.ccx_result 0 1 0 2)
+
+let test_path_sum_library_ccx_result_rejects_second_control_target_overlap () =
+  (* The second control cannot also be the target. *)
+  check_gate_overlapping_wires (Path_sum_library.ccx_result 0 1 1 2)
+
+let test_path_sum_library_ccz_result_rejects_overlapping_wires () =
+  (* CCZ must enforce the same three-wire invariant as CCX. *)
+  check_gate_overlapping_wires (Path_sum_library.ccz_result 0 0 1 2)
+
+let test_path_sum_library_invalid_index_precedes_overlap () =
+  (* Validate every selected index before reporting that controls 0 and 0
+     overlap; target 2 is outside width 2. *)
+  check_gate_invalid_target (Path_sum_library.ccx_result 0 0 2 2)
 
 let test_path_sum_library_result_reports_negative_target () =
   (* Public typed gate constructors reject negative indices before building Vars. *)
@@ -2967,8 +3013,7 @@ let test_path_sum_library_rotation_path_vars_are_width_offset () =
     | Ok path_sum ->
         check string name (ListBis.string_int [ 3; 4 ])
           (ListBis.string_int path_sum.path_var)
-    | Error Path_sum_library.TargetIndexOutOfWidth ->
-        check bool "valid target expected" true false
+    | Error _ -> check bool "valid target expected" true false
   in
   check_path_vars "rx path vars" (Path_sum_library.rx_result 1 2 3);
   check_path_vars "ry path vars" (Path_sum_library.ry_result 1 2 3)
@@ -3262,6 +3307,30 @@ let gates_apply =
     ( "ccz_result uses declared width",
       `Quick,
       test_path_sum_library_ccz_result_uses_declared_width );
+    ( "ch_result rejects overlapping wires",
+      `Quick,
+      test_path_sum_library_ch_result_rejects_overlapping_wires );
+    ( "cx_result rejects overlapping wires",
+      `Quick,
+      test_path_sum_library_cx_result_rejects_overlapping_wires );
+    ( "crz_result rejects overlapping wires",
+      `Quick,
+      test_path_sum_library_crz_result_rejects_overlapping_wires );
+    ( "ccx_result rejects duplicate controls",
+      `Quick,
+      test_path_sum_library_ccx_result_rejects_duplicate_controls );
+    ( "ccx_result rejects first control-target overlap",
+      `Quick,
+      test_path_sum_library_ccx_result_rejects_first_control_target_overlap );
+    ( "ccx_result rejects second control-target overlap",
+      `Quick,
+      test_path_sum_library_ccx_result_rejects_second_control_target_overlap );
+    ( "ccz_result rejects overlapping wires",
+      `Quick,
+      test_path_sum_library_ccz_result_rejects_overlapping_wires );
+    ( "invalid index precedes overlap",
+      `Quick,
+      test_path_sum_library_invalid_index_precedes_overlap );
     ( "ch_result returns path sum",
       `Quick,
       test_path_sum_library_ch_result_returns_path_sum );

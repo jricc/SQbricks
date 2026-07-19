@@ -370,13 +370,19 @@ module Path_sum_library : sig
       exponent [k] makes [u1], [rz], [rx], and [ry] exact identities. These
       constructors return the unchanged target without path variables in that
       case. [u1] is also the identity for [k = 0]. This is distinct from a
-      negative coefficient [s], which represents a valid opposite angle. *)
+      negative coefficient [s], which represents a valid opposite angle.
 
-  type gate_error = TargetIndexOutOfWidth
+      A successful constructor returns a ket with exactly [width] components.
+      Unselected wires keep their corresponding input variable. *)
+
+  type gate_error = TargetIndexOutOfWidth | OverlappingGateWires
   (** Errors that can prevent a gate path sum from being constructed.
 
       [TargetIndexOutOfWidth] means the requested target index is not inside
-      the declared circuit width. *)
+      the declared circuit width.
+
+      [OverlappingGateWires] means that a controlled gate uses the same wire
+      for two roles, such as both control and target. *)
 
   val h : int -> int -> t
   (** [h target width] creates a Hadamard gate:
@@ -488,7 +494,7 @@ module Path_sum_library : sig
   val ch_result : int -> int -> int -> (t, gate_error) result
   (** [ch_result control target width] is the typed version of {!ch}. It
       returns [Error TargetIndexOutOfWidth] when [control] or [target] is
-      outside [width]. *)
+      outside [width], and [Error OverlappingGateWires] when they are equal. *)
 
   val cx : int -> int -> int -> t
   (** [cx control target width] creates a CNOT gate. *)
@@ -496,7 +502,7 @@ module Path_sum_library : sig
   val cx_result : int -> int -> int -> (t, gate_error) result
   (** [cx_result control target width] is the typed version of {!cx}. It
       returns [Error TargetIndexOutOfWidth] when [control] or [target] is
-      outside [width]. *)
+      outside [width], and [Error OverlappingGateWires] when they are equal. *)
 
   val crz : int -> int -> int -> int -> t
   (** [crz k control target width] creates a controlled-RZ gate. *)
@@ -504,7 +510,7 @@ module Path_sum_library : sig
   val crz_result : int -> int -> int -> int -> (t, gate_error) result
   (** [crz_result k control target width] is the typed version of {!crz}. It
       returns [Error TargetIndexOutOfWidth] when [control] or [target] is
-      outside [width]. *)
+      outside [width], and [Error OverlappingGateWires] when they are equal. *)
 
   val cz : int -> int -> int -> t
   (** [cz control target width] creates a controlled-Z gate. *)
@@ -512,7 +518,7 @@ module Path_sum_library : sig
   val cz_result : int -> int -> int -> (t, gate_error) result
   (** [cz_result control target width] is the typed version of {!cz}. It
       returns [Error TargetIndexOutOfWidth] when [control] or [target] is
-      outside [width]. *)
+      outside [width], and [Error OverlappingGateWires] when they are equal. *)
 
   val cs : int -> int -> int -> t
   (** [cs control target width] creates a controlled-S gate. *)
@@ -520,7 +526,7 @@ module Path_sum_library : sig
   val cs_result : int -> int -> int -> (t, gate_error) result
   (** [cs_result control target width] is the typed version of {!cs}. It
       returns [Error TargetIndexOutOfWidth] when [control] or [target] is
-      outside [width]. *)
+      outside [width], and [Error OverlappingGateWires] when they are equal. *)
 
   val ct : int -> int -> int -> t
   (** [ct control target width] creates a controlled-T gate. *)
@@ -528,7 +534,7 @@ module Path_sum_library : sig
   val ct_result : int -> int -> int -> (t, gate_error) result
   (** [ct_result control target width] is the typed version of {!ct}. It
       returns [Error TargetIndexOutOfWidth] when [control] or [target] is
-      outside [width]. *)
+      outside [width], and [Error OverlappingGateWires] when they are equal. *)
 
   val ccx : int -> int -> int -> int -> t
   (** [ccx control1 control2 target width] creates a Toffoli (CCX) gate. *)
@@ -536,7 +542,8 @@ module Path_sum_library : sig
   val ccx_result : int -> int -> int -> int -> (t, gate_error) result
   (** [ccx_result control1 control2 target width] is the typed version of
       {!ccx}. It returns [Error TargetIndexOutOfWidth] when one selected index
-      is outside [width]. *)
+      is outside [width], and [Error OverlappingGateWires] when two selected
+      indices are equal. *)
 
   val ccz : int -> int -> int -> int -> t
   (** [ccz control1 control2 target width] creates a double-controlled Z gate.
@@ -545,7 +552,8 @@ module Path_sum_library : sig
   val ccz_result : int -> int -> int -> int -> (t, gate_error) result
   (** [ccz_result control1 control2 target width] is the typed version of
       {!ccz}. It returns [Error TargetIndexOutOfWidth] when one selected index
-      is outside [width]. *)
+      is outside [width], and [Error OverlappingGateWires] when two selected
+      indices are equal. *)
 
   val sh3 : t
   (** [sh3] predefined state for testing and demonstration purposes. *)

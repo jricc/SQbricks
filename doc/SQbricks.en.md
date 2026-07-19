@@ -851,6 +851,19 @@ control outside the declared width returns `Error TargetIndexOutOfWidth`. The
 old constructors remain compatibility wrappers that preserve the historical
 failure message.
 
+For a declared width `w`, each constructor now returns a ket with exactly `w`
+components, ordered by physical wire index. Wires that are not involved in the
+gate keep their input variable. For example, `x_result 1 3` represents the ket
+`|x0, 1 xor x1, x2>`. When a gate creates path variables, their indices start at
+`w`, after the circuit input variables.
+
+Wires selected by a controlled gate must also be distinct. A two-wire gate
+whose control is also its target, or a three-wire gate whose roles reuse an
+index, returns `Error OverlappingGateWires`. All indices are validated before
+this overlap check, so `Error TargetIndexOutOfWidth` takes precedence when a
+wire is outside the declared width. Untyped wrappers turn an overlap into an
+explicit failure message.
+
 The validated typed constructors are:
 
 - single-target gates: `h_result`, `x_result`, `u1_result`, `z_result`,

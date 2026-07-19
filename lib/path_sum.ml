@@ -580,7 +580,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let ( ++ ) = Poly.( ++ )
   let empty = Poly.empty
 
-  type gate_error = TargetIndexOutOfWidth
+  type gate_error = TargetIndexOutOfWidth | OverlappingGateWires
 
   let target_is_valid target width = 0 <= target && target < width
 
@@ -599,21 +599,41 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
     | _ :: remaining_targets -> invalid_targets_failure remaining_targets w
     | [] -> invalid_target_failure w w
 
+  let overlapping_gate_wires_failure targets =
+    failwith
+      (sprintf "Path_sum.Library, gate wires must be distinct: %s\n"
+         (ListBis.string_int targets))
+
+  let gate_failure targets width = function
+    | TargetIndexOutOfWidth -> invalid_targets_failure targets width
+    | OverlappingGateWires -> overlapping_gate_wires_failure targets
+
   let targets2 target1 target2 w =
     match xx target1 w with
     | Error error -> Error error
     | Ok qubit1 -> (
         match xx target2 w with
         | Error error -> Error error
-        | Ok qubit2 -> Ok (qubit1, qubit2))
+        | Ok qubit2 ->
+            if target1 = target2 then Error OverlappingGateWires
+            else Ok (qubit1, qubit2))
 
   let targets3 target1 target2 target3 w =
-    match targets2 target1 target2 w with
+    (* Validate all indices before checking overlap, so an invalid index keeps
+       the same priority as before overlap errors were introduced. *)
+    match xx target1 w with
     | Error error -> Error error
-    | Ok (qubit1, qubit2) -> (
-        match xx target3 w with
+    | Ok qubit1 -> (
+        match xx target2 w with
         | Error error -> Error error
-        | Ok qubit3 -> Ok (qubit1, qubit2, qubit3))
+        | Ok qubit2 -> (
+            match xx target3 w with
+            | Error error -> Error error
+            | Ok qubit3 ->
+                if
+                  target1 = target2 || target1 = target3 || target2 = target3
+                then Error OverlappingGateWires
+                else Ok (qubit1, qubit2, qubit3)))
 
   let yy n w : Qubit.t = Var (n + w)
 
@@ -639,7 +659,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let h ta w =
     match h_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let x_result ta w =
     match xx ta w with
@@ -655,7 +675,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let x ta w =
     match x_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let apply_angle sQ k = if sQ < Q.zero then Q.add (pow2Q k) sQ else sQ
 
@@ -680,49 +700,49 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let u1 ?(s = 1) k ta w =
     match u1_result ~s k ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let z_result ta w = u1_result 1 ta w
 
   let z ta w =
     match z_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let s_result ta w = u1_result 2 ta w
 
   let s ta w =
     match s_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let t_result ta w = u1_result 3 ta w
 
   let t ta w =
     match t_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let zinv_result ta w = u1_result ~s:(-1) 1 ta w
 
   let zinv ta w =
     match zinv_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let sinv_result ta w = u1_result ~s:(-1) 2 ta w
 
   let sinv ta w =
     match sinv_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   let tinv_result ta w = u1_result ~s:(-1) 3 ta w
 
   let tinv ta w =
     match tinv_result ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   (* \( rz s k  : |x0> -> e^{2.pi.i. (x0.s/2^k - s/2^{k+1})} |x0> \) *)
   let rz_result ?(s = 1) k ta w =
@@ -743,7 +763,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let rz ?(s = 1) k ta w =
     match rz_result ~s k ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   (* \( rx s k : |x0> -> e^{2.pi.i. (x0.y0/2 + s.y0/2^k - s/2^{k+1} + y0.y1/2)} |y1> \) *)
   let rx_result ?(s = 1) k ta w =
@@ -779,7 +799,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let rx ?(s = 1) k ta w =
     match rx_result ~s k ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   (* \( ry s k : |x0> -> e^{2.pi.i.
      (-x0/4 + y0/2 - x0.y0/2 + s.y0/2^k - s/2^{k+1} + y0.y1/2 + y1/2)}
@@ -829,7 +849,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let ry ?(s = 1) k ta w =
     match ry_result ~s k ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_target_failure ta w
+    | Error error -> gate_failure [ ta ] w error
 
   (* \( (1 ++ x_0) (1 - 2 y_0) / 8 =
         (1 - x_0) (1 - 2 y_0) / 8 =
@@ -886,7 +906,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let ch co ta w =
     match ch_result co ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+    | Error error -> gate_failure [ co; ta ] w error
 
   let cx_result co ta w =
     match targets2 co ta w with
@@ -902,7 +922,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let cx co ta w =
     match cx_result co ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+    | Error error -> gate_failure [ co; ta ] w error
 
   let crz_result k co ta w =
     match targets2 co ta w with
@@ -919,28 +939,28 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let crz k co ta w =
     match crz_result k co ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+    | Error error -> gate_failure [ co; ta ] w error
 
   let cz_result co ta w = crz_result 1 co ta w
 
   let cz co ta w =
     match cz_result co ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+    | Error error -> gate_failure [ co; ta ] w error
 
   let cs_result co ta w = crz_result 2 co ta w
 
   let cs co ta w =
     match cs_result co ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+    | Error error -> gate_failure [ co; ta ] w error
 
   let ct_result co ta w = crz_result 3 co ta w
 
   let ct co ta w =
     match ct_result co ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co; ta ] w
+    | Error error -> gate_failure [ co; ta ] w error
 
   let ccx_result co1 co2 ta w =
     match targets3 co1 co2 ta w with
@@ -958,7 +978,7 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let ccx co1 co2 ta w =
     match ccx_result co1 co2 ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co1; co2; ta ] w
+    | Error error -> gate_failure [ co1; co2; ta ] w error
 
   let ccrz k co1 co2 ta w =
     match targets3 co1 co2 ta w with
@@ -980,6 +1000,6 @@ e^{-2πi(s/2^k)} = e^{2πi((2^k - s)/2^k)}
   let ccz co1 co2 ta w =
     match ccz_result co1 co2 ta w with
     | Ok path_sum -> path_sum
-    | Error TargetIndexOutOfWidth -> invalid_targets_failure [ co1; co2; ta ] w
+    | Error error -> gate_failure [ co1; co2; ta ] w error
   let sh3 = { phase = Scal div8 ++ empty; ket = [| Var 0 |]; path_var = [] }
 end

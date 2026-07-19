@@ -870,6 +870,21 @@ un contrôle secondaire hors de la largeur déclarée renvoie
 `Error TargetIndexOutOfWidth`. Les anciens constructeurs restent des wrappers de
 compatibilité qui préservent le message d'échec historique.
 
+Pour une largeur déclarée `w`, chaque constructeur renvoie maintenant un ket
+d'exactement `w` composantes, ordonnées par indice physique. Les fils qui ne
+sont pas concernés par la porte conservent leur variable d'entrée. Par exemple,
+`x_result 1 3` représente le ket `|x0, 1 xor x1, x2>`. Lorsqu'une porte crée des
+variables de chemin, leurs indices commencent à `w`, après les variables
+d'entrée du circuit.
+
+Les fils sélectionnés par une porte contrôlée doivent aussi être distincts. Une
+porte à deux fils dont le contrôle est également la cible, ou une porte à trois
+fils dont deux rôles utilisent le même indice, renvoie
+`Error OverlappingGateWires`. Tous les indices sont validés avant ce test de
+chevauchement : `Error TargetIndexOutOfWidth` reste donc prioritaire lorsqu'un
+des fils est hors de la largeur déclarée. Les wrappers non typés transforment
+le chevauchement en un message d'échec explicite.
+
 Les constructeurs typés validés sont :
 
 - portes à une cible : `h_result`, `x_result`, `u1_result`, `z_result`,

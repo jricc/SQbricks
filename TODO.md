@@ -2,7 +2,7 @@
 
 ## Next: phase 4 correctness bugs
 
-- [ ] Make `Path_sum_library` gate constructors return a ket with the declared
+- [x] Make `Path_sum_library` gate constructors return a ket with the declared
   circuit width for arbitrary valid wires, and reject overlapping controls and
   targets.
 - [ ] Make `Program.Macros.apply_swap_result` implement the requested wire

@@ -129,7 +129,7 @@ Current correctness queue, in order:
   `Poly.Monome.simplify`;
 - [x] preserve the exact semantics of OpenQASM whole-register conditions, or
   reject unsupported forms explicitly;
-- [ ] make `Path_sum_library` honor declared circuit widths and reject
+- [x] make `Path_sum_library` honor declared circuit widths and reject
   overlapping gate wires;
 - [ ] make multi-wire swaps implement overlapping source/destination mappings
   correctly;
