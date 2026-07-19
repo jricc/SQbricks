@@ -119,11 +119,7 @@ module ListBis = struct
     List.rev (aux a [])
 
   let remove ?(eq = Int.equal) i l =
-    let rec aux acc = function
-      | hd :: tl -> if eq hd i then aux acc tl else aux (hd :: acc) tl
-      | [] -> acc
-    in
-    aux [] l
+    List.filter (fun element -> not (eq element i)) l
 
   let remove_duplicate l =
     let rec aux acc = function

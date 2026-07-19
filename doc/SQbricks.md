@@ -827,6 +827,10 @@ produits et les sommes modulo deux avec un accumulateur. Les constantes `Zero`
 et `One` n'ajoutent aucune variable, mais elles conservent les variables déjà
 collectées dans une autre branche de l'expression.
 
+`ListBis.remove` supprime toutes les occurrences demandées avec la fonction
+d'égalité fournie, tout en conservant l'ordre relatif des autres éléments. Si
+la valeur est absente, la liste conserve donc aussi son ordre initial.
+
 Les anciens wrappers restent en place pendant la migration. Ils conservent le
 comportement historique, souvent en levant encore `Failure` ou en retournant
 `None`, mais les tests nouveaux ciblent les versions `*_result`.

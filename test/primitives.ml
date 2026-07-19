@@ -78,6 +78,26 @@ let v i = Qubit.Var i
 
 let p0 = Poly.zero
 
+let test_list_bis_remove_preserves_order () =
+  (* All matching values are removed without reordering the retained values. *)
+  check (list int) "removed repeated value" [ 1; 3; 4 ]
+    (ListBis.remove 2 [ 1; 2; 3; 2; 4 ])
+
+let test_list_bis_remove_absent_value_preserves_list () =
+  (* Removing an absent value must leave the original order unchanged. *)
+  check (list int) "absent value" [ 1; 2; 3 ]
+    (ListBis.remove 9 [ 1; 2; 3 ])
+
+let list_bis =
+  [
+    ( "remove preserves order",
+      `Quick,
+      test_list_bis_remove_preserves_order );
+    ( "removing an absent value preserves the list",
+      `Quick,
+      test_list_bis_remove_absent_value_preserves_list );
+  ]
+
 let malformed_zero_width_path_sum : Path_sum.t =
   { phase = p0; ket = [||]; path_var = [ 0 ] }
 
@@ -3207,6 +3227,7 @@ let gates_apply =
 let () =
   Alcotest.run "Symbolic execution"
     [
+      ("ListBis", list_bis);
       ("Poly Normalise", poly_normalize);
       (* ("Normalise Path Variables", normalise_path_var); *)
       ("HH", hh);

@@ -809,6 +809,10 @@ and sums modulo two with an accumulator. The `Zero` and `One` constants add no
 variable, but preserve variables already collected from another branch of the
 expression.
 
+`ListBis.remove` removes every requested occurrence with the supplied equality
+function while preserving the relative order of all other elements. When the
+value is absent, the list therefore also keeps its original order.
+
 The old wrappers remain in place during the migration. They preserve historical
 behavior, often still raising `Failure` or returning `None`, but the new tests
 target the `*_result` versions.
