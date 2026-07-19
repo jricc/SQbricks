@@ -140,10 +140,6 @@ module ListBis = struct
   let substitute old old_val new_val =
     List.map (fun v -> if v = old_val then new_val else v) old
 
-  let remove_list l_to_remove l =
-    let rec aux acc = function hd :: tl -> aux (remove hd l) tl | [] -> acc in
-    aux [] l_to_remove
-
   let of_string_to_int_list s =
     if String.equal s "" then []
     else

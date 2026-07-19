@@ -29,7 +29,7 @@
 - [x] Preserve already collected variables in `Qubit.extract_path_var` and
   `Qubit.extract_var` when a constant node is visited.
 - [x] Make `ListBis.remove` preserve list order.
-- [ ] Confirm that `ListBis.remove_list` has no internal caller, then remove it
+- [x] Confirm that `ListBis.remove_list` has no internal caller, then remove it
   instead of retaining unused code.
 
 ## Done

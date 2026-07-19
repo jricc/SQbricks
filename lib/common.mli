@@ -184,14 +184,6 @@ module ListBis : sig
       - [substitute [1; 2; 1] 1 3] returns [[3; 2; 3]]
       - [substitute ["a"; "b"] "a" "c"] returns [["c"; "b"]] *)
 
-  val remove_list : int list -> int list -> int list
-  (** [remove_list to_remove l] removes each element in [to_remove] from list
-      [l], returning the result of the last removal.
-
-      Examples:
-      - [remove_list [1; 2] [1; 2; 3]] returns [[3]]
-      - [remove_list [] [1; 2; 3]] returns [[1; 2; 3]] *)
-
   val member : 'a -> 'a list -> ('a -> 'a -> bool) -> bool
   (** [member e l eq] checks if element [e] is present in list [l] using the
       given equality function [eq].
