@@ -856,6 +856,61 @@ let test_path_sum_equal_result_reports_invalid_output_index () =
       check bool "invalid output index expected" true false
   | Ok _ -> check bool "invalid output index expected" true false
 
+let test_path_sum_equal_result_rejects_narrower_first_without_outputs () =
+  (* Without explicit outputs, equality compares the complete kets. Their
+     widths must therefore be equal, independently of argument order. *)
+  let narrow : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  let wide : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| Qubit.Var 0; Qubit.Var 1 |];
+      path_var = [];
+    }
+  in
+  match Path_sum.equal_result narrow wide with
+  | Ok false -> ()
+  | Ok true -> Alcotest.fail "different complete ket widths accepted"
+  | Error _ -> Alcotest.fail "different complete ket widths should return false"
+
+let test_path_sum_equal_result_rejects_wider_first_without_outputs () =
+  (* Check the reverse order separately to prevent an asymmetric result. *)
+  let wide : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| Qubit.Var 0; Qubit.Var 1 |];
+      path_var = [];
+    }
+  in
+  let narrow : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  match Path_sum.equal_result wide narrow with
+  | Ok false -> ()
+  | Ok true -> Alcotest.fail "different complete ket widths accepted"
+  | Error _ -> Alcotest.fail "different complete ket widths should return false"
+
+let test_path_sum_equal_result_accepts_different_widths_with_outputs () =
+  (* Explicit output lists compare only the selected components, so the two
+     complete kets may have different widths. *)
+  let narrow : Path_sum.t =
+    { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
+  in
+  let wide : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| Qubit.Var 0; Qubit.Var 1 |];
+      path_var = [];
+    }
+  in
+  match
+    Path_sum.equal_result ~outputs1:[ 0 ] ~outputs2:[ 0 ] narrow wide
+  with
+  | Ok true -> ()
+  | Ok false -> Alcotest.fail "equal selected outputs rejected"
+  | Error _ -> Alcotest.fail "different ket widths with explicit outputs rejected"
+
 let path_sum_equality =
   [
     ( "equal_result returns true",
@@ -870,6 +925,15 @@ let path_sum_equality =
     ( "equal_result reports invalid output index",
       `Quick,
       test_path_sum_equal_result_reports_invalid_output_index );
+    ( "equal_result rejects narrower ket first without outputs",
+      `Quick,
+      test_path_sum_equal_result_rejects_narrower_first_without_outputs );
+    ( "equal_result rejects wider ket first without outputs",
+      `Quick,
+      test_path_sum_equal_result_rejects_wider_first_without_outputs );
+    ( "equal_result accepts different widths with outputs",
+      `Quick,
+      test_path_sum_equal_result_accepts_different_widths_with_outputs );
   ]
 
 let test_path_sum_ofSize_init_result_returns_path_sum () =
@@ -1531,6 +1595,66 @@ let test_variable_replacement_returns_none () =
   | Ok (Some _) -> check bool "no replacement expected" true false
   | Error (Rules.MalformedPathSum _) -> check bool "valid path sum" true false
 
+let test_variable_replacement_ignores_path_variable_under_product () =
+  (* Input:    phase = 0, ket = |x0 + y0*y1, y1>
+     Expected: no replacement.
+
+     When y1 = 0, the first output is independent of y0. Replacing that output
+     with a fresh path variable would therefore not be a bijective change of
+     variables. *)
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| v 0 ++ Qubit.Prod (v 2, v 3); v 3 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Rules.Variable_replacement.variable_replacement input with
+  | Ok None -> ()
+  | Ok (Some output) ->
+      Alcotest.fail ("unexpected nonlinear replacement: " ^ PSS.exact output)
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_variable_replacement_allows_product_independent_of_path_variable () =
+  (* A product may occur in Q when the candidate y0 remains a direct XOR term:
+     |y0 + x0*x1, x1> has the valid form |y0 + Q(x), x1>. *)
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| v 2 ++ Qubit.Prod (v 0, v 1); v 1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let expected : Path_sum.t =
+    { phase = Poly.zero; ket = [| v 2; v 1 |]; path_var = [ 2 ] }
+  in
+  match Rules.Variable_replacement.variable_replacement input with
+  | Ok (Some output) ->
+      check string "independent product replacement" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "expected an independent product replacement"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_variable_replacement_rejects_repeated_path_variable_under_product () =
+  (* y0 occurs both directly and in y0*y1, so the output is not y0 xor Q with
+     Q independent of y0. *)
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| v 2 ++ Qubit.Prod (v 2, v 3); v 3 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Rules.Variable_replacement.variable_replacement input with
+  | Ok None -> ()
+  | Ok (Some output) ->
+      Alcotest.fail
+        ("unexpected repeated-variable replacement: " ^ PSS.exact output)
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let test_variable_replacement_reports_malformed_path_sum () =
   let malformed_path_sum : Path_sum.t =
     { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [ 0 ] }
@@ -1731,6 +1855,15 @@ let variable_replacement =
     ( "variable_replacement returns none",
       `Quick,
       test_variable_replacement_returns_none );
+    ( "variable_replacement ignores a path variable under a product",
+      `Quick,
+      test_variable_replacement_ignores_path_variable_under_product );
+    ( "variable_replacement allows an independent product",
+      `Quick,
+      test_variable_replacement_allows_product_independent_of_path_variable );
+    ( "variable_replacement rejects a repeated variable under a product",
+      `Quick,
+      test_variable_replacement_rejects_repeated_path_variable_under_product );
     ( "variable_replacement reports malformed path sum",
       `Quick,
       test_variable_replacement_reports_malformed_path_sum );

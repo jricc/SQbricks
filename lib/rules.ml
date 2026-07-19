@@ -445,79 +445,56 @@ module Rename = struct
 end
 
 module Variable_replacement = struct
-  (** [condition_to_substitute ?debug q except ps] takes as input a qubit [q], a
-      path sum [ps], and an integer [except]. Returns [Some v] if the path
-      variables of [q] appear exactly once in [ps] (excluding the qubit at index
-      [except] in the ket), and [None] otherwise. *)
+  (** [condition_to_substitute ?debug q except ps] returns [Some y] when [q]
+      has the proved form [y xor Q], where [y] is a declared path variable that
+      does not occur in [Q], the phase, or another output qubit. *)
 
   let condition_to_substitute ?(debug = false) (q : Qubit.t) except
       (ps : Path_sum.t) : (int option, reduction_error) result =
     let width = Array.length ps.ket in
-    let rec number_of_path_var_of_q_outside_q (q : Qubit.t) :
-        (int * int, reduction_error) result =
-      match q with
-      | Var v ->
-          let condition_ket = lazy (Path_sum.Ket.member ~except v ps.ket) in
-          let condition_phase = lazy (Poly.member v ps.phase) in
-          if debug then
-            printf "Reduction_rules.condition_to_substitute, ps.phase = %s\n\n"
-              (PS.pretty ps.phase width);
-          if v < width then Ok (0, -1)
-          else if Lazy.force condition_ket then Ok (0, -1)
-          else if Lazy.force condition_phase then Ok (0, -1)
-          else Ok (1, v)
-      | Qubit.One | Qubit.Zero -> Ok (0, -1)
-      | SumMod2 (Qubit.One, q1) ->
-          if debug then
-            printf
-              "Reduction_rules.condition_to_substitute.SumMod2(1+q1), q1 = %s\n\n"
-              (QS.pretty q1 width);
-          let path_var_count = number_of_path_var_of_q_outside_q q1 in
-          (match path_var_count with
-          | Error reduction_error -> Error reduction_error
-          | Ok (nb, v) ->
-              if debug then
-                printf
-                  "Reduction_rules.condition_to_substitute.SumMod2(1+q1), nb \
-                   = %d\n\n"
-                  nb;
-              if nb < 0 then
-                Error
-                  (MalformedPathSum
-                     "Rule_variable_replacement.number_of_path_var_of_q_outside_q: negative path-variable count")
-              else Ok (nb, v))
-      | SumMod2 (q1, q2) | Prod (q1, q2) ->
-          let path_var_count1 = number_of_path_var_of_q_outside_q q1 in
-          (match path_var_count1 with
-          | Error reduction_error -> Error reduction_error
-          | Ok (nb1, v1) ->
-              if 1 < nb1 then Ok (nb1, -1)
-              else
-                let path_var_count2 = number_of_path_var_of_q_outside_q q2 in
-                match path_var_count2 with
-                | Error reduction_error -> Error reduction_error
-                | Ok (nb2, v2) ->
-                    let nb = nb1 + nb2 in
-                    (* Counts are matcher invariants: 0 means no candidate, 1
-                       means one candidate, and >1 means too many candidates. *)
-                    if nb1 < 0 || nb2 < 0 then
-                      Error
-                        (MalformedPathSum
-                           "Rule_variable_replacement.number_of_path_var_of_q_outside_q: negative path-variable count")
-                    else if 1 < nb then Ok (nb, -1)
-                    else if 1 < nb2 then Ok (nb2, -1)
-                    else if nb1 = 1 then Ok (nb1, v1)
-                    else if nb2 = 1 then Ok (nb2, v2)
-                    else if nb1 = 0 then Ok (0, -1)
-                    else if nb2 = 0 then Ok (0, -1)
-                    else
-                      Error
-                        (MalformedPathSum
-                           "Rule_variable_replacement.number_of_path_var_of_q_outside_q: unexpected path-variable count combination"))
+    let rec direct_xor_path_variables (qubit : Qubit.t) =
+      match qubit with
+      | Var variable
+        when width <= variable
+             && ListBis.member variable ps.path_var Int.equal ->
+          [ variable ]
+      | SumMod2 (left_qubit, right_qubit) ->
+          direct_xor_path_variables left_qubit
+          @ direct_xor_path_variables right_qubit
+      | Qubit.Zero | Qubit.One | Var _ | Prod _ -> []
     in
-    match number_of_path_var_of_q_outside_q q with
-    | Error reduction_error -> Error reduction_error
-    | Ok (nb, v) -> Ok (if nb = 1 then Some v else None)
+    let rec occurs_under_product variable (qubit : Qubit.t) =
+      match qubit with
+      | Prod _ as product -> Qubit.member variable product
+      | SumMod2 (left_qubit, right_qubit) ->
+          occurs_under_product variable left_qubit
+          || occurs_under_product variable right_qubit
+      | Qubit.Zero | Qubit.One | Var _ -> false
+    in
+    let direct_path_variables = direct_xor_path_variables q in
+    let occurs_once variable =
+      Int.equal 1
+        (List.fold_left
+           (fun count candidate ->
+             if Int.equal variable candidate then count + 1 else count)
+           0 direct_path_variables)
+    in
+    let is_available variable =
+      occurs_once variable
+      && not (occurs_under_product variable q)
+      && not (Path_sum.Ket.member ~except variable ps.ket)
+      && not (Poly.member variable ps.phase)
+    in
+    let available_path_variables =
+      List.sort_uniq Int.compare
+        (List.filter is_available direct_path_variables)
+    in
+    if debug then
+      printf "Reduction_rules.condition_to_substitute, candidates = %s\n\n"
+        (ListBis.string_int available_path_variables);
+    match available_path_variables with
+    | [ variable ] -> Ok (Some variable)
+    | _ -> Ok None
 
   (* original_qubit[qubit_to_replace <- replacement_qubit] *)
   let substitute_qubit_in_qubit original_qubit replacement_qubit qubit_to_replace

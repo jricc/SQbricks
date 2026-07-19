@@ -17,12 +17,12 @@
 
 ## Before phase 5
 
-- [ ] Make `HH` remove its matched path-variable pair atomically, and stop
+- [x] Make `HH` remove its matched path-variable pair atomically, and stop
   applying `Elim` as an independent reduction on canonical path sums. Audit
   the remaining calls after `HH` and variable-replacement factorisation.
-- [ ] Restrict `variable_replacement` to the proved form `y xor Q`, where `y`
+- [x] Restrict `variable_replacement` to the proved form `y xor Q`, where `y`
   does not occur in `Q`.
-- [ ] Make `Path_sum.equal_result` require equal ket widths only when no
+- [x] Make `Path_sum.equal_result` require equal ket widths only when no
   explicit output lists are supplied.
 - [ ] Normalize negative rational phase coefficients modulo one with a direct
   Euclidean remainder.

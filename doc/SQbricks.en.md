@@ -488,6 +488,19 @@ pipeline and tests therefore propagate `MalformedPathSum` explicitly instead of
 going through an untyped wrapper. `Reduction_algorithm.reduction_algorithm`
 follows the same principle.
 
+The `HH` rule atomically removes the two path variables matched by its pattern.
+The factor produced by destructive interference then exactly compensates for
+the two removed normalization factors. An unused path variable cannot be
+removed on its own, so `Elim` is no longer applied as an independent reduction
+after `HH` or after variable-replacement factorization.
+
+`Rules.Variable_replacement.variable_replacement` accepts a ket component only
+when it has the form `y xor Q`, where `y` is a declared path variable that does
+not occur in `Q`, the phase, or another ket component. `Q` may contain a product
+independent of `y`, for example `y0 xor x0*x1`. In contrast,
+`x0 xor y0*y1` has no direct candidate, and `y0 xor y0*y1` is rejected because
+`Q` depends on `y0`.
+
 In `Equiv`, initial state construction now goes through
 `Path_sum.ofSize_init_result`. An invalid width or initialization index is
 converted to `ErrorInvalidQubitIndex`, avoiding an escaping `invalid_arg` during
@@ -554,6 +567,10 @@ errors. Unit tests cover each observable return possibility for these typed
 results.
 `Path_sum.equal_result` also propagates typed phase-comparison errors instead of
 converting them to plain inequality.
+Without explicit output lists, `Path_sum.equal_result` compares the complete
+kets and returns `Ok false` when their widths differ. With two explicit output
+lists of equal length and valid indices, the complete ket widths may differ:
+only the selected components are compared.
 In the sequential algorithm, the decision that separates zero phase, global
 phase, and conditional phase also uses `Poly.equal_result`, so a malformed
 comparison is reported as `ErrorMalformedPathSum`.

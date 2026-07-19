@@ -494,6 +494,20 @@ un résultat typé. Le pipeline de réduction et les tests propagent donc
 explicitement `MalformedPathSum` au lieu de s'appuyer sur un wrapper non typé.
 `Reduction_algorithm.reduction_algorithm` suit le même principe.
 
+La règle `HH` retire atomiquement les deux variables de chemin appariées par son
+motif. Le facteur produit par la somme destructive compense alors exactement les
+deux facteurs de normalisation supprimés. Une variable de chemin inutilisée ne
+peut pas être retirée seule : `Elim` n'est donc plus appliquée comme une
+réduction indépendante après `HH` ou après la factorisation par remplacement de
+variable.
+
+`Rules.Variable_replacement.variable_replacement` accepte une composante de ket
+uniquement lorsqu'elle a la forme `y xor Q`, où `y` est une variable de chemin
+déclarée qui n'apparaît ni dans `Q`, ni dans la phase, ni dans une autre
+composante du ket. `Q` peut contenir un produit indépendant de `y`, par exemple
+`y0 xor x0*x1`. En revanche, `x0 xor y0*y1` ne contient pas de candidat direct,
+et `y0 xor y0*y1` est refusé parce que `Q` dépend de `y0`.
+
 Dans `Equiv`, la construction des états initiaux passe par
 `Path_sum.ofSize_init_result`. Une largeur invalide ou un indice
 d'initialisation invalide est converti en `ErrorInvalidQubitIndex`, ce qui évite
@@ -565,6 +579,10 @@ wrappers de compatibilité qui retournent `false` en cas d'erreur typée. Les te
 unitaires couvrent chaque possibilité observable de ces retours typés.
 `Path_sum.equal_result` propage aussi les erreurs typées de comparaison de
 phase au lieu de les convertir en simple inégalité.
+Sans listes de sorties explicites, `Path_sum.equal_result` compare les kets
+complets et retourne `Ok false` si leurs largeurs diffèrent. Avec deux listes de
+sorties explicites de même longueur et des indices valides, les largeurs totales
+des kets peuvent différer : seules les composantes sélectionnées sont comparées.
 Dans l'algorithme séquentiel, la décision qui distingue phase nulle, phase
 globale et phase conditionnelle utilise aussi `Poly.equal_result`, afin qu'une
 comparaison mal formée remonte comme `ErrorMalformedPathSum`.

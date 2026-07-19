@@ -388,6 +388,9 @@ let equal_result ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
   let width_outputs1 = List.length outputs1 in
   let width_outputs2 = List.length outputs2 in
   if width_outputs1 <> width_outputs2 then Error DifferentOutputLengths
+  else if width_outputs1 = 0 && not (Int.equal wq1 wq2) then
+    (* Without explicit outputs, equality compares the complete kets. *)
+    Ok false
   else
     let p1 = ps1.phase in
     let p2 = ps2.phase in
