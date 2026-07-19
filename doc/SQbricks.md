@@ -312,9 +312,29 @@ Les helpers ajoutés dans `Parser_OpenQASM.mly` ont chacun un rôle limité :
   qu'un fichier QASM ne réutilise pas les déclarations du fichier précédent ;
 - `declare_register` enregistre une déclaration `qreg` ou `creg`, réserve une
   tranche consécutive d'indices, puis avance le prochain offset disponible ;
-- `register_offset` récupère l'offset d'un registre classique entier, utilisé
-  notamment pour les conditions `if (c == n)` ;
+- `register_info` récupère le couple `(offset, taille)` d'un registre ;
+- `register_offset` récupère seulement son offset ;
 - `register_index` traduit `nom[index]` vers `offset + index`.
+
+Pour une condition OpenQASM `if (c == n)`, le parser conserve l'offset et la
+taille de `c`. Le bit `c[0]` est le bit de poids faible de `n`.
+`Parser_help.classical_condition_bits` sépare alors les bits attendus à `0` de
+ceux attendus à `1`, puis `Program.Macros.itl2` construit la condition exacte en
+inversant temporairement les bits attendus à `0`.
+
+Par exemple, après `creg prefix[1]; creg c[2];`, le registre `c` occupe les
+indices plats `1` et `2`. La condition `if (c == 2)` correspond à la valeur
+binaire `10` : le bit plat `1` doit valoir `0` et le bit plat `2` doit valoir
+`1`. Elle devient donc `itl2 [1] [2] programme`. Une cellule comme `c[1]` reste
+acceptée par compatibilité et est traitée comme un registre de taille un.
+
+Une valeur qui ne tient pas dans la taille déclarée est refusée explicitement.
+Un littéral entier trop grand pour la représentation entière de SQbricks est
+également refusé avec un message qui contient le littéral concerné. Si le corps
+d'une condition multi-bit est développé en plusieurs instructions, sa
+traduction ultérieure en mesures différées peut encore retourner
+`UnsupportedConditionalProgram` ; le parser conserve néanmoins la condition
+exacte au lieu de produire silencieusement un autre circuit.
 
 Par compatibilité avec des bibliothèques QASM existantes, SQbricks accepte aussi
 certains registres mal formés au lieu de bloquer immédiatement. Par exemple,

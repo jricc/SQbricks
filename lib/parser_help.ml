@@ -39,6 +39,24 @@ let int_to_control_qubits n offset =
   in
   List.sort_uniq Int.compare (aux n 0 [])
 
+let classical_condition_bits value offset width =
+  if value < 0 then
+    failwith
+      (sprintf
+         "OpenQASM condition value %d does not fit in a classical register of \
+          width %d"
+         value width);
+  let one_bits = int_to_control_qubits value offset in
+  if List.exists (fun bit -> offset + width <= bit) one_bits then
+    failwith
+      (sprintf
+         "OpenQASM condition value %d does not fit in a classical register of \
+          width %d"
+         value width);
+  let register_bits = List.init width (fun index -> offset + index) in
+  let zero_bits = List.filter (fun bit -> not (List.mem bit one_bits)) register_bits in
+  (zero_bits, one_bits)
+
 (* den = 2^k *)
 let den_to_k ?(debug = false) (den : Z.t) : int =
   let k = Z.log2 den in

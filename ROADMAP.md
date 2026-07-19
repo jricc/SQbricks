@@ -127,7 +127,7 @@ Current correctness queue, in order:
 
 - [x] finish scalar multiplication before modulo-one phase normalization in
   `Poly.Monome.simplify`;
-- [ ] preserve the exact semantics of OpenQASM whole-register conditions, or
+- [x] preserve the exact semantics of OpenQASM whole-register conditions, or
   reject unsupported forms explicitly;
 - [ ] make `Path_sum_library` honor declared circuit widths and reject
   overlapping gate wires;

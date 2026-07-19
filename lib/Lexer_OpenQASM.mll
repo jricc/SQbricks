@@ -88,7 +88,13 @@ rule token = parse
   | '(' { LRBRACKET }
   | ')' { RRBRACKET }
 
-  | ['0'-'9']+ as s { INT(int_of_string s) }
+  | ['0'-'9']+ as s {
+      match int_of_string_opt s with
+      | Some value -> INT value
+      | None ->
+          failwith
+            ("OpenQASM integer literal " ^ s ^ " is outside the supported range")
+    }
   | ['a'-'z''A'-'Z']['a'-'z''A'-'Z''0'-'9''_']* as s { IDENT(s) }
   | ',' { COMMA }				
   | ';' { SEMICOLON }

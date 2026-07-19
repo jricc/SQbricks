@@ -67,11 +67,15 @@ let declare_qreg name width =
 let declare_creg name width =
   declare_register "creg" creg_offsets next_creg_offset name width
 
-(* A whole classical register in "if (c == n)" starts at its declared offset. *)
-let register_offset kind registers name =
+let register_info kind registers name =
   match Hashtbl.find_opt registers name with
-  | Some (offset, _) -> offset
+  | Some info -> info
   | None -> failwith (sprintf "Parser.%s, undeclared register %s" kind name)
+
+(* A whole classical register starts at its declared offset. *)
+let register_offset kind registers name =
+  let offset, _ = register_info kind registers name in
+  offset
 
 (* A register cell name[index] is converted to offset + index. Out-of-range
    indices are malformed OpenQASM, but some benchmark libraries contain them;
@@ -269,10 +273,16 @@ statement:
     debug ("MEASURE " ^ string_of_int $2 ^ " -> " ^ string_of_int $4); 
     Program.Measure($2,$4) }
 
-  | IF LRBRACKET creg EQUAL INT RRBRACKET statement { 
-    let co = Parser_help.int_to_control_qubits $5 $3 in
-    debug ("IF c" ^ (ListBis.string_int co) ^ " then " ^ (ProgS.pretty $7)); 
-    Program.It (co,$7) }
+  | IF LRBRACKET condition_creg EQUAL INT RRBRACKET statement {
+    let offset, width = $3 in
+    let zero_bits, one_bits =
+      Parser_help.classical_condition_bits $5 offset width
+    in
+    debug
+      (sprintf "IF zero_bits=%s one_bits=%s then %s"
+         (ListBis.string_int zero_bits) (ListBis.string_int one_bits)
+         (ProgS.pretty $7));
+    itl2 zero_bits one_bits $7 }
   
   | RESET qubit { InitQ $2 }
 
@@ -289,6 +299,11 @@ creg:
     let co = register_index "creg" creg_offsets $1 $3 in
     debug((sprintf "2. creg, 1 = %s, 3 = %d, co = %d\n" $1 $3 co ));
     co}
+
+condition_creg:
+  | IDENT { register_info "creg" creg_offsets $1 }
+  | IDENT LBRACKET INT RBRACKET {
+    (register_index "creg" creg_offsets $1 $3, 1) }
 
 qreg_declaration:
   | QREG IDENT LBRACKET INT RBRACKET {

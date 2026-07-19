@@ -308,9 +308,28 @@ The helpers added in `Parser_OpenQASM.mly` each have a narrow role:
   one QASM file cannot reuse declarations from the previous file;
 - `declare_register` records a `qreg` or `creg` declaration, reserves a
   consecutive slice of indices, then advances the next available offset;
-- `register_offset` returns the offset of a whole classical register, used for
-  conditions such as `if (c == n)`;
+- `register_info` returns the `(offset, size)` pair of a register;
+- `register_offset` returns only its offset;
 - `register_index` translates `name[index]` to `offset + index`.
+
+For an OpenQASM condition `if (c == n)`, the parser keeps both the offset and
+the size of `c`. Bit `c[0]` is the least significant bit of `n`.
+`Parser_help.classical_condition_bits` then separates bits expected to be `0`
+from bits expected to be `1`, and `Program.Macros.itl2` builds the exact
+condition by temporarily negating the bits expected to be `0`.
+
+For example, after `creg prefix[1]; creg c[2];`, register `c` occupies flat
+indices `1` and `2`. The condition `if (c == 2)` uses the binary value `10`:
+flat bit `1` must be `0` and flat bit `2` must be `1`. It therefore becomes
+`itl2 [1] [2] program`. A cell such as `c[1]` remains accepted for compatibility
+and is treated as a one-bit register.
+
+A value that does not fit in the declared size is rejected explicitly. An
+integer literal too large for SQbricks' integer representation is also rejected
+with a message containing that literal. If a multi-bit conditional body expands
+to several instructions, its later deferred-measurement translation may still
+return `UnsupportedConditionalProgram`; the parser nevertheless preserves the
+exact condition instead of silently producing a different circuit.
 
 For compatibility with existing QASM libraries, SQbricks also accepts some
 malformed registers instead of stopping immediately. For example,

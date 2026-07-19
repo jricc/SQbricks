@@ -2,9 +2,6 @@
 
 ## Next: phase 4 correctness bugs
 
-- [ ] Give OpenQASM `if (creg == value)` exact supported semantics instead of
-  keeping only the bits equal to one; unsupported conditions and oversized
-  integer literals must fail clearly rather than change circuit semantics.
 - [ ] Make `Path_sum_library` gate constructors return a ket with the declared
   circuit width for arbitrary valid wires, and reject overlapping controls and
   targets.
@@ -51,6 +48,9 @@
 - [x] Complete phase normalization in `Poly.Monome.simplify` by multiplying
   scalar factors exposed by recursive simplification before reduction modulo
   one.
+- [x] Give OpenQASM `if (creg == value)` exact semantics by preserving bits
+  equal to zero and one, and reject out-of-width values or oversized literals
+  explicitly.
 - [x] Preserve already collected variables in `Qubit.extract_path_var` and
   `Qubit.extract_var` when a constant node is visited.
 - [x] Make `ListBis.remove` preserve list order.

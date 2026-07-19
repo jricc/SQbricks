@@ -32,7 +32,7 @@
     - {b Measure(q, b)}: Measures qubit [q] and stores result in classical bit
       [b].
     - {b It(bits, P)}: Conditional execution of [P] if all bits in [bits] are
-      [0].
+      [1].
     - {b InitQ(q)}: Initializes qubit [q] to |0⟩.
     - {b Not(b)}: Classical NOT on bit [b]. Note: Qubit and bit indices are
       integers. *)
@@ -394,8 +394,8 @@ module Macros : sig
   (** [itl qubits prog] Conditional execution on multiple qubits. *)
 
   val itl2 : int list -> int list -> t -> t
-  (** [itl2 ones zeros prog] Conditional execution based on two sets of qubits.
-  *)
+  (** [itl2 zero_bits one_bits prog] executes [prog] when every bit in
+      [zero_bits] is [0] and every bit in [one_bits] is [1]. *)
 
   (** {2 Swap Operations} *)
 

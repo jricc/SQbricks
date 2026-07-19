@@ -8,17 +8,17 @@
 (rule
  (alias qiskit)
  (action
-  (run ./qiskit.exe --bail)))
+  (run ./qiskit.exe)))
 
 (rule
  (alias mbqc)
  (action
-  (run ./mbqc.exe --bail)))
+  (run ./mbqc.exe)))
 
 (rule
  (alias unitary)
  (action
-  (run ./unitary.exe --bail)))
+  (run ./unitary.exe)))
 
 (rule
  (alias primitives)
@@ -28,4 +28,4 @@
 (rule
  (alias verif)
  (action
-  (run ./verif.exe --bail)))
+  (run ./verif.exe)))

@@ -472,6 +472,9 @@ Execution time = 0.000054 seconds, Memory = 0.006890 MB
 | `make tests_verif`     | Run functional tests for specification-based verification (Path-Sum)        |
 | `make tests`           | Run **all** tests                                                           |
 
+Alcotest suites run without `--bail`, so each suite reports all failures rather
+than stopping after the first one.
+
 ### Output Location
 
 ![Tests Location](doc/files/output-tests.png)

@@ -339,6 +339,58 @@ let test_parser_keeps_distinct_creg_offsets () =
   check string "creg offsets" (ProgS.exact (m 1 1 -- it 1 (x 0)))
     (ProgS.exact (Program.format parsed))
 
+let test_parser_preserves_zero_register_condition () =
+  (* [It] controls on bits equal to one. For [c == 0], [itl2 [0] []]
+     temporarily negates bit 0, applies the positive control, then restores it. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[2];\ncreg c[1];\nmeasure q[0] -> c[0];\nif (c == 0) x q[1];\n"
+  in
+  let lexbuf = Lexing.from_string qasm in
+  let parsed = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+  let expected = m 0 0 -- itl2 [ 0 ] [] (x 1) in
+  check string "zero register condition"
+    (ProgS.exact (Program.format expected))
+    (ProgS.exact (Program.format parsed))
+
+let test_parser_preserves_mixed_register_condition_and_offset () =
+  (* c starts at bit 1. The value 2 = 10b requires c[0] = 0 and c[1] = 1. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[3];\ncreg prefix[1];\ncreg c[2];\nmeasure q[0] -> c[0];\nmeasure q[1] -> c[1];\nif (c == 2) x q[2];\n"
+  in
+  let lexbuf = Lexing.from_string qasm in
+  let parsed = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+  let expected = m 0 1 -- m 1 2 -- itl2 [ 1 ] [ 2 ] (x 2) in
+  check string "mixed register condition with offset"
+    (ProgS.exact (Program.format expected))
+    (ProgS.exact (Program.format parsed))
+
+let check_qasm_parser_failure name expected_message qasm =
+  try
+    let lexbuf = Lexing.from_string qasm in
+    let _ = Parser_OpenQASM.program Lexer_OpenQASM.token lexbuf in
+    check bool (name ^ " expected") true false
+  with Failure message -> check string name expected_message message
+
+let test_parser_rejects_condition_value_outside_register () =
+  (* A two-bit register cannot equal 4, which needs a third bit. *)
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];\ncreg c[2];\nif (c == 4) x q[0];\n"
+  in
+  check_qasm_parser_failure "condition value outside register"
+    "OpenQASM condition value 4 does not fit in a classical register of width 2"
+    qasm
+
+let test_parser_reports_oversized_integer_literal () =
+  (* SQbricks uses OCaml integers for OpenQASM indices and condition values. *)
+  let literal = "92233720368547758081234567890" in
+  let qasm =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];\ncreg c[1];\nif (c == "
+    ^ literal ^ ") x q[0];\n"
+  in
+  check_qasm_parser_failure "oversized integer literal"
+    ("OpenQASM integer literal " ^ literal ^ " is outside the supported range")
+    qasm
+
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
     (p2' : string) () =
@@ -774,6 +826,18 @@ let unitary =
     ( "parser keeps distinct creg offsets",
       `Quick,
       test_parser_keeps_distinct_creg_offsets );
+    ( "parser preserves zero register condition",
+      `Quick,
+      test_parser_preserves_zero_register_condition );
+    ( "parser preserves mixed register condition and offset",
+      `Quick,
+      test_parser_preserves_mixed_register_condition_and_offset );
+    ( "parser rejects condition value outside register",
+      `Quick,
+      test_parser_rejects_condition_value_outside_register );
+    ( "parser reports oversized integer literal",
+      `Quick,
+      test_parser_reports_oversized_integer_literal );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );
