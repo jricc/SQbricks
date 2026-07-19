@@ -622,6 +622,17 @@ indices de sortie avant d'extraire les variables ; une incohérence remonte comm
 La préparation des permutations internes utilise `Program.Macros.apply_swap_result`
 dans `Equiv`, afin qu'une incohérence de tailles de listes ou d'option de
 placement ne remonte pas comme `failwith`.
+La première liste désigne les positions sources et la seconde les destinations :
+la valeur logique située sur `sources[i]` doit finir sur `destinations[i]`.
+Lorsque les deux listes se chevauchent, la position courante des sources encore
+à déplacer est actualisée après chaque swap. Ainsi, `[0;1] -> [1;2]` produit
+`swap 0 1` puis `swap 0 2`, et transforme `|x0,x1,x2>` en `|x2,x0,x1>`.
+
+Dans `Equiv.seq`, les sorties du premier circuit sont déplacées de `outputs1`
+vers `outputs2`. Après l'exécution de l'inverse du second circuit, les valeurs
+se trouvent au contraire sur `inputs2` : elles sont donc déplacées de `inputs2`
+vers `inputs1`. Cette orientation est indifférente pour un swap isolé, mais pas
+pour une permutation cyclique composée de plusieurs swaps.
 L'inversion interne utilise aussi `Program.inverse_result` : un sous-programme
 non réversible est signalé explicitement, puis converti par `Equiv` en
 `ErrorCircuitNotUnitary`.

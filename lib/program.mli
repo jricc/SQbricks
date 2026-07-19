@@ -376,14 +376,26 @@ module Macros : sig
   (** [apply_measure prog qubits register] Adds measurements. *)
 
   type apply_swap_error = InvalidSwapPlace | DifferentSwapLengths
+  (** Errors reported while constructing a wire permutation.
+
+      - [InvalidSwapPlace] means [place] is neither ["before"] nor ["after"]
+        when a non-identity swap is required.
+      - [DifferentSwapLengths] means the source and destination lists do not
+        describe the same number of logical wires. *)
 
   val apply_swap_result :
     ?place:string -> t -> int list -> int list -> (t, apply_swap_error) result
-  (** [apply_swap_result ?place prog a b] adds swap operations or reports why
-      they cannot be added. *)
+  (** [apply_swap_result ?place prog sources destinations] moves the logical
+      value initially on [sources[i]] to [destinations[i]]. The two lists must
+      have the same length and must not contain duplicates. Overlap between
+      the source and destination lists is supported: current wire positions
+      are updated after each selected swap. The complete permutation is placed
+      after [prog] by default, or before it when [place = "before"]. *)
 
   val apply_swap : ?place:string -> t -> int list -> int list -> t
-  (** [apply_swap ?place prog a b] Adds swap operations. *)
+  (** [apply_swap ?place prog sources destinations] is the compatibility
+      wrapper around {!apply_swap_result}. It raises [Failure] when the mapping
+      cannot be constructed. *)
 
   (** {2 Conditional Execution} *)
 

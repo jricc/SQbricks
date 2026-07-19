@@ -5,7 +5,7 @@
 - [x] Make `Path_sum_library` gate constructors return a ket with the declared
   circuit width for arbitrary valid wires, and reject overlapping controls and
   targets.
-- [ ] Make `Program.Macros.apply_swap_result` implement the requested wire
+- [x] Make `Program.Macros.apply_swap_result` implement the requested wire
   mapping when source and destination lists overlap.
 - [ ] Compare observable measurements in `Equiv` by corresponding output
   positions rather than by raw physical qubit indices.

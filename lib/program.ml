@@ -606,20 +606,87 @@ module Macros = struct
 
   type apply_swap_error = InvalidSwapPlace | DifferentSwapLengths
 
-  let apply_one_swap place p ta1 ta2 =
-    if Int.equal ta1 ta2 then Ok p
-    else if place = "after" then Ok (p -- swap ta1 ta2)
-    else if place = "before" then Ok (swap ta1 ta2 -- p)
-    else Error InvalidSwapPlace
+  (* [sources] and [destinations] describe a wire mapping pair by pair:
 
-  let rec apply_swap_result ?(place = "after") p targets1 targets2 =
-    match (targets1, targets2) with
-    | [], [] -> Ok p
-    | ta1 :: targets1_remain, ta2 :: targets2_remain -> (
-        match apply_one_swap place p ta1 ta2 with
-        | Error error -> Error error
-        | Ok p' -> apply_swap_result ~place p' targets1_remain targets2_remain)
+       sources      = [source_0; source_1; ...]
+       destinations = [destination_0; destination_1; ...]
+
+     The logical value initially at [source_i] must finish at [destination_i].
+     The lists used by Equiv contain no duplicates. Their lengths are checked
+     below; a direct caller must respect the same uniqueness invariant.
+
+     Overlapping lists require tracking current positions. For example, the
+     mapping [0; 1] -> [1; 2] means:
+
+       initial ket       = |x0, x1, x2>
+       swap 0 1          = |x1, x0, x2>
+       swap 0 2          = |x2, x0, x1>
+
+     After [swap 0 1], logical value [x1] is no longer on source wire 1: it is
+     on wire 0. The remaining source list must therefore change from [1] to
+     [0] before selecting the second swap.
+
+     Pairing the original indices independently would instead emit
+     [swap 0 1; swap 1 2] and produce |x1, x2, x0>. Neither requested logical
+     value would reach its destination. *)
+
+  let update_remaining_sources source destination remaining_sources =
+    (* A swap exchanges both physical positions. Therefore, every pending
+       logical source currently located at [destination] moves to [source].
+       Other pending source positions are unchanged. *)
+    List.map
+      (fun current_source ->
+        if Int.equal current_source destination then source else current_source)
+      remaining_sources
+
+  (* Build the swaps in execution order without attaching them to the user
+     program yet. Keeping these two operations separate is important for
+     [place = "before"]: repeatedly prefixing swaps would reverse their order.
+
+     An invalid placement is reported only when a non-identity swap is needed,
+     preserving the historical behavior for an empty or identity mapping. *)
+  let rec swaps_for_mapping_result place sources destinations =
+    match (sources, destinations) with
+    | [], [] -> Ok []
+    | source :: remaining_sources, destination :: remaining_destinations ->
+        if Int.equal source destination then
+          swaps_for_mapping_result place remaining_sources remaining_destinations
+        else if place <> "after" && place <> "before" then Error InvalidSwapPlace
+        else
+          let updated_sources =
+            update_remaining_sources source destination remaining_sources
+          in
+          (match
+             swaps_for_mapping_result place updated_sources
+               remaining_destinations
+           with
+          | Error error -> Error error
+          | Ok remaining_swaps ->
+              Ok (swap source destination :: remaining_swaps))
     | _ -> Error DifferentSwapLengths
+
+  (* Insert the complete permutation around [p] while preserving the order
+     returned by [swaps_for_mapping_result].
+
+     - [after] uses a left fold to build [p; swap_0; swap_1; ...].
+     - [before] uses a right fold to build [swap_0; swap_1; ...; p].
+
+     In both cases, [swap_0] is executed before [swap_1]. *)
+  let apply_swap_result ?(place = "after") p sources destinations =
+    match swaps_for_mapping_result place sources destinations with
+    | Error error -> Error error
+    | Ok [] -> Ok p
+    | Ok swaps when place = "after" ->
+        Ok
+          (List.fold_left
+             (fun program swap_program -> program -- swap_program)
+             p swaps)
+    | Ok swaps when place = "before" ->
+        Ok
+          (List.fold_right
+             (fun swap_program program -> swap_program -- program)
+             swaps p)
+    | Ok _ -> Error InvalidSwapPlace
 
   let apply_swap ?place p targets1 targets2 =
     match apply_swap_result ?place p targets1 targets2 with

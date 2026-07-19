@@ -608,6 +608,17 @@ extracting variables; inconsistent data is reported as `ErrorInvalidQubitIndex`.
 Internal permutation preparation uses `Program.Macros.apply_swap_result` from
 `Equiv`, so inconsistent list lengths or placement options do not escape as
 `failwith`.
+The first list gives source positions and the second gives destinations: the
+logical value on `sources[i]` must finish on `destinations[i]`. When both lists
+overlap, the current positions of sources that still need to move are updated
+after every swap. Therefore `[0;1] -> [1;2]` emits `swap 0 1` followed by
+`swap 0 2`, transforming `|x0,x1,x2>` into `|x2,x0,x1>`.
+
+In `Equiv.seq`, the first circuit outputs move from `outputs1` to `outputs2`.
+After executing the inverse of the second circuit, values are instead located
+on `inputs2`, so they move from `inputs2` to `inputs1`. This orientation is
+irrelevant for one isolated swap, but not for a cyclic permutation composed of
+several swaps.
 Internal inversion also uses `Program.inverse_result`: a non-reversible
 subprogram is reported explicitly, then converted by `Equiv` to
 `ErrorCircuitNotUnitary`.

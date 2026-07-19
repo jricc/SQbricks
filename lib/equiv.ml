@@ -471,9 +471,12 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                 printf
                                   "Equiv.seq, good order unitary2_inv =\n%s\n\n"
                                   (ProgS.pretty unitary2_inv);
+                              (* [unitary2_inv] returns values to [inputs2].
+                                 Move them from [inputs2] to the physical wires
+                                 corresponding to [inputs1]. *)
                               match
                                 apply_swap_for_equiv NotEquivDiffInputs
-                                  unitary2_inv inputs1 inputs2
+                                  unitary2_inv inputs2 inputs1
                               with
                               | Error result -> result
                               | Ok unitary2_swap ->

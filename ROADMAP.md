@@ -131,7 +131,7 @@ Current correctness queue, in order:
   reject unsupported forms explicitly;
 - [x] make `Path_sum_library` honor declared circuit widths and reject
   overlapping gate wires;
-- [ ] make multi-wire swaps implement overlapping source/destination mappings
+- [x] make multi-wire swaps implement overlapping source/destination mappings
   correctly;
 - [ ] compare measurements through the correspondence between observable
   outputs;

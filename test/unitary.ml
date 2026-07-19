@@ -74,6 +74,41 @@ let test_apply_swap_result_returns_swapped_program () =
         (ProgS.exact output)
   | Error _ -> check bool "swapped program expected" true false
 
+(* Check the permutation through symbolic execution. Several SWAP sequences
+   can implement the same wire mapping, so their exact Program.t shape is not
+   part of these regression tests. *)
+let check_apply_swap_ket ?(place = "after") name program sources destinations
+    expected_ket =
+  match apply_swap_result ~place program sources destinations with
+  | Error _ -> Alcotest.fail (name ^ ": swap construction failed")
+  | Ok swapped_program -> (
+      match Program.execution_result swapped_program with
+      | Error _ -> Alcotest.fail (name ^ ": swapped program execution failed")
+      | Ok path_sum ->
+          check string name (KS.exact expected_ket) (KS.exact path_sum.ket))
+
+let test_apply_swap_result_handles_overlapping_chain () =
+  (* x0 moves to wire 1, x1 moves to wire 2, and x2 closes the permutation by
+     moving to wire 0: |x0,x1,x2> becomes |x2,x0,x1>. *)
+  check_apply_swap_ket "overlapping chain" Program.E [ 0; 1 ] [ 1; 2 ]
+    [| Qubit.Var 2; Qubit.Var 0; Qubit.Var 1 |]
+
+let test_apply_swap_result_handles_overlapping_cycle () =
+  (* The same three-cycle is also valid when every wire is explicitly listed. *)
+  check_apply_swap_ket "overlapping cycle" Program.E [ 0; 1; 2 ] [ 1; 2; 0 ]
+    [| Qubit.Var 2; Qubit.Var 0; Qubit.Var 1 |]
+
+let test_apply_swap_result_handles_overlap_before_program () =
+  (* With place="before", the permutation runs first. X then acts on x2,
+     which the permutation moved to physical wire 0. *)
+  check_apply_swap_ket ~place:"before" "overlap before program" (x 0)
+    [ 0; 1 ] [ 1; 2 ]
+    [|
+      Qubit.SumMod2 (Qubit.One, Qubit.Var 2);
+      Qubit.Var 0;
+      Qubit.Var 1;
+    |]
+
 let test_apply_swap_result_reports_invalid_place () =
   (* Only before/after insertion is supported. *)
   match apply_swap_result ~place:"middle" (h 0) [ 0 ] [ 1 ] with
@@ -751,6 +786,15 @@ let unitary =
     ( "apply swap result ok",
       `Quick,
       test_apply_swap_result_returns_swapped_program );
+    ( "apply swap result overlapping chain",
+      `Quick,
+      test_apply_swap_result_handles_overlapping_chain );
+    ( "apply swap result overlapping cycle",
+      `Quick,
+      test_apply_swap_result_handles_overlapping_cycle );
+    ( "apply swap result overlap before program",
+      `Quick,
+      test_apply_swap_result_handles_overlap_before_program );
     ( "apply swap result invalid place",
       `Quick,
       test_apply_swap_result_reports_invalid_place );
