@@ -281,7 +281,7 @@ let extract_path_var ?(debug = false) q width =
     | Var v when width < v -> v :: acc
     | Prod (q1, q2) | SumMod2 (q1, q2) -> aux q1 acc |> aux q2
     (* | SumMod2 (q1, q2) -> aux q1 acc @ aux q2 acc *)
-    | _ -> []
+    | _ -> acc
   in
   aux q []
 
@@ -290,7 +290,7 @@ let extract_var q =
     match qubit with
     | Var v -> v :: acc
     | Prod (q1, q2) | SumMod2 (q1, q2) -> aux q1 acc |> aux q2
-    | _ -> []
+    | _ -> acc
   in
   aux q []
 

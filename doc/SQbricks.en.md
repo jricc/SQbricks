@@ -804,6 +804,11 @@ typed return:
 - `Poly.of_qubit_2_pi_result` uses the same formatting contract as
   `Poly.of_qubit_result`, but applies the shortcut for the `2*pi` case.
 
+`Qubit.extract_var` and `Qubit.extract_path_var` recursively traverse products
+and sums modulo two with an accumulator. The `Zero` and `One` constants add no
+variable, but preserve variables already collected from another branch of the
+expression.
+
 The old wrappers remain in place during the migration. They preserve historical
 behavior, often still raising `Failure` or returning `None`, but the new tests
 target the `*_result` versions.

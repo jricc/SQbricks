@@ -2300,6 +2300,18 @@ let test_qubit_remove_result_reports_sum () =
       check bool "sum expression rejected" true true
   | Ok _ -> check bool "sum expression rejection expected" true false
 
+let test_qubit_extract_var_preserves_accumulator_at_zero () =
+  (* The traversal finds Var 1 before visiting Zero. Zero must preserve the
+     variable already stored in the accumulator. *)
+  check (list int) "variable before Zero" [ 1 ]
+    (Qubit.extract_var (SumMod2 (Var 1, Zero)))
+
+let test_qubit_extract_path_var_preserves_accumulator_at_one () =
+  (* With width 2, Var 3 is a path variable. Visiting One afterwards must not
+     erase it from the accumulator. *)
+  check (list int) "path variable before One" [ 3 ]
+    (Qubit.extract_path_var (Prod (Var 3, One)) 2)
+
 let qubit =
   [
     ( "equal_result returns true",
@@ -2317,6 +2329,12 @@ let qubit =
     ("remove_result returns some", `Quick, test_qubit_remove_result_returns_some);
     ("remove_result returns none", `Quick, test_qubit_remove_result_returns_none);
     ("remove_result reports sum", `Quick, test_qubit_remove_result_reports_sum);
+    ( "extract_var preserves variables at Zero",
+      `Quick,
+      test_qubit_extract_var_preserves_accumulator_at_zero );
+    ( "extract_path_var preserves variables at One",
+      `Quick,
+      test_qubit_extract_path_var_preserves_accumulator_at_one );
     ( "simplify: x0.(1 ++ x0) -> Zero",
       `Quick,
       test_qubit (Qubit.simplify (Prod (Var 0, One ++ Var 0))) Zero );

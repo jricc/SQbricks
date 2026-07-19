@@ -822,6 +822,11 @@ retour typé :
 - `Poly.of_qubit_2_pi_result` applique le même contrat de format que
   `Poly.of_qubit_result`, mais utilise le raccourci adapté au cas `2*pi`.
 
+`Qubit.extract_var` et `Qubit.extract_path_var` parcourent récursivement les
+produits et les sommes modulo deux avec un accumulateur. Les constantes `Zero`
+et `One` n'ajoutent aucune variable, mais elles conservent les variables déjà
+collectées dans une autre branche de l'expression.
+
 Les anciens wrappers restent en place pendant la migration. Ils conservent le
 comportement historique, souvent en levant encore `Failure` ou en retournant
 `None`, mais les tests nouveaux ciblent les versions `*_result`.

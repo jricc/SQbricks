@@ -26,7 +26,7 @@
   explicit output lists are supplied.
 - [x] Normalize negative rational phase coefficients modulo one with a direct
   Euclidean remainder.
-- [ ] Preserve already collected variables in `Qubit.extract_path_var` and
+- [x] Preserve already collected variables in `Qubit.extract_path_var` and
   `Qubit.extract_var` when a constant node is visited.
 - [ ] Make `ListBis.remove` preserve list order.
 - [ ] Confirm that `ListBis.remove_list` has no internal caller, then remove it
