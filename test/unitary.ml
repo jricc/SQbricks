@@ -64,6 +64,26 @@ let test_sqv_result ?(debug = true) ?(algo = Equiv.Sequence)
     (Equiv.result_to_string expected)
     (Equiv.result_to_string greeting)
 
+let test_auto_inferred_outputs_remain_equivalent () =
+  (* Reproduce the [-sq] automatic path: measurements determine which quantum
+     wires are discarded, but are not passed to [Equiv] afterwards. *)
+  let hybrid1 = iq0 0 -- h 1 -- m 0 0 in
+  let hybrid2 = h 0 in
+  let unitary1, inits1, measurements1 =
+    To_deferred_measurement.to_deferred_measurements hybrid1
+  in
+  let unitary2, inits2, measurements2 =
+    To_deferred_measurement.to_deferred_measurements hybrid2
+  in
+  let _, width1 = Program.widths unitary1 in
+  let _, width2 = Program.widths unitary2 in
+  let inputs1 = ListBis.missing_in_range inits1 width1 in
+  let inputs2 = ListBis.missing_in_range inits2 width2 in
+  let outputs1 = ListBis.missing_in_range measurements1 width1 in
+  let outputs2 = ListBis.missing_in_range measurements2 width2 in
+  test_sqv_result ~inputs1 ~inputs2 ~outputs1 ~outputs2
+    Equiv.SubCircuitEquivalent unitary1 unitary2 ()
+
 let test_apply_swap_result_returns_swapped_program () =
   (* Different target orders require one explicit swap after the program. *)
   let input = h 0 in
@@ -750,6 +770,22 @@ let unitary =
     ( "seq invalid measurement index",
       `Quick,
       test_sqv_result ~meas1:[ 1 ] Equiv.ErrorInvalidQubitIndex (h 0) (h 0) );
+    ( "seq corresponding outputs have different physical measurement indices",
+      `Quick,
+      (* Wire 1 and wire 0 are the same logical output position. Both are
+         measured, so their different physical indices must not matter. *)
+      test_sqv_result ~inputs1:[ 1 ] ~inputs2:[ 0 ] ~outputs1:[ 1 ]
+        ~outputs2:[ 0 ] ~meas1:[ 1 ] ~meas2:[ 0 ]
+        Equiv.SubCircuitEquivalent (h 1) (h 0) );
+    ( "seq corresponding outputs have different measurement status",
+      `Quick,
+      (* The sole logical output is measured only in the first circuit. *)
+      test_sqv_result ~inputs1:[ 1 ] ~inputs2:[ 0 ] ~outputs1:[ 1 ]
+        ~outputs2:[ 0 ] ~meas1:[ 1 ] Equiv.NotEquivDiffMeasurements (h 1)
+        (h 0) );
+    ( "seq automatic output inference is unchanged",
+      `Quick,
+      test_auto_inferred_outputs_remain_equivalent );
     ( "seq full circuit not implemented",
       `Quick,
       test_sqv_result ~equivalence:Equiv.FullCircuit
@@ -1139,6 +1175,13 @@ let parallel =
       `Quick,
       test_sqv_result ~algo:Parallel ~meas1:[ 1 ] Equiv.ErrorInvalidQubitIndex
         (h 0) (h 0) );
+    ( "parallel corresponding outputs have different physical measurement indices",
+      `Quick,
+      (* The measurement comparison must use the logical output position, as
+         in Sequence, rather than the physical wire number. *)
+      test_sqv_result ~algo:Parallel ~inputs1:[ 1 ] ~inputs2:[ 0 ]
+        ~outputs1:[ 1 ] ~outputs2:[ 0 ] ~meas1:[ 1 ] ~meas2:[ 0 ]
+        Equiv.SubCircuitEquivalent (h 1) (h 0) );
     ( "parallel full circuit not implemented",
       `Quick,
       test_sqv_result ~algo:Parallel ~equivalence:Equiv.FullCircuit

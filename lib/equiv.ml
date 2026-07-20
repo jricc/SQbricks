@@ -363,9 +363,15 @@ let parameters_preparation ?(debug = false) inputs1 inputs2 outputs1 outputs2
             length_inputs1 ))
 
 let check_observable_measurement outputs1 outputs2 meas1 meas2 =
-  let intersection1 = ListBis.intersect outputs1 meas1 in
-  let intersection2 = ListBis.intersect outputs2 meas2 in
-  List.equal Int.equal intersection1 intersection2
+  (* Output lists define the logical correspondence between circuits. Physical
+     wire indices may differ, so compare whether each corresponding output is
+     measured rather than comparing the measured indices themselves. *)
+  let measurement_status outputs measurements =
+    List.map (fun output -> List.mem output measurements) outputs
+  in
+  List.equal Bool.equal
+    (measurement_status outputs1 meas1)
+    (measurement_status outputs2 meas2)
 
 type phase_equality =
   | SubCircuitEquality

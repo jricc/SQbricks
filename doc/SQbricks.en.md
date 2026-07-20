@@ -619,6 +619,18 @@ After executing the inverse of the second circuit, values are instead located
 on `inputs2`, so they move from `inputs2` to `inputs1`. This orientation is
 irrelevant for one isolated swap, but not for a cyclic permutation composed of
 several swaps.
+
+`Equiv.check_observable_measurement` also compares circuits through the logical
+correspondence defined by positions in their normalized output lists. For each
+position, it compares whether the corresponding output is measured; it does
+not compare physical indices directly. For example, `outputs1 = [1]`,
+`outputs2 = [0]`, `meas1 = [1]`, and `meas2 = [0]` describe one logical output
+measured in both circuits and are compatible. If `meas2 = []`, the function
+reports a difference instead. Measurements of qubits outside the observable
+outputs remain ignored. Automatic `-sq` mode is unchanged: it derives the
+unmeasured outputs before the call, then does not pass measurement lists to
+`Equiv`.
+
 Internal inversion also uses `Program.inverse_result`: a non-reversible
 subprogram is reported explicitly, then converted by `Equiv` to
 `ErrorCircuitNotUnitary`.

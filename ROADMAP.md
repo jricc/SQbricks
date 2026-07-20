@@ -133,7 +133,7 @@ Current correctness queue, in order:
   overlapping gate wires;
 - [x] make multi-wire swaps implement overlapping source/destination mappings
   correctly;
-- [ ] compare measurements through the correspondence between observable
+- [x] compare measurements through the correspondence between observable
   outputs;
 - [ ] implement the documented consistent renaming of path variables during
   ket and path-sum equality.

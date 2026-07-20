@@ -7,7 +7,7 @@
   targets.
 - [x] Make `Program.Macros.apply_swap_result` implement the requested wire
   mapping when source and destination lists overlap.
-- [ ] Compare observable measurements in `Equiv` by corresponding output
+- [x] Compare observable measurements in `Equiv` by corresponding output
   positions rather than by raw physical qubit indices.
 - [ ] Implement the consistent path-variable renaming documented for
   `Ket.equal_result` and used by `Path_sum.equal_result`.
