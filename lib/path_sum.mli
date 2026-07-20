@@ -75,9 +75,10 @@ module Ket : sig
     (bool * int IntMap.t * int IntMap.t, equality_error) result
   (** [equal_result ?debug ?outputs1 ?outputs2 k1 k2] is the typed version of
       {!equal}. It returns [Ok (eq, map1, map2)] when the comparison is well
-      formed, [Error DifferentOutputLengths] when the output selections have
-      different lengths, and [Error InvalidOutputIndex] when an output selection
-      is out of bounds. *)
+      formed. [map1] is the path-variable mapping from [k1] to [k2], and [map2]
+      is its inverse. It returns [Error DifferentOutputLengths] when the output
+      selections have different lengths, and [Error InvalidOutputIndex] when an
+      output selection is out of bounds. *)
 
   val equal :
     ?debug:bool ->
@@ -107,11 +108,11 @@ module Ket : sig
 
       For example:
       {[
-        let k1 = [| Var 1; SumMod2 (Var 2, Var 3) |]
-        and k2 = [| Var 4; SumMod2 (Var 5, Var 6) |] in
+        let k1 = [| SumMod2 (Var 0, Var 2); SumMod2 (Var 1, Var 3) |]
+        and k2 = [| SumMod2 (Var 0, Var 4); SumMod2 (Var 1, Var 2) |] in
         Ket.equal k1 k2;;
         - : bool * int IntMap.t * int IntMap.t =
-          (true, {1 -> 4; 2 -> 5; 3 -> 6}, {4 -> 1; 5 -> 2; 6 -> 3})
+          (true, {2 -> 4; 3 -> 2}, {2 -> 3; 4 -> 2})
       ]}
 
       If the number of qubits or output indices differ,
@@ -270,8 +271,9 @@ type equality_error =
       sum.
     - [IncompatiblePhaseWidths] means the phase comparison was given
       incompatible ket widths.
-    - [IncompletePhasePathVariableMap] means the phase comparison needs a
-      path-variable mapping that the ket comparison did not provide. *)
+    - [IncompletePhasePathVariableMap] means that the ket comparison constrains
+      one variable from a phase pair but does not provide its corresponding
+      entry on the other side. *)
 
 val equal_result :
   ?debug:bool ->

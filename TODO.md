@@ -9,7 +9,7 @@
   mapping when source and destination lists overlap.
 - [x] Compare observable measurements in `Equiv` by corresponding output
   positions rather than by raw physical qubit indices.
-- [ ] Implement the consistent path-variable renaming documented for
+- [x] Implement the consistent path-variable renaming documented for
   `Ket.equal_result` and used by `Path_sum.equal_result`.
 
 ## Then: phase 4 API and robustness bugs

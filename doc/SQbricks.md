@@ -484,6 +484,12 @@ ces cas. Les changements qui évitent de modifier des kets partagés restent des
 corrections de sûreté. Ni ces changements ni l'appel supplémentaire à
 `Qubit.simplify` ne sont nécessaires à ces résultats précis.
 
+Le renommage bijectif ultérieur des variables de chemin complète ce résultat.
+Le 20 juillet 2026, le benchmark light obtient `EQ` pendant les trois rounds de
+`owm/grover_5 Parallel`, là où le manifeste attendait encore `NC`. Le manifeste
+fonctionnel attend désormais `EQ` pour ce cas ; il reste exclu du suivi de
+performance, car sa ligne porte `TrackPerformance = no`.
+
 Le premier changement validé évite certaines exceptions non maîtrisées lorsque
 les listes d'entrées ou de sorties ne sont pas compatibles. Ces cas renvoient
 maintenant un résultat d'équivalence explicite :
@@ -609,6 +615,24 @@ wrappers de compatibilité qui retournent `false` en cas d'erreur typée. Les te
 unitaires couvrent chaque possibilité observable de ces retours typés.
 `Path_sum.equal_result` propage aussi les erreurs typées de comparaison de
 phase au lieu de les convertir en simple inégalité.
+
+`Path_sum.Ket.equal_result` compare structurellement les expressions de sortie
+correspondantes. Pour un ket de largeur `wq`, les indices strictement inférieurs
+à `wq` sont des variables d'entrée et conservent leur indice ; les indices
+supérieurs ou égaux à `wq` sont des variables de chemin et peuvent être
+renommés. La première rencontre d'une paire construit une table directe du
+premier ket vers le second et sa table inverse. Les occurrences suivantes
+doivent respecter les deux tables : une source ne peut pas avoir deux images et
+deux sources ne peuvent pas partager la même image.
+
+Par exemple, pour deux kets de largeur 2, la comparaison de
+`|x0 xor v2, x1 xor v3>` avec `|x0 xor v4, x1 xor v2>` construit les tables
+`{2 -> 4; 3 -> 2}` et `{2 -> 3; 4 -> 2}`. `Path_sum.equal_result` réutilise
+ensuite cette même bijection pour comparer les phases. Une paire de variables
+de phase absente des deux tables n'a pas été contrainte par le ket : elle reste
+comparée par son indice de chemin relatif. Une présence dans une seule table
+est en revanche signalée par `IncompletePhasePathVariableMap`.
+
 Sans listes de sorties explicites, `Path_sum.equal_result` compare les kets
 complets et retourne `Ok false` si leurs largeurs diffèrent. Avec deux listes de
 sorties explicites de même longueur et des indices valides, les largeurs totales

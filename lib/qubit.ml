@@ -49,25 +49,17 @@ let equal_result ?(debug = false) ?(wq1 = 0) ?(wq2 = 0)
         (* If path variables *)
         wq1 <= v1 && wq2 <= v2
       then
-        let path_var_indices =
-          if IntMap.is_empty map_path_var1 && IntMap.is_empty map_path_var2 then
-            Ok (v1 - wq1, v2 - wq2)
-          else
-            match
-              ( IntMap.find_opt v1 map_path_var1,
-                IntMap.find_opt v2 map_path_var2 )
-            with
-            | Some val1, Some val2 -> Ok (val1, val2)
-            | _ -> Error IncompletePathVariableMap
-        in
-        match path_var_indices with
-        | Ok (y1, y2) ->
-            if debug then (
-              printf "Qubit.equal, v1 = %d, v2 = %d, wq1 = %d, wq2 = %d\n\n%!"
-                v1 v2 wq1 wq2;
-              printf "Qubit.equal, y1 = %d, y2 = %d\n\n%!" y1 y2);
-            Ok (Int.equal y1 y2)
-        | Error error -> Error error
+        (* [map_path_var1] maps first-circuit variables to the second circuit;
+           [map_path_var2] is its inverse. Variables absent from both maps were
+           not constrained by the compared ket, so retain the previous
+           relative-index comparison for that pair. *)
+        match
+          (IntMap.find_opt v1 map_path_var1, IntMap.find_opt v2 map_path_var2)
+        with
+        | Some expected2, Some expected1 ->
+            Ok (Int.equal expected2 v2 && Int.equal expected1 v1)
+        | None, None -> Ok (Int.equal (v1 - wq1) (v2 - wq2))
+        | Some _, None | None, Some _ -> Error IncompletePathVariableMap
       else Ok false
     in
 

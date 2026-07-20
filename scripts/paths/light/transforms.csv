@@ -3,7 +3,7 @@ owm;tof_3;owm;EQ;EQ;no;benchmarks/Feynman/tof_3.qasm
 owm;barenco_tof_3;owm;EQ;EQ;no;benchmarks/Feynman/barenco_tof_3.qasm
 owm;qft_4;owm;NC;NC;no;benchmarks/Feynman/qft_4.qasm
 owm;grover_3;owm;EQ;EQ;no;benchmarks/VeriQbench/combinational/grover/grover_3.qasm
-owm;grover_5;owm;EQ;NC;no;benchmarks/VeriQbench/combinational/grover/grover_5.qasm
+owm;grover_5;owm;EQ;EQ;no;benchmarks/VeriQbench/combinational/grover/grover_5.qasm
 owm;gf2^6_mult;owm;EQ;-;yes;benchmarks/Feynman/gf2^6_mult.qasm
 owm;qft_15;owm;EQ;-;yes;benchmarks/VeriQbench/combinational/qft/qft_15.qasm
 owm;hwb6;owm;-;EQ;yes;benchmarks/Feynman/hwb6.qasm

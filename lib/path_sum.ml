@@ -74,18 +74,43 @@ module Ket = struct
         || not (ListBis.valid_indices wq2 outputs2)
       then Error InvalidOutputIndex
       else
-      (* If we don't provide a list of qubits, we check all qubits *)
-      if List.is_empty outputs1 then (
-        if not (Int.equal wq1 wq2) then Ok (false, map_path_var1, map_path_var2)
-        else
-          let i = ref 0 in
-          let result = ref true in
-          while !result && !i < wq1 do
-            if not (Qubit.equal k1.(!i) k2.(!i)) then result := false;
-            incr i
-          done;
-          Ok (!result, map_path_var1, map_path_var2))
-      else
+        (* A path-variable pair creates a direct mapping and its inverse. Later
+           occurrences must preserve both directions, which makes the
+           renaming bijective. *)
+        let compare_path_variables m1 m2 variable1 variable2 =
+          match
+            (IntMap.find_opt variable1 m1, IntMap.find_opt variable2 m2)
+          with
+          | Some expected2, Some expected1 ->
+              ( Int.equal expected2 variable2 && Int.equal expected1 variable1,
+                m1,
+                m2 )
+          | None, None ->
+              ( true,
+                IntMap.add variable1 variable2 m1,
+                IntMap.add variable2 variable1 m2 )
+          | Some _, None | None, Some _ -> (false, m1, m2)
+        in
+
+        let rec compare_qubits m1 m2 q1 q2 =
+          match (q1, q2) with
+          | Zero, Zero | One, One -> (true, m1, m2)
+          | Var variable1, Var variable2 ->
+              if variable1 < wq1 && variable2 < wq2 then
+                (Int.equal variable1 variable2, m1, m2)
+              else if wq1 <= variable1 && wq2 <= variable2 then
+                compare_path_variables m1 m2 variable1 variable2
+              else (false, m1, m2)
+          | Prod (left1, right1), Prod (left2, right2)
+          | SumMod2 (left1, right1), SumMod2 (left2, right2) ->
+              let left_equal, m1, m2 =
+                compare_qubits m1 m2 left1 left2
+              in
+              if left_equal then compare_qubits m1 m2 right1 right2
+              else (false, m1, m2)
+          | _ -> (false, m1, m2)
+        in
+
         let rec aux m1 m2 = function
           | hd1 :: tl1, hd2 :: tl2 ->
               if debug then printf "Ket.equal, hd1 = %d, hd2 = %d\n%!" hd1 hd2;
@@ -94,20 +119,28 @@ module Ket = struct
                   (QS.pretty k1.(hd1) wq1)
                   (QS.pretty k2.(hd2) wq2);
 
-              let qubits_equal m1 m2 =
-                match (k1.(hd1), k2.(hd2)) with
-                | q1, q2 -> (Qubit.equal ~debug ~wq1 ~wq2 q1 q2, m1, m2)
+              let equal, new_m1, new_m2 =
+                compare_qubits m1 m2 k1.(hd1) k2.(hd2)
               in
-
-              let equal, new_m1, new_m2 = qubits_equal m1 m2 in
               if debug then printf "Ket.equal, qubits_equal = %b\n\n%!" equal;
               if equal then aux new_m1 new_m2 (tl1, tl2)
               else (false, new_m1, new_m2)
           | [], [] -> (true, m1, m2)
           | _ -> (false, m1, m2)
         in
+        (* Without explicit outputs, compare every component in order. *)
+        let compared_outputs =
+          if List.is_empty outputs1 then
+            if Int.equal wq1 wq2 then
+              Some (ListBis.range 0 wq1, ListBis.range 0 wq2)
+            else None
+          else Some (outputs1, outputs2)
+        in
         let result, out_m1, out_m2 =
-          aux map_path_var1 map_path_var2 (outputs1, outputs2)
+          match compared_outputs with
+          | None -> (false, map_path_var1, map_path_var2)
+          | Some output_pairs ->
+              aux map_path_var1 map_path_var2 output_pairs
         in
         if debug then printf "Ket.equal, result = %b\n\n%!" result;
         if debug then

@@ -478,6 +478,12 @@ The changes that avoid mutating shared kets remain safety fixes. Neither these
 changes nor the additional call to `Qubit.simplify` are required for these
 specific results.
 
+The later bijective path-variable renaming completes this result. On July 20,
+2026, the light benchmark returns `EQ` in all three rounds of
+`owm/grover_5 Parallel`, where the manifest still expected `NC`. The functional
+manifest now expects `EQ` for this case; it remains excluded from performance
+tracking because its row has `TrackPerformance = no`.
+
 The first validated change avoids some uncontrolled exceptions when input or
 output lists are incompatible. These cases now return an explicit equivalence
 result:
@@ -596,6 +602,23 @@ errors. Unit tests cover each observable return possibility for these typed
 results.
 `Path_sum.equal_result` also propagates typed phase-comparison errors instead of
 converting them to plain inequality.
+
+`Path_sum.Ket.equal_result` structurally compares corresponding output
+expressions. For a ket of width `wq`, indices below `wq` are input variables and
+retain their index; indices greater than or equal to `wq` are path variables
+and may be renamed. The first occurrence of a pair builds a direct map from the
+first ket to the second and its inverse map. Later occurrences must respect
+both maps: one source cannot have two images, and two sources cannot share one
+image.
+
+For example, for two kets of width 2, comparing
+`|x0 xor v2, x1 xor v3>` with `|x0 xor v4, x1 xor v2>` builds
+`{2 -> 4; 3 -> 2}` and `{2 -> 3; 4 -> 2}`. `Path_sum.equal_result` then reuses
+the same bijection to compare phases. A phase-variable pair absent from both
+maps was not constrained by the ket and remains compared by relative path
+index. A pair present in only one map is instead reported as
+`IncompletePhasePathVariableMap`.
+
 Without explicit output lists, `Path_sum.equal_result` compares the complete
 kets and returns `Ok false` when their widths differ. With two explicit output
 lists of equal length and valid indices, the complete ket widths may differ:

@@ -47,8 +47,10 @@ type equality_error = IncompatibleWidths | IncompletePathVariableMap
 
     - [IncompatibleWidths] means the two width parameters describe incompatible
       free-variable spaces.
-    - [IncompletePathVariableMap] means that path-variable maps were provided,
-      but at least one compared path variable was missing from one of them. *)
+    - [IncompletePathVariableMap] means that exactly one variable from a
+      compared path-variable pair is constrained by the provided direct and
+      inverse maps. A pair absent from both maps is compared by relative path
+      index. *)
 
 val equal_result :
   ?debug:bool ->
@@ -82,10 +84,10 @@ val equal :
       variable; a variable index greater or equal to [wq1] (resp. [wq2]) is a
       *path variable*.
 
-    - [map_path_var1] and [map_path_var2] are mappings between path variables
-      encountered so far in [q1] and [q2]. They are used to ensure that two
-      qubits are equivalent up to a consistent renaming of their path variables.
-      Incomplete or inconsistent mappings make the comparison return [false].
+    - [map_path_var1] maps path variables from [q1] to [q2], and
+      [map_path_var2] is its inverse. They ensure that both expressions use the
+      same bijective renaming. A pair absent from both maps is compared by its
+      relative path index; a pair present on only one side is malformed.
 
     - Returns [true] if [q1] and [q2] are structurally equivalent modulo
       renaming of path variables, [false] otherwise. Use {!equal_result} when
@@ -94,9 +96,12 @@ val equal :
 
     For example:
     {[
-      let q1 = SumMod2 (Var 1, Var 2)
-      and q2 = SumMod2 (Var 3, Var 4) in
-      Qubit.equal ~wq1:2 ~wq2:2 q1 q2;;
+      let q1 = SumMod2 (Var 0, Var 2)
+      and q2 = SumMod2 (Var 0, Var 4)
+      and map1 = IntMap.singleton 2 4
+      and map2 = IntMap.singleton 4 2 in
+      Qubit.equal ~wq1:2 ~wq2:2 ~map_path_var1:map1
+        ~map_path_var2:map2 q1 q2;;
       - : bool = true
     ]}
     Both qubits have the same structure and differ only by path-variable

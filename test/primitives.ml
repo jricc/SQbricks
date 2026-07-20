@@ -990,6 +990,33 @@ let test_path_sum_equal_result_accepts_different_widths_with_outputs () =
   | Ok false -> Alcotest.fail "equal selected outputs rejected"
   | Error _ -> Alcotest.fail "different ket widths with explicit outputs rejected"
 
+let test_path_sum_equal_result_uses_ket_path_var_mapping_in_phase () =
+  (* ps1: phase = 1/2 y0, ket = |y0,y1>
+     ps2: phase = 1/2 y1, ket = |y1,y0>
+     The ket establishes y0 <-> y1, and the phase must use the same renaming. *)
+  let path_sum1 : Path_sum.t =
+    {
+      phase =
+        to_poly
+          (Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 2)));
+      ket = [| Qubit.Var 2; Qubit.Var 3 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  let path_sum2 : Path_sum.t =
+    {
+      phase =
+        to_poly
+          (Monome.Prod (Monome.Scal div2, Monome.Qubit (Qubit.Var 3)));
+      ket = [| Qubit.Var 3; Qubit.Var 2 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Path_sum.equal_result path_sum1 path_sum2 with
+  | Ok true -> ()
+  | Ok false -> Alcotest.fail "consistent path-variable renaming rejected"
+  | Error _ -> Alcotest.fail "well-formed path-sum comparison expected"
+
 let path_sum_equality =
   [
     ( "equal_result returns true",
@@ -1013,6 +1040,9 @@ let path_sum_equality =
     ( "equal_result accepts different widths with outputs",
       `Quick,
       test_path_sum_equal_result_accepts_different_widths_with_outputs );
+    ( "equal_result applies ket path-variable mapping to phase",
+      `Quick,
+      test_path_sum_equal_result_uses_ket_path_var_mapping_in_phase );
   ]
 
 let test_path_sum_ofSize_init_result_returns_path_sum () =
@@ -2425,6 +2455,39 @@ let test_ket_equal_result_reports_invalid_output_index () =
       check bool "invalid output index expected" true false
   | Ok _ -> check bool "invalid output index expected" true false
 
+let test_ket_equal_result_returns_consistent_path_var_maps () =
+  (* Both kets have width 2, so Var 0 and Var 1 are free variables. The path
+     variables are renamed by the bijection 2 -> 4 and 3 -> 2. *)
+  let ket1 = [| v 0 ++ v 2; v 1 ++ v 3 |] in
+  let ket2 = [| v 0 ++ v 4; v 1 ++ v 2 |] in
+  let expected_map1 = IntMap.of_list [ (2, 4); (3, 2) ] in
+  let expected_map2 = IntMap.of_list [ (2, 3); (4, 2) ] in
+  match Ket.equal_result ket1 ket2 with
+  | Ok (true, map1, map2) ->
+      check string "first-to-second path-variable map"
+        (Common.to_string_int_map expected_map1)
+        (Common.to_string_int_map map1);
+      check string "second-to-first path-variable map"
+        (Common.to_string_int_map expected_map2)
+        (Common.to_string_int_map map2)
+  | Ok (false, _, _) -> Alcotest.fail "consistent path-variable renaming rejected"
+  | Error _ -> Alcotest.fail "well-formed ket comparison expected"
+
+let test_ket_equal_result_rejects_inconsistent_path_var_renaming () =
+  (* The first comparison would map 2 -> 4, but the second would require the
+     same source variable 2 to map to 3. *)
+  match Ket.equal_result [| v 2; v 2 |] [| v 4; v 3 |] with
+  | Ok (false, _, _) -> ()
+  | Ok (true, _, _) -> Alcotest.fail "inconsistent path-variable map accepted"
+  | Error _ -> Alcotest.fail "well-formed ket comparison expected"
+
+let test_ket_equal_result_rejects_non_injective_path_var_renaming () =
+  (* Distinct source variables 2 and 3 cannot both map to variable 4. *)
+  match Ket.equal_result [| v 2; v 3 |] [| v 4; v 4 |] with
+  | Ok (false, _, _) -> ()
+  | Ok (true, _, _) -> Alcotest.fail "non-injective path-variable map accepted"
+  | Error _ -> Alcotest.fail "well-formed ket comparison expected"
+
 let test_ket_path_var_order_result_returns_order () =
   (* For a ket of width 2, variables 0 and 1 are input/output variables x0,x1.
      Variables starting at 2 are path variables y0,y1,... *)
@@ -2526,6 +2589,15 @@ let ket =
     ( "equal_result reports invalid output index",
       `Quick,
       test_ket_equal_result_reports_invalid_output_index );
+    ( "equal_result returns consistent path-variable maps",
+      `Quick,
+      test_ket_equal_result_returns_consistent_path_var_maps );
+    ( "equal_result rejects inconsistent path-variable renaming",
+      `Quick,
+      test_ket_equal_result_rejects_inconsistent_path_var_renaming );
+    ( "equal_result rejects non-injective path-variable renaming",
+      `Quick,
+      test_ket_equal_result_rejects_non_injective_path_var_renaming );
     ( "path_var_order_result returns order",
       `Quick,
       test_ket_path_var_order_result_returns_order );

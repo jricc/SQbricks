@@ -135,7 +135,7 @@ Current correctness queue, in order:
   correctly;
 - [x] compare measurements through the correspondence between observable
   outputs;
-- [ ] implement the documented consistent renaming of path variables during
+- [x] implement the documented consistent renaming of path variables during
   ket and path-sum equality.
 
 API and robustness bugs to handle after the correctness queue:
