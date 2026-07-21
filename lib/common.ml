@@ -109,7 +109,7 @@ module ListBis = struct
     List.rev (aux n1 [])
 
   (* forall i in lst -> i in [a,b] *)
-  let check_bounds a b lst = not (List.for_all (fun x -> a <= x && x < b) lst)
+  let check_bounds a b lst = List.for_all (fun x -> a <= x && x < b) lst
 
   let valid_indices width lst =
     List.for_all (fun indice -> 0 <= indice && indice < width) lst
@@ -152,18 +152,10 @@ module ListBis = struct
       else List.map int_of_string str_list
 
   let extract_upper_bound_list bound list =
-    let rec aux acc = function
-      | hd :: tl -> if bound <= hd then aux (hd :: acc) tl else aux acc tl
-      | [] -> acc
-    in
-    aux [] list
+    List.filter (fun value -> bound <= value) list
 
   let extract_lower_bound_list bound list =
-    let rec aux acc = function
-      | hd :: tl -> if hd < bound then aux (hd :: acc) tl else aux acc tl
-      | [] -> acc
-    in
-    aux [] list
+    List.filter (fun value -> value < bound) list
 
   let intersect l1 l2 =
     let l2_sorted = List.sort_uniq Int.compare l2 in
