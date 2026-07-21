@@ -446,6 +446,32 @@ let test_parser_reports_oversized_integer_literal () =
     ("OpenQASM integer literal " ^ literal ^ " is outside the supported range")
     qasm
 
+let test_openqasm_one_creg_keeps_complete_program () =
+  (* [one_creg] changes the classical-register layout only. The quantum
+     register and the circuit instructions must still be exported. *)
+  let expected =
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];\ncreg c[1];\nh q[0];\nmeasure q[0] -> c[0];\n"
+  in
+  check string "single classical register export" expected
+    (To_openqasm.string_oq ~one_creg:true (h 0 -- m 0 0))
+
+let test_openqasm_rejects_unsupported_controlled_gate () =
+  (* A control arity unsupported by OpenQASM export must fail explicitly. It
+     must not enter the generic multi-target expansion with the same gate. *)
+  let unsupported_gate = Program.Apply (Gates.H, [ 0; 1 ], [ 2 ]) in
+  let expected_message =
+    sprintf "To_openqasm.to_qasm, unsupported gate application:\n%s"
+      (ProgS.pretty unsupported_gate)
+  in
+  try
+    let _ = To_openqasm.string_oq unsupported_gate in
+    check bool "unsupported controlled gate expected" true false
+  with
+  | Failure message ->
+      check string "unsupported controlled gate" expected_message message
+  | Stack_overflow ->
+      Alcotest.fail "unsupported controlled gate caused recursive expansion"
+
 let test_prog_equiv_qasm ?(debug = true) ?(algo = Equiv.Sequence)
     ?(not_equiv = false) ?(equivalence = Equiv.SubCircuit) (p1' : string)
     (p2' : string) () =
@@ -918,6 +944,12 @@ let unitary =
     ( "parser reports oversized integer literal",
       `Quick,
       test_parser_reports_oversized_integer_literal );
+    ( "openqasm one creg keeps complete program",
+      `Quick,
+      test_openqasm_one_creg_keeps_complete_program );
+    ( "openqasm rejects unsupported controlled gate",
+      `Quick,
+      test_openqasm_rejects_unsupported_controlled_gate );
     ( "seq unit vs hybrid",
       `Quick,
       test_prog_equiv ~not_equiv:true (m 0 0) (h 0) );

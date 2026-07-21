@@ -23,6 +23,9 @@
 
 ## Later roadmap work
 
+- [ ] Add OpenQASM export support for `H` gates with an arbitrary number of
+  controls. Symbolic execution already supports them, but the OpenQASM 2
+  exporter currently rejects them because it has no decomposition for them.
 - [ ] Measure the performance impact of recursive variable substitution under
   `Qubit.Prod`; it unlocks additional reductions and equivalence proofs, but
   traversing larger qubit expressions may increase reduction time.

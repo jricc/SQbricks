@@ -76,7 +76,13 @@ let to_qasm ?(one_creg = false) ?(debug = false) (p : Program.t) : t =
     | Apply (U1 _, _, _) ->
         failwith
           (sprintf "To_openqasm.to_qasm.aux, program = %s\n" (ProgS.pretty p))
-    | Apply (g, co, ta) -> aux (multi_apply co ta g E)
+    | Apply (g, co, (_ :: _ :: _ as targets)) ->
+        aux (multi_apply co targets g E)
+    | Apply (_, _, []) -> ID
+    | Apply _ ->
+        failwith
+          (sprintf "To_openqasm.to_qasm, unsupported gate application:\n%s"
+             (ProgS.pretty p))
     | Measure (k, ta) -> MEASURE (k, ta)
     | It ([ k ], Sequence (p1, p2)) -> aux (it k p1 -- it k p2)
     | It ([ k ], p') -> IF (k, aux p')
@@ -89,7 +95,7 @@ let to_qasm ?(one_creg = false) ?(debug = false) (p : Program.t) : t =
   in
   let output = aux p in
   if wc = 0 then SEQUENCE (QREG wq, output)
-  else if one_creg then CREG wc
+  else if one_creg then SEQUENCE (QREG wq, SEQUENCE (CREG wc, output))
   else
     let res = ref (CREG 0) in
     for i = 1 to wc - 1 do

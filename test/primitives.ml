@@ -88,6 +88,29 @@ let test_list_bis_remove_absent_value_preserves_list () =
   check (list int) "absent value" [ 1; 2; 3 ]
     (ListBis.remove 9 [ 1; 2; 3 ])
 
+let test_list_bis_check_bounds_matches_documented_interval () =
+  (* The lower bound is inclusive, the upper bound is exclusive, and every
+     element must satisfy the interval. The empty list is therefore valid. *)
+  let actual =
+    [
+      ListBis.check_bounds 1 4 [ 1; 2; 3 ];
+      ListBis.check_bounds 1 4 [ 1; 2; 4 ];
+      ListBis.check_bounds 1 4 [ 0; 1 ];
+      ListBis.check_bounds 1 4 [];
+    ]
+  in
+  check (list bool) "bounds results" [ true; false; false; true ] actual
+
+let test_list_bis_extract_upper_bound_preserves_order () =
+  (* Filtering values greater than or equal to the bound keeps input order. *)
+  check (list int) "upper-bound extraction" [ 3; 5; 4 ]
+    (ListBis.extract_upper_bound_list 3 [ 1; 3; 5; 2; 4 ])
+
+let test_list_bis_extract_lower_bound_preserves_order () =
+  (* Filtering values below the bound keeps input order. *)
+  check (list int) "lower-bound extraction" [ 1; 0; 2 ]
+    (ListBis.extract_lower_bound_list 3 [ 1; 3; 0; 5; 2 ])
+
 let list_bis =
   [
     ( "remove preserves order",
@@ -96,6 +119,15 @@ let list_bis =
     ( "removing an absent value preserves the list",
       `Quick,
       test_list_bis_remove_absent_value_preserves_list );
+    ( "check_bounds follows its documented interval",
+      `Quick,
+      test_list_bis_check_bounds_matches_documented_interval );
+    ( "extract_upper_bound_list preserves order",
+      `Quick,
+      test_list_bis_extract_upper_bound_preserves_order );
+    ( "extract_lower_bound_list preserves order",
+      `Quick,
+      test_list_bis_extract_lower_bound_preserves_order );
   ]
 
 let malformed_zero_width_path_sum : Path_sum.t =
