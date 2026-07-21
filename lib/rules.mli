@@ -56,6 +56,20 @@ module Elim : sig
         [{phase = 0; ket = |x0,1>; []}] *)
 end
 
+module Omega : sig
+  (** This module incrementally implements Amy's omega reduction rule. The
+      current validated case is [Q = 0] and [R = 0]. *)
+
+  val omega :
+    ?debug:bool ->
+    Path_sum.t ->
+    (Path_sum.t option, reduction_error) result
+  (** [omega ?debug ps] applies at most one omega reduction. It returns
+      [Ok (Some ps')] when a path variable is eliminated, [Ok None] when the
+      rule does not match, and [Error (MalformedPathSum message)] when [ps]
+      violates an invariant required by the rule. *)
+end
+
 module HH : sig
   (** This module implements the [HH] reduction rule for path variable
       elimination. *)

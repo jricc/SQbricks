@@ -214,6 +214,34 @@ let hh =
       `Quick,
       test_reduction_algorithm_reports_malformed_path_sum );
   ]
+
+let test_omega_reduces_zero_boolean_polynomial () =
+  (* Q = 0 is the smallest omega instance:
+       phase = 1/4 y0, ket = |x0>, path variables = [y0]
+     Summing over y0 produces phase 1/8 and removes y0. *)
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 1)) +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    { phase = Scal div8 +++ Poly.empty; ket = [| x0 |]; path_var = [] }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = 0" (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match phase 1/4 y0"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let omega =
+  [
+    ( "omega reduces Q = 0",
+      `Quick,
+      test_omega_reduces_zero_boolean_polynomial );
+  ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)
 (* 
@@ -3551,6 +3579,7 @@ let () =
       ("Poly Normalise", poly_normalize);
       (* ("Normalise Path Variables", normalise_path_var); *)
       ("HH", hh);
+      ("Omega", omega);
       ("Path-sum equality", path_sum_equality);
       ("Path-sum initialization", path_sum_initialization);
       ("Path-sum substitution", path_sum_substitution);

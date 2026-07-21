@@ -66,6 +66,39 @@ module Elim = struct
     ps'
 end
 
+module Omega = struct
+  (* First validated case of Omega: Q = 0 and R = 0. *)
+  let q_zero_phase y0 =
+    Poly.to_poly
+      (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
+
+  let omega ?(debug = false) (ps : Path_sum.t) :
+      (Path_sum.t option, reduction_error) result =
+    if debug then printf "Rule_omega.omega, ps =\n%s\n%!" (PSS.pretty ps);
+    let rec find_candidate = function
+      | y0 :: remaining_path_variables ->
+          if
+            (not (Ket.member y0 ps.ket))
+            && Poly.equal ps.phase (q_zero_phase y0)
+          then
+            let output : Path_sum.t =
+              {
+                ps with
+                phase = Poly.to_poly (Monome.Scal div8);
+                path_var = ListBis.remove y0 ps.path_var;
+              }
+            in
+            if debug then
+              printf "Rule_omega.omega, matched y%d\n%s\n%!"
+                (y0 - Array.length ps.ket)
+                (PSS.pretty output);
+            Ok (Some output)
+          else find_candidate remaining_path_variables
+      | [] -> Ok None
+    in
+    find_candidate ps.path_var
+end
+
 module HH = struct
   let empty = Poly.empty
   let find = Poly.find

@@ -449,6 +449,11 @@ For omega and case rules:
 5. Integrate step by step.
 6. Compare before/after results.
 
+Develop a new reduction rule one semantic case at a time: add the smallest
+failing test, implement only that case, validate it, and only then add the next
+more general test. Do not anticipate later matcher cases in an earlier
+implementation.
+
 Each rule must have:
 
 - a clear matching condition;
