@@ -446,6 +446,50 @@ let test_parser_reports_oversized_integer_literal () =
     ("OpenQASM integer literal " ^ literal ^ " is outside the supported range")
     qasm
 
+let open_file_descriptor_count () =
+  (* Linux exposes the process file descriptors here. Other platforms still
+     exercise the parser behavior, but cannot perform this resource check. *)
+  try Some (Array.length (Sys.readdir "/proc/self/fd"))
+  with Sys_error _ -> None
+
+let with_temporary_parser_input suffix contents test =
+  let path = Filename.temp_file "sqbricks-parser-" suffix in
+  let output_channel = open_out path in
+  output_string output_channel contents;
+  close_out output_channel;
+  Fun.protect ~finally:(fun () -> Sys.remove path) (fun () -> test path)
+
+let check_parser_closes_input name suffix contents parse =
+  with_temporary_parser_input suffix contents (fun path ->
+      let before = open_file_descriptor_count () in
+      parse path;
+      match (before, open_file_descriptor_count ()) with
+      | Some before, Some after -> check int name before after
+      | _ -> ())
+
+let test_openqasm_parser_closes_input_after_success () =
+  check_parser_closes_input "OpenQASM success" ".qasm"
+    "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[1];\nh q[0];\n"
+    (fun path -> ignore (Parser_get.GetProg.to_prog path))
+
+let test_openqasm_parser_closes_input_after_error () =
+  check_parser_closes_input "OpenQASM error" ".qasm" "invalid" (fun path ->
+      try
+        ignore (Parser_get.GetProg.to_prog path);
+        Alcotest.fail "invalid OpenQASM input accepted"
+      with Parser_OpenQASM.Error -> ())
+
+let test_path_sum_parser_closes_input_after_success () =
+  check_parser_closes_input "path-sum success" ".txt" "1,,|x0>" (fun path ->
+      ignore (Parser_get.GetPs.to_ps path))
+
+let test_path_sum_parser_closes_input_after_error () =
+  check_parser_closes_input "path-sum error" ".txt" "invalid" (fun path ->
+      try
+        ignore (Parser_get.GetPs.to_ps path);
+        Alcotest.fail "invalid path-sum input accepted"
+      with Parser_Path_sum.Error -> ())
+
 let test_openqasm_one_creg_keeps_complete_program () =
   (* [one_creg] changes the classical-register layout only. The quantum
      register and the circuit instructions must still be exported. *)
@@ -944,6 +988,18 @@ let unitary =
     ( "parser reports oversized integer literal",
       `Quick,
       test_parser_reports_oversized_integer_literal );
+    ( "OpenQASM parser closes input after success",
+      `Quick,
+      test_openqasm_parser_closes_input_after_success );
+    ( "OpenQASM parser closes input after error",
+      `Quick,
+      test_openqasm_parser_closes_input_after_error );
+    ( "path-sum parser closes input after success",
+      `Quick,
+      test_path_sum_parser_closes_input_after_success );
+    ( "path-sum parser closes input after error",
+      `Quick,
+      test_path_sum_parser_closes_input_after_error );
     ( "openqasm one creg keeps complete program",
       `Quick,
       test_openqasm_one_creg_keeps_complete_program );

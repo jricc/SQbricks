@@ -19,15 +19,24 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* Parse one file while keeping ownership of its input channel local.
+   [Fun.protect] executes [finally] both when [parse] returns normally and when
+   it raises an exception. [close_in_noerr] also prevents a closing error from
+   hiding the original parser error. *)
+let parse_file parse file =
+  let input_channel = open_in file in
+  Fun.protect
+    ~finally:(fun () -> close_in_noerr input_channel)
+    (fun () ->
+      let lexbuf = Lexing.from_channel input_channel in
+      parse lexbuf)
+
 module GetProg = struct
   open Parser_OpenQASM
   open Lexer_OpenQASM
   open Common
 
-  let getProg file =
-    let c = open_in file in
-    let lb = Lexing.from_channel c in
-    program token lb
+  let getProg file = parse_file (program token) file
 
   let to_prog ?(debug = false) input =
     let extension = Filename.extension input in
@@ -48,10 +57,7 @@ module GetPs = struct
   open Lexer_Path_sum
   open Common
 
-  let getPS file =
-    let c = open_in file in
-    let lb = Lexing.from_channel c in
-    path_sum token lb
+  let getPS file = parse_file (path_sum token) file
 
   let to_ps ?(debug = false) input =
     let extension = Filename.extension input in

@@ -21,8 +21,12 @@
 
 module GetProg : sig
   val to_prog : ?debug:bool -> string -> Program.t
+  (** [to_prog ?debug input] locates and parses the OpenQASM file [input]. Its
+      input channel is closed whether parsing succeeds or raises an exception. *)
 end
 
 module GetPs : sig
   val to_ps : ?debug:bool -> string -> Path_sum.t
+  (** [to_ps ?debug input] locates and parses the path-sum file [input]. Its
+      input channel is closed whether parsing succeeds or raises an exception. *)
 end
