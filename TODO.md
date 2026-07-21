@@ -14,12 +14,12 @@
 
 ## Then: phase 4 API and robustness bugs
 
-- [ ] Fix OpenQASM export with `one_creg=true` so it keeps the quantum register
+- [x] Fix OpenQASM export with `one_creg=true` so it keeps the quantum register
   and circuit, and reject unsupported controlled gates without recursive
   expansion loops.
-- [ ] Align `ListBis.check_bounds` and the bound-extraction helpers with their
+- [x] Align `ListBis.check_bounds` and the bound-extraction helpers with their
   documented return values and list order, after checking for external users.
-- [ ] Close parser input channels on both successful parses and parser errors.
+- [x] Close parser input channels on both successful parses and parser errors.
 
 ## Later roadmap work
 
@@ -62,6 +62,7 @@
 
 ## Done
 
+- [x] Complete roadmap phase 4: step-by-step correctness and robustness fixes.
 - [x] Recenter the fork on SQbricks, preserve the former full tree on
   `archive/full-qbricks-main`, and leave the original Qbricks repository
   untouched.

@@ -363,6 +363,22 @@ correspondant au format SQbricks `2*pi/2^k`. La comparaison des entiers Zarith
 se fait avec `Z.equal`, c'est-à-dire par valeur mathématique, pas par identité
 mémoire.
 
+Les points d'entrée fichier `Parser_get.GetProg.to_prog` et
+`Parser_get.GetPs.to_ps` délèguent la lecture à `parse_file`. Cette fonction
+ouvre le canal, construit le buffer lexical, puis exécute le parser dans
+`Fun.protect`. Son bloc `finally` appelle `close_in_noerr` après un succès comme
+après une exception. Le suffixe `noerr` est important : une erreur secondaire
+pendant la fermeture ne doit pas masquer l'erreur originale du parser.
+
+À l'export OpenQASM, `one_creg=true` change seulement la représentation des
+bits classiques : le résultat contient toujours le `qreg`, un unique
+`creg c[wc]` et toutes les instructions du circuit. Une application possédant
+plusieurs cibles est séparée en applications à une cible, qui sont ensuite
+validées individuellement. Une combinaison de porte et de contrôles non prise
+en charge est rejetée explicitement au lieu de relancer récursivement la même
+conversion. L'exécution symbolique accepte les portes `H` multi-contrôlées,
+mais leur décomposition OpenQASM reste un travail de roadmap.
+
 ## Traduction en mesures différées
 
 `To_deferred_measurement.to_deferred_measurements_result` transforme un
@@ -900,6 +916,13 @@ collectées dans une autre branche de l'expression.
 `ListBis.remove` supprime toutes les occurrences demandées avec la fonction
 d'égalité fournie, tout en conservant l'ordre relatif des autres éléments. Si
 la valeur est absente, la liste conserve donc aussi son ordre initial.
+
+`ListBis.check_bounds lower upper list` renvoie `true` si chaque valeur vérifie
+`lower <= valeur < upper`. La borne inférieure est donc incluse, la borne
+supérieure est exclue, et la liste vide est valide. Les fonctions
+`extract_upper_bound_list` et `extract_lower_bound_list` filtrent respectivement
+les valeurs supérieures ou égales à la borne et les valeurs strictement
+inférieures, sans modifier leur ordre relatif.
 
 Les anciens wrappers restent en place pendant la migration. Ils conservent le
 comportement historique, souvent en levant encore `Failure` ou en retournant

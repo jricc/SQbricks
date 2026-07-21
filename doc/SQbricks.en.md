@@ -356,6 +356,21 @@ that `den` is a power of two and returns the exponent expected by SQbricks'
 `2*pi/2^k` representation. Zarith integers are compared with `Z.equal`, meaning
 by mathematical value, not by memory identity.
 
+The file entry points `Parser_get.GetProg.to_prog` and
+`Parser_get.GetPs.to_ps` delegate reading to `parse_file`. This function opens
+the channel, creates the lexing buffer, then runs the parser inside
+`Fun.protect`. Its `finally` block calls `close_in_noerr` after both success and
+an exception. The `noerr` suffix matters: a secondary closing error must not
+hide the original parser error.
+
+During OpenQASM export, `one_creg=true` changes only the classical-bit layout:
+the result still contains the `qreg`, one `creg c[wc]`, and all circuit
+instructions. An application with several targets is split into single-target
+applications, which are then validated individually. An unsupported gate and
+control combination is rejected explicitly instead of recursively restarting
+the same conversion. Symbolic execution accepts multi-controlled `H` gates,
+but their OpenQASM decomposition remains roadmap work.
+
 ## Deferred measurement translation
 
 `To_deferred_measurement.to_deferred_measurements_result` translates a hybrid
@@ -880,6 +895,12 @@ expression.
 `ListBis.remove` removes every requested occurrence with the supplied equality
 function while preserving the relative order of all other elements. When the
 value is absent, the list therefore also keeps its original order.
+
+`ListBis.check_bounds lower upper list` returns `true` when every value
+satisfies `lower <= value < upper`. The lower bound is included, the upper bound
+is excluded, and the empty list is valid. `extract_upper_bound_list` and
+`extract_lower_bound_list` respectively filter values greater than or equal to
+the bound and values strictly below it, without changing their relative order.
 
 The old wrappers remain in place during the migration. They preserve historical
 behavior, often still raising `Failure` or returning `None`, but the new tests

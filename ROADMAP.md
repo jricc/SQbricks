@@ -19,7 +19,7 @@ Avoid large feature additions before the benchmark and regression setup are reli
 
 ## Current checkpoint
 
-As of 2026-07-12:
+As of 2026-07-21:
 
 - the light non-regression benchmark exists and checks both functional status
   and tracked performance;
@@ -30,7 +30,7 @@ As of 2026-07-12:
   memory failure, while continuing other series;
 - the large regression path selection exists and has a separate baseline/check
   workflow;
-- phases 1, 2, and 3 are done;
+- phases 1, 2, 3, and 4 are done;
 - phase 3 covered reduction, equivalence checking, separation, projection,
   benchmark scripts, AST/Program invariants, OpenQASM parser behavior,
   deferred measurement translation, and path-sum generation.
@@ -119,7 +119,7 @@ Expected output:
 - severity classification;
 - proposed minimal fix for each issue.
 
-## Phase 4 — Step-by-step bug fixes
+## ~~Phase 4 — Step-by-step bug fixes~~
 
 Goal: fix correctness and reproducibility issues.
 
@@ -140,14 +140,14 @@ Current correctness queue, in order:
 
 API and robustness bugs to handle after the correctness queue:
 
-- [ ] preserve the full circuit in `one_creg` OpenQASM exports and terminate
+- [x] preserve the full circuit in `one_creg` OpenQASM exports and terminate
   cleanly on unsupported controlled gates;
-- [ ] align the remaining `ListBis` helper implementations with their public
+- [x] align the remaining `ListBis` helper implementations with their public
   contracts;
-- [ ] close parser input channels on success and failure.
+- [x] close parser input channels on success and failure.
 
-Phase 5 starts only after the correctness queue is resolved, or after an item
-is deliberately classified as unsupported and rejected with an explicit error.
+The phase 4 queue is complete. Unsupported multi-controlled Hadamard export is
+rejected explicitly and remains tracked as later OpenQASM work.
 
 Rules:
 
