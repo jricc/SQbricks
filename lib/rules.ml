@@ -67,7 +67,8 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* Validated Omega cases currently keep R = 0 and use Q = 0 or Q = xi. *)
+  (* Validated Omega cases currently keep R = 0 and use Q = 0, Q = xi, or
+     Q = xi xor xj for two distinct input variables. *)
   let q_zero_phase y0 =
     Poly.to_poly
       (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
@@ -90,6 +91,30 @@ module Omega = struct
          (Monome.Prod
             (Monome.Scal three_quarters, Monome.Qubit (Qubit.Var input_variable))))
 
+  let two_inputs_phase y0 first_input second_input =
+    Poly.insert
+      (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
+      (Poly.insert
+         (Monome.Prod
+            ( Monome.Scal div2,
+              Monome.Prod
+                ( Monome.Qubit (Qubit.Var y0),
+                  Monome.Qubit (Qubit.Var first_input) ) ))
+         (Poly.to_poly
+            (Monome.Prod
+               ( Monome.Scal div2,
+                 Monome.Prod
+                   ( Monome.Qubit (Qubit.Var y0),
+                     Monome.Qubit (Qubit.Var second_input) ) ))))
+
+  let two_inputs_reduced_phase first_input second_input =
+    let boolean_sum =
+      Qubit.SumMod2 (Qubit.Var first_input, Qubit.Var second_input)
+    in
+    let lifted_sum = Poly.of_qubit boolean_sum divm4 in
+    let scaled_lift = Poly.distribution (Monome.Scal divm4) lifted_sum in
+    Poly.simplify (Poly.insert (Monome.Scal div8) scaled_lift)
+
   let omega ?(debug = false) (ps : Path_sum.t) :
       (Path_sum.t option, reduction_error) result =
     if debug then printf "Rule_omega.omega, ps =\n%s\n%!" (PSS.pretty ps);
@@ -100,13 +125,31 @@ module Omega = struct
         Some (single_input_reduced_phase input_variable)
       else find_input_phase y0 (input_variable + 1)
     in
+    let rec find_second_input y0 first_input second_input =
+      if second_input >= width then None
+      else if
+        Poly.equal ps.phase
+          (two_inputs_phase y0 first_input second_input)
+      then Some (two_inputs_reduced_phase first_input second_input)
+      else find_second_input y0 first_input (second_input + 1)
+    in
+    let rec find_two_inputs_phase y0 first_input =
+      if first_input >= width then None
+      else
+        match find_second_input y0 first_input (first_input + 1) with
+        | Some phase -> Some phase
+        | None -> find_two_inputs_phase y0 (first_input + 1)
+    in
     let rec find_candidate = function
       | y0 :: remaining_path_variables ->
           let reduced_phase =
             if Ket.member y0 ps.ket then None
             else if Poly.equal ps.phase (q_zero_phase y0) then
               Some (Poly.to_poly (Monome.Scal div8))
-            else find_input_phase y0 0
+            else (
+              match find_input_phase y0 0 with
+              | Some phase -> Some phase
+              | None -> find_two_inputs_phase y0 0)
           in
           (match reduced_phase with
           | Some phase ->

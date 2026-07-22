@@ -58,7 +58,8 @@ end
 
 module Omega : sig
   (** This module incrementally implements Amy's omega reduction rule. The
-      current cases are [Q = 0] and [Q = xi], with [R = 0]. *)
+      current cases are [Q = 0], [Q = xi], and [Q = xi xor xj] for distinct
+      input variables, with [R = 0]. *)
 
   val omega :
     ?debug:bool ->

@@ -268,6 +268,48 @@ let test_omega_reduces_input_variable_boolean_polynomial () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_omega_reconstructs_lifted_xor () =
+  (* Q = x0 xor x1 has the integer lift
+       Q_hat = x0 + x1 - 2 x0 x1.
+     In 1/2 y0 Q_hat, the term -y0 x0 x1 is an integer and disappears from
+     the phase modulo one. Omega must nevertheless reconstruct the complete
+     lift in -1/4 Q_hat, including the term 1/2 x0 x1:
+       1/4 y0 + 1/2 y0 x0 + 1/2 y0 x1
+       -> 1/8 + 3/4 x0 + 3/4 x1 + 1/2 x0 x1. *)
+  let y0 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x1)) +++ Poly.empty));
+      ket = [| x0; x1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0)
+            +++ (Prod (Scal three_quarters, Qubit x1)
+                +++ (Prod (Scal div2, Prod (Qubit x0, Qubit x1))
+                    +++ Poly.empty)));
+      ket = [| x0; x1 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0 xor x1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None ->
+      Alcotest.fail
+        "omega should match phase 1/4 y0 + 1/2 y0 x0 + 1/2 y0 x1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let omega =
   [
     ( "omega reduces Q = 0",
@@ -276,6 +318,9 @@ let omega =
     ( "omega reduces Q = x0",
       `Quick,
       test_omega_reduces_input_variable_boolean_polynomial );
+    ( "omega reconstructs the lift of Q = x0 xor x1",
+      `Quick,
+      test_omega_reconstructs_lifted_xor );
   ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)
