@@ -58,7 +58,7 @@ end
 
 module Omega : sig
   (** This module incrementally implements Amy's omega reduction rule. The
-      current validated case is [Q = 0] and [R = 0]. *)
+      current cases are [Q = 0] and [Q = xi], with [R = 0]. *)
 
   val omega :
     ?debug:bool ->

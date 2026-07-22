@@ -236,11 +236,46 @@ let test_omega_reduces_zero_boolean_polynomial () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_omega_reduces_input_variable_boolean_polynomial () =
+  (* Q = x0, so Q_hat = x0:
+       phase = 1/4 y0 + 1/2 y0 x0
+     Omega produces 1/8 - 1/4 x0. SQbricks stores the negative coefficient
+     modulo one as 3/4, hence phase = 1/8 + 3/4 x0. *)
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit (v 1))
+        +++ (Prod (Scal div2, Prod (Qubit (v 1), Qubit x0)) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0" (PSS.exact expected) (PSS.exact output)
+  | Ok None ->
+      Alcotest.fail "omega should match phase 1/4 y0 + 1/2 y0 x0"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let omega =
   [
     ( "omega reduces Q = 0",
       `Quick,
       test_omega_reduces_zero_boolean_polynomial );
+    ( "omega reduces Q = x0",
+      `Quick,
+      test_omega_reduces_input_variable_boolean_polynomial );
   ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)

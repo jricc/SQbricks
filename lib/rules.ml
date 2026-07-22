@@ -67,24 +67,53 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* First validated case of Omega: Q = 0 and R = 0. *)
+  (* Validated Omega cases currently keep R = 0 and use Q = 0 or Q = xi. *)
   let q_zero_phase y0 =
     Poly.to_poly
       (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
 
+  let single_input_phase y0 input_variable =
+    Poly.insert
+      (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
+      (Poly.to_poly
+         (Monome.Prod
+            ( Monome.Scal div2,
+              Monome.Prod
+                ( Monome.Qubit (Qubit.Var y0),
+                  Monome.Qubit (Qubit.Var input_variable) ) )))
+
+  let single_input_reduced_phase input_variable =
+    let three_quarters = Q.add div2 div4 in
+    Poly.insert
+      (Monome.Scal div8)
+      (Poly.to_poly
+         (Monome.Prod
+            (Monome.Scal three_quarters, Monome.Qubit (Qubit.Var input_variable))))
+
   let omega ?(debug = false) (ps : Path_sum.t) :
       (Path_sum.t option, reduction_error) result =
     if debug then printf "Rule_omega.omega, ps =\n%s\n%!" (PSS.pretty ps);
+    let width = Array.length ps.ket in
+    let rec find_input_phase y0 input_variable =
+      if input_variable >= width then None
+      else if Poly.equal ps.phase (single_input_phase y0 input_variable) then
+        Some (single_input_reduced_phase input_variable)
+      else find_input_phase y0 (input_variable + 1)
+    in
     let rec find_candidate = function
       | y0 :: remaining_path_variables ->
-          if
-            (not (Ket.member y0 ps.ket))
-            && Poly.equal ps.phase (q_zero_phase y0)
-          then
+          let reduced_phase =
+            if Ket.member y0 ps.ket then None
+            else if Poly.equal ps.phase (q_zero_phase y0) then
+              Some (Poly.to_poly (Monome.Scal div8))
+            else find_input_phase y0 0
+          in
+          (match reduced_phase with
+          | Some phase ->
             let output : Path_sum.t =
               {
                 ps with
-                phase = Poly.to_poly (Monome.Scal div8);
+                phase;
                 path_var = ListBis.remove y0 ps.path_var;
               }
             in
@@ -93,7 +122,7 @@ module Omega = struct
                 (y0 - Array.length ps.ket)
                 (PSS.pretty output);
             Ok (Some output)
-          else find_candidate remaining_path_variables
+          | None -> find_candidate remaining_path_variables)
       | [] -> Ok None
     in
     find_candidate ps.path_var
