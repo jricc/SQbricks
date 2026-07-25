@@ -269,17 +269,26 @@ let test_unitary_is_only_a_hybrid_syntax_check () =
   check bool "malformed unitary-shaped gate accepted" true
     (Program.unitary (Program.Apply (Gates.H, [], [])))
 
-let test_deferred_measurement_reports_not_without_measurement () =
-  match To_deferred_measurement.to_deferred_measurements_result (notC 0) with
-  | Error (To_deferred_measurement.ClassicalControlWithoutMeasurement 0) ->
-      check bool "classical bit without measurement" true true
-  | _ -> check bool "classical bit without measurement expected" true false
+let test_deferred_measurement_tracks_not_on_initial_zero () =
+  match
+    To_deferred_measurement.to_deferred_measurements_result
+      (notC 0 -- it 0 (x 1))
+  with
+  | Ok (program, inits, meas) ->
+      check string "condition made true" (ProgS.exact (x 1))
+        (ProgS.exact program);
+      check string "deferred inits" "[]" (ListBis.string_int inits);
+      check string "deferred meas" "[]" (ListBis.string_int meas)
+  | Error _ -> check bool "initial classical zero expected" true false
 
-let test_deferred_measurement_reports_it_without_measurement () =
+let test_deferred_measurement_skips_false_initial_condition () =
   match To_deferred_measurement.to_deferred_measurements_result (it 0 (x 1)) with
-  | Error (To_deferred_measurement.ClassicalControlWithoutMeasurement 0) ->
-      check bool "conditional bit without measurement" true true
-  | _ -> check bool "conditional bit without measurement expected" true false
+  | Ok (program, inits, meas) ->
+      check string "false initial condition" (ProgS.exact Program.E)
+        (ProgS.exact program);
+      check string "deferred inits" "[]" (ListBis.string_int inits);
+      check string "deferred meas" "[]" (ListBis.string_int meas)
+  | Error _ -> check bool "initial classical zero expected" true false
 
 let test_deferred_measurement_reports_invalid_measurement_bit () =
   match To_deferred_measurement.to_deferred_measurements_result (m 0 (-1)) with
@@ -298,6 +307,22 @@ let test_deferred_measurement_translates_simple_condition () =
       check string "deferred inits" "[]" (ListBis.string_int inits);
       check string "deferred meas" "[0]" (ListBis.string_int meas)
   | Error _ -> check bool "simple condition expected" true false
+
+let test_deferred_measurement_translates_partially_measured_condition () =
+  (* This is the shape produced by [if (c == 1)] when only c[0] has been
+     measured: the untouched bits c[1] and c[2] still satisfy their expected
+     zero values. *)
+  let program =
+    m 0 0 -- notC 1 -- notC 2 -- itl [ 0; 1; 2 ] (x 3) -- notC 1
+    -- notC 2
+  in
+  match To_deferred_measurement.to_deferred_measurements_result program with
+  | Ok (program, inits, meas) ->
+      check string "partially measured condition" (ProgS.exact (cx 0 3))
+        (ProgS.exact program);
+      check string "deferred inits" "[]" (ListBis.string_int inits);
+      check string "deferred meas" "[0]" (ListBis.string_int meas)
+  | Error _ -> check bool "partially measured condition expected" true false
 
 let test_deferred_measurement_keeps_all_measured_qubits_unavailable () =
   match
@@ -934,18 +959,21 @@ let unitary =
     ( "unitary is only a hybrid syntax check",
       `Quick,
       test_unitary_is_only_a_hybrid_syntax_check );
-    ( "deferred measurement reports not without measurement",
+    ( "deferred measurement tracks not on initial zero",
       `Quick,
-      test_deferred_measurement_reports_not_without_measurement );
-    ( "deferred measurement reports it without measurement",
+      test_deferred_measurement_tracks_not_on_initial_zero );
+    ( "deferred measurement skips false initial condition",
       `Quick,
-      test_deferred_measurement_reports_it_without_measurement );
+      test_deferred_measurement_skips_false_initial_condition );
     ( "deferred measurement reports invalid measurement bit",
       `Quick,
       test_deferred_measurement_reports_invalid_measurement_bit );
     ( "deferred measurement translates simple condition",
       `Quick,
       test_deferred_measurement_translates_simple_condition );
+    ( "deferred measurement translates partially measured condition",
+      `Quick,
+      test_deferred_measurement_translates_partially_measured_condition );
     ( "deferred measurement keeps all measured qubits unavailable",
       `Quick,
       test_deferred_measurement_keeps_all_measured_qubits_unavailable );

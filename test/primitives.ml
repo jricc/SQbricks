@@ -1049,6 +1049,28 @@ let test_path_sum_equal_result_uses_ket_path_var_mapping_in_phase () =
   | Ok false -> Alcotest.fail "consistent path-variable renaming rejected"
   | Error _ -> Alcotest.fail "well-formed path-sum comparison expected"
 
+let test_path_sum_equal_result_rejects_phase_incompatible_with_ket_mapping () =
+  (* The kets map the first path variable y0 to y1. The second phase still
+     depends on its own y0, so the phases differ without either map being
+     malformed. *)
+  let phase =
+    Monome.Prod
+      ( Monome.Scal div2,
+        Monome.Prod
+          (Monome.Qubit (Qubit.Var 0), Monome.Qubit (Qubit.Var 1)) )
+    +++ Poly.empty
+  in
+  let path_sum1 : Path_sum.t =
+    { phase; ket = [| Qubit.Var 1 |]; path_var = [ 1 ] }
+  in
+  let path_sum2 : Path_sum.t =
+    { phase; ket = [| Qubit.Var 2 |]; path_var = [ 1; 2 ] }
+  in
+  match Path_sum.equal_result path_sum1 path_sum2 with
+  | Ok false -> ()
+  | Ok true -> Alcotest.fail "phases incompatible with ket mapping accepted"
+  | Error _ -> Alcotest.fail "well-formed unequal path sums reported malformed"
+
 let path_sum_equality =
   [
     ( "equal_result returns true",
@@ -1075,6 +1097,9 @@ let path_sum_equality =
     ( "equal_result applies ket path-variable mapping to phase",
       `Quick,
       test_path_sum_equal_result_uses_ket_path_var_mapping_in_phase );
+    ( "equal_result rejects phase incompatible with ket mapping",
+      `Quick,
+      test_path_sum_equal_result_rejects_phase_incompatible_with_ket_mapping );
   ]
 
 let test_path_sum_ofSize_init_result_returns_path_sum () =

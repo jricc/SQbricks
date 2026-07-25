@@ -23,6 +23,8 @@
 
 ## Later roadmap work
 
+- [ ] Add flexible unit-test runtime regression tracking that remains useful as
+  new tests are added, instead of comparing only the total test-suite duration.
 - [ ] Add OpenQASM export support for `H` gates with an arbitrary number of
   controls. Symbolic execution already supports them, but the OpenQASM 2
   exporter currently rejects them because it has no decomposition for them.
