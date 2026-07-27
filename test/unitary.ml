@@ -524,6 +524,17 @@ let test_openqasm_one_creg_keeps_complete_program () =
   check string "single classical register export" expected
     (To_openqasm.string_oq ~one_creg:true (h 0 -- m 0 0))
 
+let test_openqasm_exports_three_controlled_x () =
+  (* The exported decomposition must remain equivalent after a QASM
+     round-trip; emitting an unsupported custom instruction is not enough. *)
+  let three_controlled_x =
+    Program.Apply (Gates.X, [ 0; 1; 2 ], [ 3 ])
+  in
+  let qasm = To_openqasm.string_oq three_controlled_x in
+  with_temporary_parser_input ".qasm" qasm (fun path ->
+      let exported_program = to_prog path in
+      test_prog_equiv ~debug:false three_controlled_x exported_program ())
+
 let test_openqasm_rejects_unsupported_controlled_gate () =
   (* A control arity unsupported by OpenQASM export must fail explicitly. It
      must not enter the generic multi-target expansion with the same gate. *)
@@ -1031,6 +1042,9 @@ let unitary =
     ( "openqasm one creg keeps complete program",
       `Quick,
       test_openqasm_one_creg_keeps_complete_program );
+    ( "openqasm exports three-controlled X",
+      `Quick,
+      test_openqasm_exports_three_controlled_x );
     ( "openqasm rejects unsupported controlled gate",
       `Quick,
       test_openqasm_rejects_unsupported_controlled_gate );

@@ -23,6 +23,14 @@
 
 ## Later roadmap work
 
+- [ ] On a dedicated `owm-multicontrol` branch, audit and correct the
+  multi-controlled-gate pipeline used by `owm-vs-qiskit`: make the lowering
+  before OWM explicit instead of relying implicitly on `To_openqasm`
+  serialization, preserve exact semantics, and measure the gate-count growth.
+- [ ] On a separate `reduction-performance` branch, locate and correct the
+  large-benchmark slowdowns where the baseline and current gate counts are
+  identical, notably in `owm`, `tele`, and `owm-vs-tele`, before changing their
+  performance baselines.
 - [ ] Add flexible unit-test runtime regression tracking that remains useful as
   new tests are added, instead of comparing only the total test-suite duration.
 - [ ] Add OpenQASM export support for `H` gates with an arbitrary number of

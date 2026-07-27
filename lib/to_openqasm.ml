@@ -57,6 +57,19 @@ let to_qasm ?(one_creg = false) ?(debug = false) (p : Program.t) : t =
     | [] -> acc
   in
 
+  (* V = H.S.H satisfies V^2 = X. This decomposition of a three-controlled X
+     uses only gates already supported by the OpenQASM exporter. *)
+  let controlled_controlled_v s co1 co2 ta =
+    h ta -- ccu1 ~s 2 co1 co2 ta -- h ta
+  in
+  let three_controlled_x co1 co2 co3 ta =
+    controlled_controlled_v 1 co2 co3 ta
+    -- ccx co1 co2 co3
+    -- controlled_controlled_v (-1) co2 co3 ta
+    -- ccx co1 co2 co3
+    -- controlled_controlled_v 1 co1 co2 ta
+  in
+
   let rec aux (p : Program.t) : t =
     match p with
     | E -> ID
@@ -65,6 +78,8 @@ let to_qasm ?(one_creg = false) ?(debug = false) (p : Program.t) : t =
     | Apply (X, [], [ ta ]) -> X ta
     | Apply (X, [ co ], [ ta ]) -> CX (co, ta)
     | Apply (X, [ co1; co2 ], [ ta ]) -> CCX (co1, co2, ta)
+    | Apply (X, [ co1; co2; co3 ], [ ta ]) ->
+        aux (three_controlled_x co1 co2 co3 ta)
     | Apply (U1 (s, k), [], [ ta ]) ->
         let angle = Q.div_2exp s (k - 1) in
         U1 (angle, ta)
