@@ -780,23 +780,6 @@ module Variable_replacement = struct
         0 ket
     in
 
-    let apply_change path_var shifted_path_var shifted_path_var_poly =
-      let output_state : Path_sum.t =
-        {
-          (* This helper lifts the Boolean XOR separately for each phase
-             monomial, preserving coefficients such as 1/4. *)
-          phase =
-            Poly.substitute_rules_hh ~debug input_state.phase path_var
-              shifted_path_var_poly;
-          ket =
-            Path_sum.Ket.substitute ~debug input_state.ket path_var
-              shifted_path_var;
-          path_var = input_state.path_var;
-        }
-      in
-      Simplification.simplify ~debug output_state
-    in
-
     let rec try_qubits qubit_index =
       if qubit_index = width then input_state
       else
@@ -805,20 +788,33 @@ module Variable_replacement = struct
         in
         match affine_xor_expression shifted_path_var with
         | Some ([ path_var ], true, shifted_path_var_poly) ->
-            let output_state =
-              apply_change path_var shifted_path_var shifted_path_var_poly
-            in
             let direct_before =
               count_direct_path_var input_state.ket path_var
             in
-            let direct_after = count_direct_path_var output_state.ket path_var in
+            let candidate_ket =
+              Path_sum.Ket.substitute ~debug input_state.ket path_var
+                shifted_path_var
+            in
+            let direct_after = count_direct_path_var candidate_ket path_var in
             if debug then
               printf
                 "Rules.replace_not_path_var_by_var, path_var = %d, \
                  direct_before = %d, direct_after = %d\n\n%!"
                 path_var direct_before direct_after;
-            if direct_before < direct_after then output_state
-            else try_qubits (qubit_index + 1)
+            if direct_before >= direct_after then try_qubits (qubit_index + 1)
+            else
+              let output_state : Path_sum.t =
+                {
+                  (* Lift the Boolean XOR separately for each phase monomial,
+                     preserving coefficients such as 1/4. *)
+                  phase =
+                    Poly.substitute_rules_hh ~debug input_state.phase path_var
+                      shifted_path_var_poly;
+                  ket = candidate_ket;
+                  path_var = input_state.path_var;
+                }
+              in
+              Simplification.simplify ~debug output_state
         | _ -> try_qubits (qubit_index + 1)
     in
     try_qubits 0
