@@ -803,13 +803,28 @@ module Variable_replacement = struct
                 path_var direct_before direct_after;
             if direct_before >= direct_after then try_qubits (qubit_index + 1)
             else
+              let substituted_phase =
+                match shifted_path_var with
+                | Qubit.SumMod2 (Qubit.One, Qubit.Var variable)
+                  when Int.equal variable path_var ->
+                    (* Boolean negation lifts directly to 1 - y. Avoid the
+                       general affine-XOR lifting for this frequent case. *)
+                    let one_minus_path_var =
+                      Poly.merge Poly.one
+                        (Poly.to_poly
+                           (Monome.Prod
+                              ( Monome.Scal Q.minus_one,
+                                Monome.Qubit (Qubit.Var path_var) )))
+                    in
+                    Poly.substitute_poly ~debug input_state.phase path_var
+                      one_minus_path_var
+                | _ ->
+                    Poly.substitute_rules_hh ~debug input_state.phase path_var
+                      shifted_path_var_poly
+              in
               let output_state : Path_sum.t =
                 {
-                  (* Lift the Boolean XOR separately for each phase monomial,
-                     preserving coefficients such as 1/4. *)
-                  phase =
-                    Poly.substitute_rules_hh ~debug input_state.phase path_var
-                      shifted_path_var_poly;
+                  phase = substituted_phase;
                   ket = candidate_ket;
                   path_var = input_state.path_var;
                 }
