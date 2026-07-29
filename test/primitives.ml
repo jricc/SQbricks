@@ -1980,6 +1980,29 @@ let test_replace_not_path_var_by_var_ignores_non_simplifying_shift () =
   check string "non-simplifying shift unchanged" (PSS.exact input)
     (PSS.exact output)
 
+let test_replace_not_path_var_by_var_tries_next_candidate () =
+  (* Input: phase = 0, ket = |x0 + y0, x1 + y1, y0>
+
+     The first candidate y0 <- x0 + y0 only moves the direct occurrence of y0,
+     so it must be ignored. The second candidate y1 <- x1 + y1 creates a new
+     output equal to y1 and must be applied. *)
+  let input : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| v 0 ++ v 3; v 1 ++ v 4; v 3 |];
+      path_var = [ 3; 4 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Poly.zero;
+      ket = [| v 0 ++ v 3; v 4; v 3 |];
+      path_var = [ 3; 4 ];
+    }
+  in
+  let output = Rules.Variable_replacement.replace_not_path_var_by_var input in
+  check string "next affine candidate" (PSS.exact expected) (PSS.exact output)
+
 let test_replace_not_path_var_by_var_ignores_nonlinear_shift () =
   (* Input:            phase = 0, ket = |x0x1 + y0, x1>
      Candidate change: y0 <- y0 + x0x1
@@ -2048,6 +2071,9 @@ let variable_replacement =
     ( "replace_not_path_var_by_var ignores non-simplifying shift",
       `Quick,
       test_replace_not_path_var_by_var_ignores_non_simplifying_shift );
+    ( "replace_not_path_var_by_var tries the next affine candidate",
+      `Quick,
+      test_replace_not_path_var_by_var_tries_next_candidate );
     ( "replace_not_path_var_by_var ignores nonlinear shift",
       `Quick,
       test_replace_not_path_var_by_var_ignores_nonlinear_shift );
