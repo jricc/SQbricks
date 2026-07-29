@@ -31,6 +31,9 @@
   large-benchmark slowdowns where the baseline and current gate counts are
   identical, notably in `owm`, `tele`, and `owm-vs-tele`, before changing their
   performance baselines.
+- [ ] Make the large regression checker report a changed gate-count signature
+  as a workload change instead of comparing its execution time with the old
+  performance baseline.
 - [ ] Add flexible unit-test runtime regression tracking that remains useful as
   new tests are added, instead of comparing only the total test-suite duration.
 - [ ] Add OpenQASM export support for `H` gates with an arbitrary number of

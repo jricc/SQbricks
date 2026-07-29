@@ -1060,6 +1060,28 @@ let unitary =
     ("cx = hczh", `Quick, test_prog_equiv (h 1 -- cz 0 1 -- h 1) (cx 0 1));
     ("ccx = ccxoq2", `Quick, test_prog_equiv (ccxoq2 0 1 2) (ccx 0 1 2));
     ("ccx = ccxoq2", `Quick, test_prog_equiv (ccxoq2 3 5 0) (ccx 3 5 0));
+    (* Compare the decomposition with the primitive multi-control semantics.
+       These cases exercise both register boundaries and non-ordered wires. *)
+    ( "c3xdecomp = c3x, contiguous indices",
+      `Quick,
+      test_prog_equiv
+        (c3xdecomp 0 1 2 3)
+        (Program.Apply (Gates.X, [ 0; 1; 2 ], [ 3 ])) );
+    ( "c3xdecomp = c3x, target at index zero",
+      `Quick,
+      test_prog_equiv
+        (c3xdecomp 1 2 3 0)
+        (Program.Apply (Gates.X, [ 1; 2; 3 ], [ 0 ])) );
+    ( "c3xdecomp = c3x, non-ordered controls",
+      `Quick,
+      test_prog_equiv
+        (c3xdecomp 6 2 5 1)
+        (Program.Apply (Gates.X, [ 6; 2; 5 ], [ 1 ])) );
+    ( "c3xdecomp = c3x, sparse boundary indices",
+      `Quick,
+      test_prog_equiv
+        (c3xdecomp 9 0 5 2)
+        (Program.Apply (Gates.X, [ 9; 0; 5 ], [ 2 ])) );
     ("x_qb", `Quick, test_prog_equiv (x_qb 0) (x 0));
     ("ccx_qb", `Quick, test_prog_equiv (ccx_qb 0 1 2) (ccx 0 1 2));
     ("gp 2 -- gp 2 = gp 1", `Quick, test_prog_equiv (gp 2 -- gp 2) (gp 1));
