@@ -67,13 +67,14 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* Validated Omega cases currently keep R = 0 and use Q = 0, Q = xi, or
-     Q = xi xor xj for two distinct input variables. *)
+  (* Implemented Omega cases currently keep R = 0 and use Q = 0, Q = xi,
+     Q = yj for another path variable, or Q = xi xor xj for two distinct
+     input variables. *)
   let q_zero_phase y0 =
     Poly.to_poly
       (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
 
-  let single_input_phase y0 input_variable =
+  let single_variable_phase y0 boolean_variable =
     Poly.insert
       (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
       (Poly.to_poly
@@ -81,15 +82,16 @@ module Omega = struct
             ( Monome.Scal div2,
               Monome.Prod
                 ( Monome.Qubit (Qubit.Var y0),
-                  Monome.Qubit (Qubit.Var input_variable) ) )))
+                  Monome.Qubit (Qubit.Var boolean_variable) ) )))
 
-  let single_input_reduced_phase input_variable =
+  let single_variable_reduced_phase boolean_variable =
     let three_quarters = Q.add div2 div4 in
     Poly.insert
       (Monome.Scal div8)
       (Poly.to_poly
          (Monome.Prod
-            (Monome.Scal three_quarters, Monome.Qubit (Qubit.Var input_variable))))
+            ( Monome.Scal three_quarters,
+              Monome.Qubit (Qubit.Var boolean_variable) )))
 
   let two_inputs_phase y0 first_input second_input =
     Poly.insert
@@ -121,9 +123,19 @@ module Omega = struct
     let width = Array.length ps.ket in
     let rec find_input_phase y0 input_variable =
       if input_variable >= width then None
-      else if Poly.equal ps.phase (single_input_phase y0 input_variable) then
-        Some (single_input_reduced_phase input_variable)
+      else if Poly.equal ps.phase (single_variable_phase y0 input_variable) then
+        Some (single_variable_reduced_phase input_variable)
       else find_input_phase y0 (input_variable + 1)
+    in
+    let rec find_other_path_phase y0 = function
+      | [] -> None
+      | path_variable :: remaining_path_variables ->
+          if Int.equal path_variable y0 then
+            find_other_path_phase y0 remaining_path_variables
+          else if
+            Poly.equal ps.phase (single_variable_phase y0 path_variable)
+          then Some (single_variable_reduced_phase path_variable)
+          else find_other_path_phase y0 remaining_path_variables
     in
     let rec find_second_input y0 first_input second_input =
       if second_input >= width then None
@@ -149,7 +161,10 @@ module Omega = struct
             else (
               match find_input_phase y0 0 with
               | Some phase -> Some phase
-              | None -> find_two_inputs_phase y0 0)
+              | None -> (
+                  match find_two_inputs_phase y0 0 with
+                  | Some phase -> Some phase
+                  | None -> find_other_path_phase y0 ps.path_var))
           in
           (match reduced_phase with
           | Some phase ->
