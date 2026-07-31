@@ -343,6 +343,23 @@ let test_omega_keeps_other_path_variable () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_reduction_algorithm_applies_omega () =
+  (* This smallest integration case checks that the reduction pipeline invokes
+     Omega: the direct phase 1/4 y0 must become 1/8 and y0 must disappear. *)
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 1)) +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    { phase = Scal div8 +++ Poly.empty; ket = [| x0 |]; path_var = [] }
+  in
+  let output = reduce_valid_path_sum input in
+  check string "reduction algorithm with Omega" (PSS.exact expected)
+    (PSS.exact output)
+
 let omega =
   [
     ( "omega reduces Q = 0",
@@ -357,6 +374,9 @@ let omega =
     ( "omega keeps another path variable",
       `Quick,
       test_omega_keeps_other_path_variable );
+    ( "reduction algorithm applies omega",
+      `Quick,
+      test_reduction_algorithm_applies_omega );
   ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)
