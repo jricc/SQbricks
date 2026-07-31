@@ -31,6 +31,9 @@
   large-benchmark slowdowns where the baseline and current gate counts are
   identical, notably in `owm`, `tele`, and `owm-vs-tele`, before changing their
   performance baselines.
+- [ ] Reduce repeated HH candidate scans on `owm/gf2^9mult_89_413`: profiling
+  observed 3,596 `hh_aux` calls from 4 `HH.hh` calls in Sequence, and 1,798
+  `hh_aux` calls from 3 `HH.hh` calls in Parallel.
 - [ ] Add flexible unit-test runtime regression tracking that remains useful as
   new tests are added, instead of comparing only the total test-suite duration.
 - [ ] Add OpenQASM export support for `H` gates with an arbitrary number of

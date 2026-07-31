@@ -737,6 +737,22 @@ lift(a xor b) = lift(a) + lift(b) - 2 lift(a) lift(b)
 This distinction is necessary: directly replacing `yk` with an arithmetic
 sum would lose the correction terms introduced by XOR.
 
+When the phase coefficient is `1/2`, these correction terms are integer phases
+and vanish modulo one. For example:
+
+```text
+1/2 (a xor b)
+  = 1/2 a + 1/2 b - ab
+  ≡ 1/2 a + 1/2 b                    (mod 1)
+```
+
+In this case, `coef_lift (1/2) = 0`, and `Poly.lift` returns the original
+polynomial directly instead of rebuilding it recursively. Empty and
+single-monomial polynomials are also returned directly because no cross term
+can arise. In the instrumented Sequence profile for `tele/grover_17`, this
+fast path reduced time in `Poly.lift` from `11.00 s` to `0.01 s`, and total
+time from `36.08 s` to `21.47 s`.
+
 Write `P' ≡ P` when the two path sums are semantically equivalent, that is,
 when:
 

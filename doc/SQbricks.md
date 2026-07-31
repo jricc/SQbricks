@@ -753,6 +753,23 @@ lift(a xor b) = lift(a) + lift(b) - 2 lift(a) lift(b)
 Cette distinction est nécessaire : remplacer directement `yk` par une
 somme arithmétique ferait perdre les termes correctifs produits par le XOR.
 
+Lorsque le coefficient de phase vaut `1/2`, ces termes correctifs sont des
+phases entières et disparaissent modulo un. Par exemple :
+
+```text
+1/2 (a xor b)
+  = 1/2 a + 1/2 b - ab
+  ≡ 1/2 a + 1/2 b                    (mod 1)
+```
+
+Dans ce cas, `coef_lift (1/2) = 0` et `Poly.lift` retourne directement le
+polynôme initial au lieu de le reconstruire récursivement. Les polynômes vides
+ou réduits à un monôme sont également retournés directement, car aucun terme
+croisé ne peut apparaître. Sur le profil instrumenté de
+`tele/grover_17` en mode Sequence, ce raccourci a réduit le temps de
+`Poly.lift` de `11,00 s` à `0,01 s`, et le temps total de `36,08 s` à
+`21,47 s`.
+
 On note `P' ≡ P` lorsque les deux path-sums sont sémantiquement équivalents,
 c'est-à-dire lorsque :
 

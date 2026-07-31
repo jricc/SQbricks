@@ -890,6 +890,16 @@ let test_poly_distribution_result_reports_unformatted_monome () =
       check bool "unformatted distribution monome rejected" true true
   | Ok _ -> check bool "unformatted distribution monome expected" true false
 
+let test_poly_lift_half_coefficient_returns_input () =
+  (* With a 1/2 phase coefficient, the correction for lifting x0 xor x1 is an
+     integer phase. It vanishes modulo one, so no x0.x1 term is needed. *)
+  let input =
+    Monome.Qubit (Qubit.Var 0)
+    +++ (Monome.Qubit (Qubit.Var 1) +++ Poly.empty)
+  in
+  let output = Poly.lift input div2 in
+  check bool "half-coefficient lift" true (Poly.equal input output)
+
 let poly_algebra =
   [
     ( "distribution_result returns poly",
@@ -898,6 +908,9 @@ let poly_algebra =
     ( "distribution_result reports unformatted monome",
       `Quick,
       test_poly_distribution_result_reports_unformatted_monome );
+    ( "lift with half coefficient adds no cross term",
+      `Quick,
+      test_poly_lift_half_coefficient_returns_input );
   ]
 
 let test_path_sum_equal_result_returns_true () =

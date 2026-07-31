@@ -84,6 +84,8 @@ If a more generic design is possible, mention it only as an alternative, but do 
   The user handles Git operations manually.
 - Document important choices, limitations, and edge cases.
 - Avoid comments that merely repeat the code.
+- Prefer one or two short, concrete examples over a long abstract comment when
+  examples make the behavior or invariant easier to understand.
 - Use descriptive variable and function names. Avoid generic names such as
   `f`, `input`, `output`, or `aux` when a domain-specific name would make the
   code easier to read.
