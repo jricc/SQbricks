@@ -371,6 +371,164 @@ control combination is rejected explicitly instead of recursively restarting
 the same conversion. Symbolic execution accepts multi-controlled `H` gates,
 but their OpenQASM decomposition remains roadmap work.
 
+### Decomposition of the three-controlled X gate
+
+`Program.Macros.c3xdecomp` decomposes an `X` gate with three controls into
+gates already supported by OWM and by the OpenQASM exporter:
+
+```ocaml
+let c3xdecomp co1 co2 co3 ta =
+  let controlled_controlled_v s control1 control2 target =
+    h target -- ccu1 ~s 2 control1 control2 target -- h target
+  in
+  controlled_controlled_v 1 co2 co3 ta
+  -- ccx co1 co2 co3
+  -- controlled_controlled_v (-1) co2 co3 ta
+  -- ccx co1 co2 co3
+  -- controlled_controlled_v 1 co1 co2 ta
+```
+
+Assume that the four qubits are distinct. Let
+
+$$
+a=\texttt{co1},\qquad
+b=\texttt{co2},\qquad
+c=\texttt{co3},\qquad
+t=\texttt{ta}.
+$$
+
+The `--` operator denotes sequential execution from left to right.
+
+#### Constructing the square root of X
+
+In SQbricks, `ccu1 2` conditionally applies the gate
+
+$$
+S=
+\begin{pmatrix}
+1&0\\
+0&i
+\end{pmatrix}.
+$$
+
+Therefore,
+
+```ocaml
+h target -- ccu1 2 control1 control2 target -- h target
+```
+
+applies the gate
+
+$$
+V=HSH
+$$
+
+to `target` when both controls are $1$, and the identity $HH=I$
+otherwise. Similarly, `~s:(-1)` applies
+
+$$
+V^\dagger=HS^\dagger H.
+$$
+
+Since $H^2=I$, $S^2=Z$, and $HZH=X$, it follows exactly that
+
+$$
+V^2=(HSH)(HSH)=HS^2H=HZH=X.
+$$
+
+This equality introduces no additional global phase.
+
+#### Action of the decomposition
+
+The generated sequence can be written as
+
+$$
+CCV_{b,c\rightarrow t}\;;
+CCX_{a,b\rightarrow c}\;;
+CCV^\dagger_{b,c\rightarrow t}\;;
+CCX_{a,b\rightarrow c}\;;
+CCV_{a,b\rightarrow t}.
+$$
+
+Consider a computational-basis state for the controls and an arbitrary target
+state:
+
+$$
+|a,b,c\rangle|\psi\rangle_t,
+\qquad a,b,c\in\{0,1\}.
+$$
+
+The first $CCV$ applies $V^{bc}$ to the target. The first $CCX$
+temporarily changes the third control to
+
+$$
+c'=c\oplus ab.
+$$
+
+The following $CCV^\dagger$ then applies $V^{-bc'}$. The second $CCX$
+restores the third control because
+
+$$
+(c\oplus ab)\oplus ab=c.
+$$
+
+Finally, the last $CCV$ applies $V^{ab}$. Since all target operations are
+powers of $V$, their composition is
+
+$$
+V^E,
+\qquad E=bc-b(c\oplus ab)+ab.
+$$
+
+For bits, the identity
+
+$$
+x\oplus y=x+y-2xy
+$$
+
+gives
+
+$$
+\begin{aligned}
+b(c\oplus ab)
+  &=b(c+ab-2abc)\\
+  &=bc+ab-2abc.
+\end{aligned}
+$$
+
+Therefore,
+
+$$
+E=bc-(bc+ab-2abc)+ab=2abc.
+$$
+
+The total action on the target is thus
+
+$$
+V^{2abc}=(V^2)^{abc}=X^{abc}.
+$$
+
+Consequently,
+
+$$
+|a,b,c\rangle|\psi\rangle_t
+\longmapsto
+|a,b,c\rangle X^{abc}|\psi\rangle_t.
+$$
+
+The target receives $X$ if and only if all three controls are $1$. The
+controls are restored at the end of the sequence. Equality on computational
+basis states implies equality on every state by linearity: the decomposition
+implements an exact $C^3X$ gate without an ancillary qubit or a global phase.
+
+This construction is the $n=4$, $U=X$ instance of Lemma 7.5 in
+[Barenco et al., *Elementary gates for quantum computation*](https://arxiv.org/pdf/quant-ph/9503016#page=21),
+which sets $V^2=U$. Lemma 6.1 gives the underlying elementary argument for
+two controls. The unit tests directly compare `c3xdecomp` with the
+multi-controlled semantics of `Program.Apply`, using contiguous, sparse,
+non-ordered indices at both ends of the register. An additional OWM test checks
+the transformation without going through OpenQASM.
+
 ## Deferred measurement translation
 
 `To_deferred_measurement.to_deferred_measurements_result` translates a hybrid
