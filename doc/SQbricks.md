@@ -701,6 +701,24 @@ peut pas être retirée seule : `Elim` n'est donc plus appliquée comme une
 réduction indépendante après `HH` ou après la factorisation par remplacement de
 variable.
 
+Toute variable de chemin reste une candidate possible pour jouer le rôle de
+`y0`. Cependant, `hh_aux` ne peut réussir que si la phase contient le terme
+`1/2*y0*yi`, où `yi` est une autre variable de chemin. La fonction interne
+`path_variables_with_possible_yi` extrait en un seul parcours les variables qui
+possèdent ce témoin nécessaire, puis `HH.hh` essaie uniquement celles-ci dans
+l'ordre de `path_var`. Après une réduction réussie, la phase ayant changé, la
+liste est recalculée. Ce préfiltre ne change donc ni le motif mathématique, ni
+l'ordre des réductions, ni le traitement d'erreur des path-sums de largeur
+nulle.
+
+Sur `owm/gf2^9mult_89_413`, le profil initial comptait 3 596 appels à `hh_aux`
+pour 4 appels à `HH.hh` en Sequence, contre 1 798 pour 3 en Parallel. Une mesure
+A/B/A sur la même machine donne un rapport Sequence/Parallel de `2,045` sur
+`main`, contre `1,720` et `1,715` avec le préfiltre. Ce rapport réduit d'environ
+16 % le coût spécifique à Sequence malgré la variation de vitesse globale de
+la machine. Le test unitaire conserve aussi une variable de chemin absente
+placée avant une paire HH valide, tout en appliquant la réduction à cette paire.
+
 `Rules.Variable_replacement.variable_replacement` accepte une composante de ket
 uniquement lorsqu'elle a la forme `y xor Q`, où `y` est une variable de chemin
 déclarée qui n'apparaît ni dans `Q`, ni dans la phase, ni dans une autre

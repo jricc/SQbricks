@@ -186,6 +186,27 @@ let test_hh_explicitly_removes_matched_pair () =
   check string "matched path variables are removed together"
     (PSS.exact expected) (PSS.exact output)
 
+let test_hh_skips_unmatched_candidate_before_match () =
+  (* phase = 1/2 y1y2, ket = |y2>, path variables = [y0; y1; y2].
+     The absent y0 is ignored, then HH applies to y1 and y2. *)
+  let phase =
+    Prod (Scal div2, Prod (Qubit (v 2), Qubit (v 3))) +++ Poly.empty
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| v 3 |]; path_var = [ 1; 2; 3 ] }
+  in
+  let expected : Path_sum.t =
+    { phase = p0; ket = [| zero |]; path_var = [ 1 ] }
+  in
+  let output =
+    match Rules.HH.hh input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "unmatched candidate before HH match" (PSS.exact expected)
+    (PSS.exact output)
+
 let test_reduction_algorithm_reports_malformed_path_sum () =
   let malformed =
     match
@@ -210,6 +231,9 @@ let hh =
     ( "hh explicitly removes its matched pair",
       `Quick,
       test_hh_explicitly_removes_matched_pair );
+    ( "hh skips an unmatched candidate before a match",
+      `Quick,
+      test_hh_skips_unmatched_candidate_before_match );
     ( "reduction_algorithm reports malformed path sum",
       `Quick,
       test_reduction_algorithm_reports_malformed_path_sum );

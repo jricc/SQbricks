@@ -31,9 +31,11 @@
   large-benchmark slowdowns where the baseline and current gate counts are
   identical, notably in `owm`, `tele`, and `owm-vs-tele`, before changing their
   performance baselines.
-- [ ] Reduce repeated HH candidate scans on `owm/gf2^9mult_89_413`: profiling
+- [x] Reduce repeated HH candidate scans on `owm/gf2^9mult_89_413`: profiling
   observed 3,596 `hh_aux` calls from 4 `HH.hh` calls in Sequence, and 1,798
-  `hh_aux` calls from 3 `HH.hh` calls in Parallel.
+  `hh_aux` calls from 3 `HH.hh` calls in Parallel. The validated phase prefilter
+  preserves path-variable order and reduces the normalized Sequence-specific
+  cost by approximately 16%.
 - [ ] Make the large regression checker report a changed gate-count signature
   as a workload change instead of comparing its execution time with the old
   performance baseline.

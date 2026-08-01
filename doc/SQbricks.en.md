@@ -692,6 +692,23 @@ the two removed normalization factors. An unused path variable cannot be
 removed on its own, so `Elim` is no longer applied as an independent reduction
 after `HH` or after variable-replacement factorization.
 
+Every path variable remains a possible candidate for the role of `y0`.
+However, `hh_aux` can succeed only if the phase contains the term
+`1/2*y0*yi`, where `yi` is another path variable. The internal
+`path_variables_with_possible_yi` function extracts variables with this
+necessary witness in one traversal, then `HH.hh` tries only those variables in
+`path_var` order. After a successful reduction, the phase has changed, so the
+list is recomputed. This prefilter therefore changes neither the mathematical
+pattern, the reduction order, nor error handling for zero-width path sums.
+
+On `owm/gf2^9mult_89_413`, the initial profile counted 3,596 `hh_aux` calls for
+4 `HH.hh` calls in Sequence, versus 1,798 for 3 in Parallel. An A/B/A
+measurement on the same machine gives a Sequence/Parallel ratio of `2.045` on
+`main`, versus `1.720` and `1.715` with the prefilter. This ratio shows an
+approximately 16% reduction in Sequence-specific cost despite variation in the
+machine's overall speed. The unit test also keeps an absent path variable placed
+before a valid HH pair while still reducing that pair.
+
 `Rules.Variable_replacement.variable_replacement` accepts a ket component only
 when it has the form `y xor Q`, where `y` is a declared path variable that does
 not occur in `Q`, the phase, or another ket component. `Q` may contain a product

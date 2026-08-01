@@ -222,6 +222,29 @@ module HH = struct
     let condition_poly = lazy (not (y0_member_unauthorized y0 ps.phase)) in
     if condition_ket then Lazy.force condition_poly else false
 
+  let path_variables_with_possible_yi (phase : Poly.t) width =
+    let rec aux phase candidates =
+      if Poly.equal phase Poly.empty then List.sort_uniq Int.compare candidates
+      else
+        let monome, remaining_phase = (Poly.find phase, Poly.del phase) in
+        let candidates =
+          match monome with
+          | Prod (Scal coefficient, Prod (Qubit (Var v1), Qubit (Var v2)))
+            when Q.equal coefficient div2 ->
+              (* This is only a prefilter for [hh_aux]: every path variable can
+                 be tried as y0, but a successful match also needs a path
+                 variable yi. For example, [1/2*y0*y1] provides a possible yi
+                 for both variables, whereas [1/2*x0*y0] provides none for y0. *)
+              let candidates =
+                if width <= v2 then v1 :: candidates else candidates
+              in
+              if width <= v1 then v2 :: candidates else candidates
+          | _ -> candidates
+        in
+        aux remaining_phase candidates
+    in
+    aux phase []
+
   (* HH removes the summation variable y0 and the constrained variable yi in
      one canonical-to-canonical transformation. *)
   let remove_matched_path_variables path_variables y0 yi =
@@ -287,11 +310,11 @@ module HH = struct
     let width = Array.length ps.ket in
     if Int.equal y0_to_remove (-1) then
       (* Try y0 in order of arrival *)
-      let rec aux (acc : Path_sum.t) = function
+      let rec aux (acc : Path_sum.t) candidates = function
         | y0 :: y0_remain ->
             if debug then
               printf "Rule_hh.hh.accepted, y0 candidate = %d\n\n%!" (y0 - width);
-            if y0_accepted y0 acc then (
+            if List.mem y0 candidates && y0_accepted y0 acc then (
               if debug then
                 printf "Rule_hh.hh.accepted, y0 = %d\n\n%!" (y0 - width);
               match hh_aux y0 acc ~debug with
@@ -303,15 +326,24 @@ module HH = struct
                    if debug then
                      printf
                        "Rule_hh.hh.accepted.match hh_aux, acc_reduced =\n\
-                        %s\n\n\
+                       %s\n\n\
                         %!"
                        (PSS.pretty acc_reduced);
-                   aux (Simplification.simplify acc_reduced) y0_remain)
-              | Ok None -> aux acc y0_remain)
-            else aux acc y0_remain
+                   let acc_simplified = Simplification.simplify acc_reduced in
+                   aux acc_simplified
+                     (path_variables_with_possible_yi acc_simplified.phase width)
+                     y0_remain)
+              | Ok None -> aux acc candidates y0_remain)
+            else aux acc candidates y0_remain
         | _ -> Ok acc
       in
-      aux ps ps.path_var
+      (* Keep malformed zero-width inputs on the existing error path through
+         [hh_aux]; candidate filtering is only valid for positive widths. *)
+      let candidates =
+        if width <= 0 then ps.path_var
+        else path_variables_with_possible_yi ps.phase width
+      in
+      aux ps candidates ps.path_var
     else if
       (* The user proposes y0 *)
       y0_accepted y0_to_remove ps
