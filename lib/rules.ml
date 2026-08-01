@@ -67,50 +67,58 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* The Q = 0 case supports any R independent of y0. Other implemented cases
-     currently keep R = 0 and use Q = xi, Q = yj for another path variable,
-     or Q = xi xor xj for two distinct input variables. *)
+  (* The Q = 0 and Q = xi cases support any R independent of y0. Other
+     implemented cases currently keep R = 0 and use Q = yj for another path
+     variable, or Q = xi xor xj for two distinct input variables. *)
   let q_zero_monome y0 =
     Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0))
 
-  (* Matches 1/4 y0 + R with y0 absent from R, and returns 1/8 + R. *)
-  let q_zero_reduced_phase y0 phase =
-    let required_monome = q_zero_monome y0 in
-    let rec remove_required_monome remaining_phase phase_context =
+  (* Removes one occurrence of required_monome and preserves every other term. *)
+  let remove_first_monome required_monome phase =
+    let rec remove remaining_phase preserved_phase =
       if Poly.is_empty remaining_phase then
-        (* Case: the required 1/4 y0 term is absent. *)
+        (* Case: required_monome is absent. *)
         None
       else
         let monome = Poly.find remaining_phase in
         let remaining_phase = Poly.del remaining_phase in
         if Monome.equal monome required_monome then
-          (* Case: 1/4 y0 is found; all other terms form the candidate R. *)
-          let phase_context = Poly.merge phase_context remaining_phase in
-          if Poly.member y0 phase_context then
-            (* Case: y0 occurs in R, so Q = 0 does not match. *)
-            None
-          else
-            (* Case: valid Q = 0; replace 1/4 y0 by 1/8 and preserve R. *)
-            Some (Poly.insert (Monome.Scal div8) phase_context)
+          (* Case: required_monome is found. *)
+          Some (Poly.merge preserved_phase remaining_phase)
         else
-          (* Case: this monomial belongs to R; keep scanning for 1/4 y0. *)
-          remove_required_monome remaining_phase
-            (Poly.insert monome phase_context)
+          (* Case: preserve this different monomial and continue. *)
+          remove remaining_phase (Poly.insert monome preserved_phase)
     in
-    remove_required_monome phase Poly.empty
+    remove phase Poly.empty
+
+  (* Matches 1/4 y0 + R with y0 absent from R, and returns 1/8 + R. *)
+  let q_zero_reduced_phase y0 phase =
+    match remove_first_monome (q_zero_monome y0) phase with
+    | None ->
+        (* Case: the required 1/4 y0 term is absent. *)
+        None
+    | Some phase_context ->
+        if Poly.member y0 phase_context then
+          (* Case: y0 occurs in R, so Q = 0 does not match. *)
+          None
+        else
+          (* Case: valid Q = 0; replace 1/4 y0 by 1/8 and preserve R. *)
+          Some (Poly.insert (Monome.Scal div8) phase_context)
+
+  let single_variable_coupling_monome y0 boolean_variable =
+    Monome.Prod
+      ( Monome.Scal div2,
+        Monome.Prod
+          ( Monome.Qubit (Qubit.Var y0),
+            Monome.Qubit (Qubit.Var boolean_variable) ) )
 
   (* Builds the complete R = 0 input-phase template
      1/4 y0 + 1/2 y0 v for Q = v, where v may be an input variable or another
      path variable. *)
   let single_variable_phase y0 boolean_variable =
     Poly.insert
-      (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
-      (Poly.to_poly
-         (Monome.Prod
-            ( Monome.Scal div2,
-              Monome.Prod
-                ( Monome.Qubit (Qubit.Var y0),
-                  Monome.Qubit (Qubit.Var boolean_variable) ) )))
+      (q_zero_monome y0)
+      (Poly.to_poly (single_variable_coupling_monome y0 boolean_variable))
 
   (* Builds the corresponding reduced phase 1/8 - 1/4 v. Phase coefficients
      are modulo one, so -1/4 is represented by 3/4. *)
@@ -122,6 +130,32 @@ module Omega = struct
          (Monome.Prod
             ( Monome.Scal three_quarters,
               Monome.Qubit (Qubit.Var boolean_variable) )))
+
+  (* Matches 1/4 y0 + 1/2 y0 v + R with y0 absent from R. *)
+  let single_variable_reduced_phase_with_context y0 boolean_variable phase =
+    match remove_first_monome (q_zero_monome y0) phase with
+    | None ->
+        (* Case: the required 1/4 y0 term is absent. *)
+        None
+    | Some phase_without_y0_term -> (
+        match
+          remove_first_monome
+            (single_variable_coupling_monome y0 boolean_variable)
+            phase_without_y0_term
+        with
+        | None ->
+            (* Case: the required 1/2 y0 v term is absent. *)
+            None
+        | Some phase_context ->
+            if Poly.member y0 phase_context then
+              (* Case: y0 occurs in R, so Q = v does not match. *)
+              None
+            else
+              (* Case: valid Q = v; preserve R in the complete reduced phase. *)
+              Some
+                (Poly.merge
+                   (single_variable_reduced_phase boolean_variable)
+                   phase_context))
 
   (* Builds the observable input-phase template for Q = xi xor xj. The cubic
      term of the lift has an integer coefficient after multiplication by
@@ -162,9 +196,16 @@ module Omega = struct
        reduced phase for the first complete-phase match of Q = xi. *)
     let rec find_input_phase y0 input_variable =
       if input_variable >= width then None
-      else if Poly.equal ps.phase (single_variable_phase y0 input_variable) then
-        Some (single_variable_reduced_phase input_variable)
-      else find_input_phase y0 (input_variable + 1)
+      else
+        match
+          single_variable_reduced_phase_with_context y0 input_variable ps.phase
+        with
+        | Some candidate_reduced_phase ->
+            (* Case: Q = xi with an independent R. *)
+            Some candidate_reduced_phase
+        | None ->
+            (* Case: this xi does not match; try the next input variable. *)
+            find_input_phase y0 (input_variable + 1)
     in
     (* Scans every declared path variable except y0 and returns the reduced
        phase for the first complete-phase match of Q = yj. *)
