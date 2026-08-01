@@ -59,9 +59,10 @@ end
 module Omega : sig
   (** This module incrementally implements Amy's omega reduction rule. The
       current cases are [Q = 0], [Q = xi], [Q = yj] for another path variable,
-      [Q = xi xor xj] for distinct input variables, and [Q = xi xor yj]. Every
-      implemented case supports any [R] independent of the eliminated
-      variable. *)
+      [Q = xi xor xj] for distinct input variables, [Q = xi xor yj], and
+      [Q = yj xor yk] for distinct path variables. Every case except the
+      path-variable xor supports any [R] independent of the eliminated
+      variable; the path-variable xor currently keeps [R = 0]. *)
 
   val omega :
     ?debug:bool ->

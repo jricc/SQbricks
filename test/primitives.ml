@@ -483,6 +483,44 @@ let test_omega_preserves_context_for_mixed_lifted_xor () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_omega_reconstructs_path_variables_lifted_xor () =
+  (* Q = y1 xor y2 and R = 0:
+       1/4 y0 + 1/2 y0 y1 + 1/2 y0 y2
+       -> 1/8 + 3/4 y1 + 3/4 y2 + 1/2 y1 y2. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let y2 = v 3 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y2)) +++ Poly.empty));
+      ket = [| x0 |];
+      path_var = [ 1; 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit y1)
+            +++ (Prod (Scal three_quarters, Qubit y2)
+                +++ (Prod (Scal div2, Prod (Qubit y1, Qubit y2))
+                    +++ Poly.empty)));
+      ket = [| x0 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = y1 xor y2" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = y1 xor y2"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let test_omega_keeps_other_path_variable () =
   (* Q = y1 checks that Omega removes only its matched variable y0:
        phase = 1/4 y0 + 1/2 y0 y1
@@ -593,6 +631,9 @@ let omega =
     ( "omega preserves context for Q = x0 xor y1",
       `Quick,
       test_omega_preserves_context_for_mixed_lifted_xor );
+    ( "omega reconstructs the lift of Q = y1 xor y2",
+      `Quick,
+      test_omega_reconstructs_path_variables_lifted_xor );
     ( "omega keeps another path variable",
       `Quick,
       test_omega_keeps_other_path_variable );
