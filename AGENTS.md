@@ -93,6 +93,10 @@ If a more generic design is possible, mention it only as an alternative, but do 
   two similar data structures must be handled differently.
 - As soon as code or tests are even slightly non-trivial, add a short comment
   explaining the intention, invariant, or reason for the case.
+- In branch-heavy domain logic, comment each non-obvious branch with the
+  semantic case it handles.
+- Keep branch comments short: name the case and, when useful, its result or the
+  next case tried. Prefer precise names over long walkthroughs.
 
 ## OCaml-specific rules
 

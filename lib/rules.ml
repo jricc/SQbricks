@@ -67,12 +67,37 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* Implemented Omega cases currently keep R = 0 and use Q = 0, Q = xi,
-     Q = yj for another path variable, or Q = xi xor xj for two distinct
-     input variables. *)
-  let q_zero_phase y0 =
-    Poly.to_poly
-      (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
+  (* The Q = 0 case supports any R independent of y0. Other implemented cases
+     currently keep R = 0 and use Q = xi, Q = yj for another path variable,
+     or Q = xi xor xj for two distinct input variables. *)
+  let q_zero_monome y0 =
+    Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0))
+
+  (* Matches 1/4 y0 + R with y0 absent from R, and returns 1/8 + R. *)
+  let q_zero_reduced_phase y0 phase =
+    let required_monome = q_zero_monome y0 in
+    let rec remove_required_monome remaining_phase phase_context =
+      if Poly.is_empty remaining_phase then
+        (* Case: the required 1/4 y0 term is absent. *)
+        None
+      else
+        let monome = Poly.find remaining_phase in
+        let remaining_phase = Poly.del remaining_phase in
+        if Monome.equal monome required_monome then
+          (* Case: 1/4 y0 is found; all other terms form the candidate R. *)
+          let phase_context = Poly.merge phase_context remaining_phase in
+          if Poly.member y0 phase_context then
+            (* Case: y0 occurs in R, so Q = 0 does not match. *)
+            None
+          else
+            (* Case: valid Q = 0; replace 1/4 y0 by 1/8 and preserve R. *)
+            Some (Poly.insert (Monome.Scal div8) phase_context)
+        else
+          (* Case: this monomial belongs to R; keep scanning for 1/4 y0. *)
+          remove_required_monome remaining_phase
+            (Poly.insert monome phase_context)
+    in
+    remove_required_monome phase Poly.empty
 
   (* Builds the complete R = 0 input-phase template
      1/4 y0 + 1/2 y0 v for Q = v, where v may be an input variable or another
@@ -170,49 +195,57 @@ module Omega = struct
       if first_input >= width then None
       else
         match find_second_input y0 first_input (first_input + 1) with
-        | Some phase -> Some phase
-        | None -> find_two_inputs_phase y0 (first_input + 1)
+        | Some candidate_reduced_phase ->
+            (* Case: Q = xi xor xj; this is the complete reduced phase. *)
+            Some candidate_reduced_phase
+        | None ->
+            (* Case: no pair for first_input; try the next input. *)
+            find_two_inputs_phase y0 (first_input + 1)
     in
     (* Tries path variables in declaration order and returns after the first
        successful Omega reduction. *)
     let rec find_candidate = function
       | y0 :: remaining_path_variables ->
-          (* Try the next declared path variable as the y0 to eliminate. *)
           let reduced_phase =
             if Ket.member y0 ps.ket then
-              (* Reject this y0: Omega requires the eliminated variable to be
-                 absent from the ket. *)
+              (* Case: y0 occurs in the ket and cannot be eliminated. *)
               None
-            else if Poly.equal ps.phase (q_zero_phase y0) then
-              (* Q = 0: 1/4 y0 reduces to the constant phase 1/8. *)
-              Some (Poly.to_poly (Monome.Scal div8))
             else (
-              match find_input_phase y0 0 with
-              | Some phase ->
-                  (* Q = xi for one of the input variables. *)
-                  Some phase
+              match q_zero_reduced_phase y0 ps.phase with
+              | Some candidate_reduced_phase ->
+                  (* Case: Q = 0; candidate is the complete phase 1/8 + R. *)
+                  Some candidate_reduced_phase
               | None -> (
-                  (* No single-input match: try every pair of input
-                     variables. *)
-                  match find_two_inputs_phase y0 0 with
-                  | Some phase ->
-                      (* Q = xi xor xj for two distinct input variables. *)
-                      Some phase
-                  | None ->
-                      (* Last supported case: Q = yj. Search the complete
-                         original list because yj may occur before or after
-                         y0; find_other_path_phase excludes y0 itself. *)
-                      find_other_path_phase y0 ps.path_var))
+                  (* Case Q = 0 absent: try Q = xi. *)
+                  match find_input_phase y0 0 with
+                  | Some candidate_reduced_phase ->
+                      (* Case: Q = xi; candidate is the complete reduced phase. *)
+                      Some candidate_reduced_phase
+                  | None -> (
+                      (* Case Q = xi absent: try Q = xi xor xj. *)
+                      match find_two_inputs_phase y0 0 with
+                      | Some candidate_reduced_phase ->
+                          (* Case: Q = xi xor xj; candidate is the complete
+                             reduced phase, not Q. *)
+                          Some candidate_reduced_phase
+                      | None -> (
+                          (* Case input-only Q absent: try Q = yj. *)
+                          match find_other_path_phase y0 ps.path_var with
+                          | Some candidate_reduced_phase ->
+                              (* Case: Q = yj; candidate is the complete
+                                 reduced phase. *)
+                              Some candidate_reduced_phase
+                          | None ->
+                              (* Case: no implemented Q form matches this y0. *)
+                              None))))
           in
           (match reduced_phase with
-          | Some phase ->
-            (* The current y0 matched. Preserve the ket and every other field,
-               replace the phase, remove only y0 from the original path
-               variable list, and stop after this single reduction. *)
+          | Some reduced_phase ->
+            (* Case: replace the phase and remove the matched y0. *)
             let output : Path_sum.t =
               {
                 ps with
-                phase;
+                phase = reduced_phase;
                 path_var = ListBis.remove y0 ps.path_var;
               }
             in
@@ -222,11 +255,10 @@ module Omega = struct
                 (PSS.pretty output);
             Ok (Some output)
           | None ->
-              (* This y0 did not match. Try the next candidate without
-                 removing any previously examined path variable. *)
+              (* Case: this y0 does not match; try the next path variable. *)
               find_candidate remaining_path_variables)
       | [] ->
-          (* No declared path variable satisfies an implemented Omega case. *)
+          (* Case: no path variable satisfies an implemented Omega form. *)
           Ok None
     in
     find_candidate ps.path_var

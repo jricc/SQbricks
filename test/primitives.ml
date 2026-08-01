@@ -236,6 +236,32 @@ let test_omega_reduces_zero_boolean_polynomial () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_omega_preserves_independent_phase_context () =
+  (* Q = 0 with R = 1/2 x0 is the smallest contextual Omega instance:
+       phase = 1/4 y0 + R
+     Omega must replace only the y0 term by 1/8 and preserve R and the ket. *)
+  let phase_context = Prod (Scal div2, Qubit x0) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 1)) +++ phase_context;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Scal div8 +++ phase_context;
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R" (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve an independent phase R"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let test_omega_reduces_input_variable_boolean_polynomial () =
   (* Q = x0, so Q_hat = x0:
        phase = 1/4 y0 + 1/2 y0 x0
@@ -365,6 +391,9 @@ let omega =
     ( "omega reduces Q = 0",
       `Quick,
       test_omega_reduces_zero_boolean_polynomial );
+    ( "omega preserves an independent phase context",
+      `Quick,
+      test_omega_preserves_independent_phase_context );
     ( "omega reduces Q = x0",
       `Quick,
       test_omega_reduces_input_variable_boolean_polynomial );
