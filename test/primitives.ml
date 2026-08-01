@@ -444,6 +444,45 @@ let test_omega_reconstructs_mixed_lifted_xor () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_omega_preserves_context_for_mixed_lifted_xor () =
+  (* Q = x0 xor y1 and R = 1/2 x1:
+       1/4 y0 + 1/2 y0 x0 + 1/2 y0 y1 + R
+       -> 1/8 + 3/4 x0 + 3/4 y1 + 1/2 x0 y1 + R. *)
+  let y0 = v 2 in
+  let y1 = v 3 in
+  let phase_context = Prod (Scal div2, Qubit x1) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+                +++ phase_context));
+      ket = [| x0; x1 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0)
+            +++ (Prod (Scal three_quarters, Qubit y1)
+                +++ (Prod (Scal div2, Prod (Qubit x0, Qubit y1))
+                    +++ phase_context)));
+      ket = [| x0; x1 |];
+      path_var = [ 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = x0 xor y1"
+        (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = x0 xor y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let test_omega_keeps_other_path_variable () =
   (* Q = y1 checks that Omega removes only its matched variable y0:
        phase = 1/4 y0 + 1/2 y0 y1
@@ -551,6 +590,9 @@ let omega =
     ( "omega reconstructs the lift of Q = x0 xor y1",
       `Quick,
       test_omega_reconstructs_mixed_lifted_xor );
+    ( "omega preserves context for Q = x0 xor y1",
+      `Quick,
+      test_omega_preserves_context_for_mixed_lifted_xor );
     ( "omega keeps another path variable",
       `Quick,
       test_omega_keeps_other_path_variable );
