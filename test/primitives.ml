@@ -402,6 +402,40 @@ let test_omega_keeps_other_path_variable () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_omega_preserves_context_for_path_variable () =
+  (* Q = y1 and R = 1/2 x0:
+       1/4 y0 + 1/2 y0 y1 + R -> 1/8 - 1/4 y1 + R. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let phase_context = Prod (Scal div2, Qubit x0) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+            +++ phase_context);
+      ket = [| x0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit y1) +++ phase_context);
+      ket = [| x0 |];
+      path_var = [ 2 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = y1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let test_reduction_algorithm_applies_omega () =
   (* This smallest integration case checks that the reduction pipeline invokes
      Omega: the direct phase 1/4 y0 must become 1/8 and y0 must disappear. *)
@@ -439,6 +473,9 @@ let omega =
     ( "omega keeps another path variable",
       `Quick,
       test_omega_keeps_other_path_variable );
+    ( "omega preserves context for Q = y1",
+      `Quick,
+      test_omega_preserves_context_for_path_variable );
     ( "reduction algorithm applies omega",
       `Quick,
       test_reduction_algorithm_applies_omega );

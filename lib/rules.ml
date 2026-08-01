@@ -67,9 +67,8 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* The Q = 0 and Q = xi cases support any R independent of y0. Other
-     implemented cases currently keep R = 0 and use Q = yj for another path
-     variable, or Q = xi xor xj for two distinct input variables. *)
+  (* The Q = 0, Q = xi, and Q = yj cases support any R independent of y0.
+     The Q = xi xor xj case currently keeps R = 0. *)
   let q_zero_monome y0 =
     Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0))
 
@@ -111,14 +110,6 @@ module Omega = struct
         Monome.Prod
           ( Monome.Qubit (Qubit.Var y0),
             Monome.Qubit (Qubit.Var boolean_variable) ) )
-
-  (* Builds the complete R = 0 input-phase template
-     1/4 y0 + 1/2 y0 v for Q = v, where v may be an input variable or another
-     path variable. *)
-  let single_variable_phase y0 boolean_variable =
-    Poly.insert
-      (q_zero_monome y0)
-      (Poly.to_poly (single_variable_coupling_monome y0 boolean_variable))
 
   (* Builds the corresponding reduced phase 1/8 - 1/4 v. Phase coefficients
      are modulo one, so -1/4 is represented by 3/4. *)
@@ -208,16 +199,25 @@ module Omega = struct
             find_input_phase y0 (input_variable + 1)
     in
     (* Scans every declared path variable except y0 and returns the reduced
-       phase for the first complete-phase match of Q = yj. *)
+       phase for the first match of Q = yj with an independent R. *)
     let rec find_other_path_phase y0 = function
       | [] -> None
       | path_variable :: remaining_path_variables ->
-          if Int.equal path_variable y0 then
+          if Int.equal path_variable y0 then (
+            (* Case: Q cannot reuse the eliminated y0; try the next yj. *)
             find_other_path_phase y0 remaining_path_variables
-          else if
-            Poly.equal ps.phase (single_variable_phase y0 path_variable)
-          then Some (single_variable_reduced_phase path_variable)
-          else find_other_path_phase y0 remaining_path_variables
+          )
+          else
+            match
+              single_variable_reduced_phase_with_context y0 path_variable
+                ps.phase
+            with
+            | Some candidate_reduced_phase ->
+                (* Case: Q = yj with an independent R. *)
+                Some candidate_reduced_phase
+            | None ->
+                (* Case: this yj does not match; try the next path variable. *)
+                find_other_path_phase y0 remaining_path_variables
     in
     (* For fixed y0 and first_input, scans the possible second inputs and
        returns the reduced phase for the first matching pair. *)
