@@ -67,8 +67,7 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* The Q = 0, Q = xi, and Q = yj cases support any R independent of y0.
-     The Q = xi xor xj case currently keeps R = 0. *)
+  (* Every implemented Q case supports any R independent of y0. *)
   let q_zero_monome y0 =
     Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0))
 
@@ -148,25 +147,6 @@ module Omega = struct
                    (single_variable_reduced_phase boolean_variable)
                    phase_context))
 
-  (* Builds the observable input-phase template for Q = xi xor xj. The cubic
-     term of the lift has an integer coefficient after multiplication by
-     1/2 y0, so it vanishes from the phase modulo one. *)
-  let two_inputs_phase y0 first_input second_input =
-    Poly.insert
-      (Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0)))
-      (Poly.insert
-         (Monome.Prod
-            ( Monome.Scal div2,
-              Monome.Prod
-                ( Monome.Qubit (Qubit.Var y0),
-                  Monome.Qubit (Qubit.Var first_input) ) ))
-         (Poly.to_poly
-            (Monome.Prod
-               ( Monome.Scal div2,
-                 Monome.Prod
-                   ( Monome.Qubit (Qubit.Var y0),
-                     Monome.Qubit (Qubit.Var second_input) ) ))))
-
   (* Reconstructs a lift of xi xor xj compatible with the -1/4 factor,
      applies that factor explicitly, adds 1/8, then normalizes the resulting
      phase modulo one. This recovers the quadratic term hidden in the input
@@ -178,6 +158,41 @@ module Omega = struct
     let lifted_sum = Poly.of_qubit boolean_sum divm4 in
     let scaled_lift = Poly.distribution (Monome.Scal divm4) lifted_sum in
     Poly.simplify (Poly.insert (Monome.Scal div8) scaled_lift)
+
+  (* Matches 1/4 y0 + 1/2 y0 xi + 1/2 y0 xj + R with y0 absent from R. *)
+  let two_inputs_reduced_phase_with_context y0 first_input second_input phase =
+    match remove_first_monome (q_zero_monome y0) phase with
+    | None ->
+        (* Case: the required 1/4 y0 term is absent. *)
+        None
+    | Some phase_without_y0_term -> (
+        match
+          remove_first_monome
+            (single_variable_coupling_monome y0 first_input)
+            phase_without_y0_term
+        with
+        | None ->
+            (* Case: the required 1/2 y0 xi term is absent. *)
+            None
+        | Some phase_without_first_coupling -> (
+            match
+              remove_first_monome
+                (single_variable_coupling_monome y0 second_input)
+                phase_without_first_coupling
+            with
+            | None ->
+                (* Case: the required 1/2 y0 xj term is absent. *)
+                None
+            | Some phase_context ->
+                if Poly.member y0 phase_context then
+                  (* Case: y0 occurs in R, so Q = xi xor xj does not match. *)
+                  None
+                else
+                  (* Case: valid Q = xi xor xj; preserve R in the result. *)
+                  Some
+                    (Poly.merge
+                       (two_inputs_reduced_phase first_input second_input)
+                       phase_context)))
 
   let omega ?(debug = false) (ps : Path_sum.t) :
       (Path_sum.t option, reduction_error) result =
@@ -223,11 +238,17 @@ module Omega = struct
        returns the reduced phase for the first matching pair. *)
     let rec find_second_input y0 first_input second_input =
       if second_input >= width then None
-      else if
-        Poly.equal ps.phase
-          (two_inputs_phase y0 first_input second_input)
-      then Some (two_inputs_reduced_phase first_input second_input)
-      else find_second_input y0 first_input (second_input + 1)
+      else
+        match
+          two_inputs_reduced_phase_with_context y0 first_input second_input
+            ps.phase
+        with
+        | Some candidate_reduced_phase ->
+            (* Case: Q = xi xor xj with an independent R. *)
+            Some candidate_reduced_phase
+        | None ->
+            (* Case: this pair does not match; try the next second input. *)
+            find_second_input y0 first_input (second_input + 1)
     in
     (* Enumerates each pair of distinct input variables exactly once, with
        first_input < second_input, and returns the first Q = xi xor xj
