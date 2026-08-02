@@ -327,6 +327,37 @@ let test_omega_preserves_context_for_input_variable () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+let test_omega_reduces_input_product_boolean_polynomial () =
+  (* Q = x0 x1 is already a Boolean monomial, so its lift is unchanged:
+       1/4 y0 + 1/2 y0 x0 x1 -> 1/8 + 3/4 x0 x1. *)
+  let y0 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, x0x1)) +++ Poly.empty);
+      ket = [| x0; x1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, x0x1) +++ Poly.empty);
+      ket = [| x0; x1 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0 x1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = x0 x1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let test_omega_reconstructs_lifted_xor () =
   (* Q = x0 xor x1 has the integer lift
        Q_hat = x0 + x1 - 2 x0 x1.
@@ -659,6 +690,9 @@ let omega =
     ( "omega preserves context for Q = x0",
       `Quick,
       test_omega_preserves_context_for_input_variable );
+    ( "omega reduces Q = x0 x1",
+      `Quick,
+      test_omega_reduces_input_product_boolean_polynomial );
     ( "omega reconstructs the lift of Q = x0 xor x1",
       `Quick,
       test_omega_reconstructs_lifted_xor );

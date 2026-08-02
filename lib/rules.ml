@@ -67,7 +67,8 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* Every implemented Q case supports any R independent of y0. *)
+  (* Every implemented Q case except Q = xi xj supports any R independent of
+     y0. The Q = xi xj case currently keeps R = 0. *)
   let q_zero_monome y0 =
     Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0))
 
@@ -146,6 +147,31 @@ module Omega = struct
                 (Poly.merge
                    (single_variable_reduced_phase boolean_variable)
                    phase_context))
+
+  (* Builds the complete R = 0 input phase for Q = xi xj. *)
+  let two_inputs_product_phase y0 first_input second_input =
+    let input_product =
+      Qubit.Prod (Qubit.Var first_input, Qubit.Var second_input)
+    in
+    let product_coupling =
+      Monome.Prod
+        ( Monome.Scal div2,
+          Monome.Prod
+            ( Monome.Qubit (Qubit.Var y0), Monome.Qubit input_product ) )
+    in
+    Poly.insert (q_zero_monome y0) (Poly.to_poly product_coupling)
+
+  (* Builds the corresponding reduced phase 1/8 - 1/4 xi xj. *)
+  let two_inputs_product_reduced_phase first_input second_input =
+    let three_quarters = Q.add div2 div4 in
+    let input_product =
+      Qubit.Prod (Qubit.Var first_input, Qubit.Var second_input)
+    in
+    Poly.insert
+      (Monome.Scal div8)
+      (Poly.to_poly
+         (Monome.Prod
+            (Monome.Scal three_quarters, Monome.Qubit input_product)))
 
   (* Reconstructs a lift of v1 xor v2 compatible with the -1/4 factor,
      applies that factor explicitly, adds 1/8, then normalizes the resulting
@@ -236,6 +262,35 @@ module Omega = struct
             | None ->
                 (* Case: this yj does not match; try the next path variable. *)
                 find_other_path_phase y0 remaining_path_variables
+    in
+    (* For fixed y0 and first_input, scans later inputs for an exact
+       Q = xi xj match with R = 0. *)
+    let rec find_second_product_input y0 first_input second_input =
+      if second_input >= width then None
+      else if
+        Poly.equal ps.phase
+          (two_inputs_product_phase y0 first_input second_input)
+      then
+        (* Case: Q = xi xj with R = 0. *)
+        Some (two_inputs_product_reduced_phase first_input second_input)
+      else (
+        (* Case: this product does not match; try the next second input. *)
+        find_second_product_input y0 first_input (second_input + 1)
+      )
+    in
+    (* Enumerates each pair of distinct inputs once for Q = xi xj. *)
+    let rec find_input_product_phase y0 first_input =
+      if first_input >= width then None
+      else
+        match
+          find_second_product_input y0 first_input (first_input + 1)
+        with
+        | Some candidate_reduced_phase ->
+            (* Case: Q = xi xj; this is the complete reduced phase. *)
+            Some candidate_reduced_phase
+        | None ->
+            (* Case: no product for first_input; try the next input. *)
+            find_input_product_phase y0 (first_input + 1)
     in
     (* For fixed y0 and first_input, scans the possible second inputs and
        returns the reduced phase for the first matching pair. *)
@@ -363,41 +418,49 @@ module Omega = struct
                       (* Case: Q = xi; candidate is the complete reduced phase. *)
                       Some candidate_reduced_phase
                   | None -> (
-                      (* Case Q = xi absent: try Q = xi xor xj. *)
-                      match find_two_inputs_phase y0 0 with
+                      (* Case Q = xi absent: try Q = xi xj. *)
+                      match find_input_product_phase y0 0 with
                       | Some candidate_reduced_phase ->
-                          (* Case: Q = xi xor xj; candidate is the complete
-                             reduced phase, not Q. *)
+                          (* Case: Q = xi xj; candidate is the complete reduced
+                             phase. *)
                           Some candidate_reduced_phase
                       | None -> (
-                          (* Case input-only Q absent: try Q = xi xor yj. *)
-                          match find_mixed_phase y0 0 with
+                          (* Case product Q absent: try Q = xi xor xj. *)
+                          match find_two_inputs_phase y0 0 with
                           | Some candidate_reduced_phase ->
-                              (* Case: Q = xi xor yj; candidate is the complete
-                                 reduced phase. *)
+                              (* Case: Q = xi xor xj; candidate is the complete
+                                 reduced phase, not Q. *)
                               Some candidate_reduced_phase
                           | None -> (
-                              (* Case mixed Q absent: try Q = yj xor yk. *)
-                              match
-                                find_two_path_variables_phase y0 ps.path_var
-                              with
+                              (* Case input-only Q absent: try Q = xi xor yj. *)
+                              match find_mixed_phase y0 0 with
                               | Some candidate_reduced_phase ->
-                                  (* Case: Q = yj xor yk; candidate is the
+                                  (* Case: Q = xi xor yj; candidate is the
                                      complete reduced phase. *)
                                   Some candidate_reduced_phase
                               | None -> (
-                                  (* Case path-variable xor absent: try Q = yj. *)
+                                  (* Case mixed Q absent: try Q = yj xor yk. *)
                                   match
-                                    find_other_path_phase y0 ps.path_var
+                                    find_two_path_variables_phase y0 ps.path_var
                                   with
                                   | Some candidate_reduced_phase ->
-                                      (* Case: Q = yj; candidate is the complete
-                                         reduced phase. *)
+                                      (* Case: Q = yj xor yk; candidate is the
+                                         complete reduced phase. *)
                                       Some candidate_reduced_phase
-                                  | None ->
-                                      (* Case: no implemented Q form matches
-                                         this y0. *)
-                                      None))))))
+                                  | None -> (
+                                      (* Case path-variable xor absent: try
+                                         Q = yj. *)
+                                      match
+                                        find_other_path_phase y0 ps.path_var
+                                      with
+                                      | Some candidate_reduced_phase ->
+                                          (* Case: Q = yj; candidate is the
+                                             complete reduced phase. *)
+                                          Some candidate_reduced_phase
+                                      | None ->
+                                          (* Case: no implemented Q form
+                                             matches this y0. *)
+                                          None)))))))
           in
           (match reduced_phase with
           | Some reduced_phase ->
