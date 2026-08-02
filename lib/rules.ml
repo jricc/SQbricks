@@ -67,8 +67,7 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* Every implemented Q case except Q = xi xj supports any R independent of
-     y0. The Q = xi xj case currently keeps R = 0. *)
+  (* Every implemented Q case supports any R independent of y0. *)
   let q_zero_monome y0 =
     Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0))
 
@@ -148,18 +147,15 @@ module Omega = struct
                    (single_variable_reduced_phase boolean_variable)
                    phase_context))
 
-  (* Builds the complete R = 0 input phase for Q = xi xj. *)
-  let two_inputs_product_phase y0 first_input second_input =
+  (* Builds the required 1/2 y0 xi xj coupling for Q = xi xj. *)
+  let two_inputs_product_coupling_monome y0 first_input second_input =
     let input_product =
       Qubit.Prod (Qubit.Var first_input, Qubit.Var second_input)
     in
-    let product_coupling =
-      Monome.Prod
-        ( Monome.Scal div2,
-          Monome.Prod
-            ( Monome.Qubit (Qubit.Var y0), Monome.Qubit input_product ) )
-    in
-    Poly.insert (q_zero_monome y0) (Poly.to_poly product_coupling)
+    Monome.Prod
+      ( Monome.Scal div2,
+        Monome.Prod
+          (Monome.Qubit (Qubit.Var y0), Monome.Qubit input_product) )
 
   (* Builds the corresponding reduced phase 1/8 - 1/4 xi xj. *)
   let two_inputs_product_reduced_phase first_input second_input =
@@ -172,6 +168,33 @@ module Omega = struct
       (Poly.to_poly
          (Monome.Prod
             (Monome.Scal three_quarters, Monome.Qubit input_product)))
+
+  (* Matches 1/4 y0 + 1/2 y0 xi xj + R with y0 absent from R. *)
+  let two_inputs_product_reduced_phase_with_context y0 first_input second_input
+      phase =
+    match remove_first_monome (q_zero_monome y0) phase with
+    | None ->
+        (* Case: the required 1/4 y0 term is absent. *)
+        None
+    | Some phase_without_y0_term -> (
+        match
+          remove_first_monome
+            (two_inputs_product_coupling_monome y0 first_input second_input)
+            phase_without_y0_term
+        with
+        | None ->
+            (* Case: the required 1/2 y0 xi xj term is absent. *)
+            None
+        | Some phase_context ->
+            if Poly.member y0 phase_context then
+              (* Case: y0 occurs in R, so Q = xi xj does not match. *)
+              None
+            else
+              (* Case: valid Q = xi xj; preserve R in the result. *)
+              Some
+                (Poly.merge
+                   (two_inputs_product_reduced_phase first_input second_input)
+                   phase_context))
 
   (* Reconstructs a lift of v1 xor v2 compatible with the -1/4 factor,
      applies that factor explicitly, adds 1/8, then normalizes the resulting
@@ -263,20 +286,21 @@ module Omega = struct
                 (* Case: this yj does not match; try the next path variable. *)
                 find_other_path_phase y0 remaining_path_variables
     in
-    (* For fixed y0 and first_input, scans later inputs for an exact
-       Q = xi xj match with R = 0. *)
+    (* For fixed y0 and first_input, scans later inputs for a Q = xi xj match
+       with an independent R. *)
     let rec find_second_product_input y0 first_input second_input =
       if second_input >= width then None
-      else if
-        Poly.equal ps.phase
-          (two_inputs_product_phase y0 first_input second_input)
-      then
-        (* Case: Q = xi xj with R = 0. *)
-        Some (two_inputs_product_reduced_phase first_input second_input)
-      else (
-        (* Case: this product does not match; try the next second input. *)
-        find_second_product_input y0 first_input (second_input + 1)
-      )
+      else
+        match
+          two_inputs_product_reduced_phase_with_context y0 first_input
+            second_input ps.phase
+        with
+        | Some candidate_reduced_phase ->
+            (* Case: Q = xi xj with an independent R. *)
+            Some candidate_reduced_phase
+        | None ->
+            (* Case: this product does not match; try the next second input. *)
+            find_second_product_input y0 first_input (second_input + 1)
     in
     (* Enumerates each pair of distinct inputs once for Q = xi xj. *)
     let rec find_input_product_phase y0 first_input =
