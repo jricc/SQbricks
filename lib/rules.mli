@@ -61,9 +61,8 @@ module Omega : sig
       current cases are [Q = 0], [Q = xi], [Q = yj] for another path variable,
       [Q = xi xj] and [Q = xi xor xj] for distinct input variables,
       [Q = xi yj] and [Q = xi xor yj] for mixed pairs, and [Q = yj xor yk] for
-      distinct path variables. Every implemented case except the mixed product
-      supports any [R] independent of the eliminated variable; the mixed
-      product currently keeps [R = 0]. *)
+      distinct path variables. Every implemented case supports any [R]
+      independent of the eliminated variable. *)
 
   val omega :
     ?debug:bool ->
