@@ -67,8 +67,7 @@ module Elim = struct
 end
 
 module Omega = struct
-  (* Every implemented Q case except Q = yj yk supports any R independent of
-     y0. The path product case currently keeps R = 0. *)
+  (* Every implemented Q case supports any R independent of y0. *)
   let q_zero_monome y0 =
     Monome.Prod (Monome.Scal div4, Monome.Qubit (Qubit.Var y0))
 
@@ -157,14 +156,6 @@ module Omega = struct
       ( Monome.Scal div2,
         Monome.Prod
           (Monome.Qubit (Qubit.Var y0), Monome.Qubit boolean_product) )
-
-  (* Builds the complete R = 0 input phase for Q = v1 v2. *)
-  let two_variables_product_phase y0 first_variable second_variable =
-    Poly.insert
-      (q_zero_monome y0)
-      (Poly.to_poly
-         (two_variables_product_coupling_monome y0 first_variable
-            second_variable))
 
   (* Builds the corresponding reduced phase 1/8 - 1/4 v1 v2. *)
   let two_variables_product_reduced_phase first_variable second_variable =
@@ -364,8 +355,7 @@ module Omega = struct
             (* Case: no yj matches this xi; try the next input variable. *)
             find_mixed_product_phase y0 (input_variable + 1)
     in
-    (* For one path variable yj, scans later variables yk for an exact
-       Q = yj yk match with R = 0. *)
+    (* For one path variable yj, scans later variables yk for Q = yj yk. *)
     let rec find_second_product_path_variable y0 first_path_variable = function
       | [] -> None
       | second_path_variable :: remaining_path_variables ->
@@ -374,20 +364,18 @@ module Omega = struct
             find_second_product_path_variable y0 first_path_variable
               remaining_path_variables
           )
-          else if
-            Poly.equal ps.phase
-              (two_variables_product_phase y0 first_path_variable
-                 second_path_variable)
-          then
-            (* Case: Q = yj yk with R = 0. *)
-            Some
-              (two_variables_product_reduced_phase first_path_variable
-                 second_path_variable)
-          else (
-            (* Case: this yk does not match; try the next path variable. *)
-            find_second_product_path_variable y0 first_path_variable
-              remaining_path_variables
-          )
+          else
+            match
+              two_variables_product_reduced_phase_with_context y0
+                first_path_variable second_path_variable ps.phase
+            with
+            | Some candidate_reduced_phase ->
+                (* Case: Q = yj yk with an independent R. *)
+                Some candidate_reduced_phase
+            | None ->
+                (* Case: this yk does not match; try the next path variable. *)
+                find_second_product_path_variable y0 first_path_variable
+                  remaining_path_variables
     in
     (* Enumerates each path-variable pair distinct from y0 exactly once. *)
     let rec find_two_path_variables_product_phase y0 = function
