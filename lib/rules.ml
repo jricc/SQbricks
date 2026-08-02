@@ -274,16 +274,11 @@ module HH = struct
             | Some r ->
                 if debug then
                   printf "Rule_hh.hh_aux, r = %s\n%!" (PS.pretty r n);
-                let r_simplified = simplify r in
-                if debug then
-                  printf "Rule_hh.hh_aux, r_simplified = %s\n%!"
-                    (PS.pretty r_simplified n);
                 (* \( 1/2 y_0 (y_i + Q) -> (Q = q1 ++ q2) -> Q = q1 + q2 \) *)
                 let ps_output_simplified : Path_sum.t =
                   {
                     phase =
-                      simplify
-                        (Poly.substitute_rules_hh r_simplified yi q ~debug);
+                      simplify (Poly.substitute_rules_hh r yi q ~debug);
                     ket =
                       Path_sum.Ket.substitute ps.ket yi
                         (qsimplify (Poly.to_qubit q));
@@ -329,9 +324,11 @@ module HH = struct
                        %s\n\n\
                         %!"
                        (PSS.pretty acc_reduced);
-                   let acc_simplified = Simplification.simplify acc_reduced in
-                   aux acc_simplified
-                     (path_variables_with_possible_yi acc_simplified.phase width)
+                   (* [hh_aux] already simplifies its phase and ket. For
+                      example, [1/2*y0*y1 + 1/2*y2*y3] becomes the already
+                      simplified [1/2*y2*y3], so do not simplify it again. *)
+                   aux acc_reduced
+                     (path_variables_with_possible_yi acc_reduced.phase width)
                      y0_remain)
               | Ok None -> aux acc candidates y0_remain)
             else aux acc candidates y0_remain

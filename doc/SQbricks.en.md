@@ -709,6 +709,31 @@ approximately 16% reduction in Sequence-specific cost despite variation in the
 machine's overall speed. The unit test also keeps an absent path variable placed
 before a valid HH pair while still reducing that pair.
 
+After a successful match, `hh_aux` already returns a simplified phase and ket.
+The `R[yi <- Q]` phase goes through `Poly.simplify`, while
+`Path_sum.Ket.substitute` simplifies every ket component after substitution.
+`HH.hh` therefore continues directly with this result instead of applying
+`Rules.Simplification.simplify` again. The test with
+`1/2*y0*y1 + 1/2*y2*y3` checks that two successive HH matches remain possible
+without this second simplification.
+
+Likewise, `extract_R` selects the monomials independent of `y0`, but `R` is no
+longer simplified before substitution. The complete phase produced by
+`R[yi <- Q]` is still simplified once, which also combines terms that became
+equal. One test uses `yi = y1`, `Q = x0`, and
+`R = 1/4*y1 + 1/4*y1`: after substitution, both terms become `1/4*x0` and are
+then combined into `1/2*x0`. This case emphasizes that `yi` may occur in `R`,
+but not in `Q`.
+
+On the focused uninstrumented `owm/gf2^9mult_89_413` measurement, removing
+these two redundant operations reduced Sequence from `399.310709 s` to
+`336.880721 s` (about 15.6%) and Parallel from `232.857644 s` to
+`203.169174 s` (about 12.7%). The unit tests pass. The August 2, 2026 large
+`owm` check also improves the targeted `gf2` cases, but remains globally
+inconclusive: several unrelated cases that were already close to the
+600-second baseline limit reached the memory limit. That run must therefore
+not replace the baseline.
+
 `Rules.Variable_replacement.variable_replacement` accepts a ket component only
 when it has the form `y xor Q`, where `y` is a declared path variable that does
 not occur in `Q`, the phase, or another ket component. `Q` may contain a product

@@ -719,6 +719,31 @@ A/B/A sur la même machine donne un rapport Sequence/Parallel de `2,045` sur
 la machine. Le test unitaire conserve aussi une variable de chemin absente
 placée avant une paire HH valide, tout en appliquant la réduction à cette paire.
 
+Après un match réussi, `hh_aux` retourne déjà une phase et un ket simplifiés.
+La phase `R[yi <- Q]` passe par `Poly.simplify`, tandis que
+`Path_sum.Ket.substitute` simplifie chaque composante du ket après la
+substitution. `HH.hh` poursuit donc directement avec ce résultat au lieu de
+réappliquer `Rules.Simplification.simplify`. Le test avec
+`1/2*y0*y1 + 1/2*y2*y3` vérifie que deux matchs HH successifs restent
+possibles sans cette seconde simplification.
+
+De même, `extract_R` sélectionne les monômes indépendants de `y0`, mais `R`
+n'est plus simplifié avant la substitution. La phase complète obtenue après
+`R[yi <- Q]` est toujours simplifiée une fois, ce qui combine aussi les termes
+devenus identiques. Un test utilise `yi = y1`, `Q = x0` et
+`R = 1/4*y1 + 1/4*y1` : après substitution, les deux termes deviennent
+`1/4*x0` puis sont combinés en `1/2*x0`. Ce cas rappelle que `yi` peut
+apparaître dans `R`, mais pas dans `Q`.
+
+Sur la mesure ciblée non instrumentée de `owm/gf2^9mult_89_413`, la suppression
+de ces deux opérations redondantes fait passer Sequence de `399,310709 s` à
+`336,880721 s` (environ 15,6 %) et Parallel de `232,857644 s` à
+`203,169174 s` (environ 12,7 %). Les tests unitaires passent. Le contrôle large
+`owm` du 2 août 2026 améliore également les cas `gf2` ciblés, mais reste
+inconclusif globalement : plusieurs cas sans rapport avec cette optimisation,
+déjà proches de la limite de 600 secondes dans la baseline, ont atteint la
+limite mémoire. Cette exécution ne doit donc pas remplacer la baseline.
+
 `Rules.Variable_replacement.variable_replacement` accepte une composante de ket
 uniquement lorsqu'elle a la forme `y xor Q`, où `y` est une variable de chemin
 déclarée qui n'apparaît ni dans `Q`, ni dans la phase, ni dans une autre

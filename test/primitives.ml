@@ -207,6 +207,56 @@ let test_hh_skips_unmatched_candidate_before_match () =
   check string "unmatched candidate before HH match" (PSS.exact expected)
     (PSS.exact output)
 
+let test_hh_applies_two_successive_matches () =
+  (* phase = 1/2 y0y1 + 1/2 y2y3, ket = |y1 + y3>.
+     The first HH match removes y0,y1; the second removes y2,y3. *)
+  let phase =
+    Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2)))
+    +++ (Prod (Scal div2, Prod (Qubit (v 3), Qubit (v 4))) +++ Poly.empty)
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| v 2 ++ v 4 |]; path_var = [ 1; 2; 3; 4 ] }
+  in
+  let expected : Path_sum.t =
+    { phase = p0; ket = [| zero |]; path_var = [] }
+  in
+  let output =
+    match Rules.HH.hh input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "two successive HH matches" (PSS.exact expected)
+    (PSS.exact output)
+
+let test_hh_simplifies_remainder_after_substitution () =
+  (* phase = 1/2 y0(yi + Q) + R and ket = |yi>, with yi = y1, Q = x0,
+     and R = 1/4 y1 + 1/4 y1. Substitution gives R[yi <- Q] = 1/2 x0. *)
+  let remainder_term : Monome.t = Prod (Scal div4, Qubit (v 2)) in
+  let phase =
+    Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2)))
+    +++ (Prod (Scal div2, Prod (Qubit (v 1), Qubit x0))
+         +++ (remainder_term +++ (remainder_term +++ Poly.empty)))
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| v 2 |]; path_var = [ 1; 2 ] }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Prod (Scal div2, Qubit x0) +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  let output =
+    match Rules.HH.hh input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "remainder simplified after substitution" (PSS.exact expected)
+    (PSS.exact output)
+
 let test_reduction_algorithm_reports_malformed_path_sum () =
   let malformed =
     match
@@ -234,6 +284,12 @@ let hh =
     ( "hh skips an unmatched candidate before a match",
       `Quick,
       test_hh_skips_unmatched_candidate_before_match );
+    ( "hh applies two successive matches",
+      `Quick,
+      test_hh_applies_two_successive_matches );
+    ( "hh simplifies its remainder after substitution",
+      `Quick,
+      test_hh_simplifies_remainder_after_substitution );
     ( "reduction_algorithm reports malformed path sum",
       `Quick,
       test_reduction_algorithm_reports_malformed_path_sum );
