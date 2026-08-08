@@ -242,6 +242,30 @@
       dune exec -- ./bin/main.exe -qasm_to_ps circuit.qasm
     ]} *)
 
+(** {2 Benchmark Utilities} *)
+
+(** [-nb_gates_csv <c1.qasm> <c2.qasm>]
+     Outputs the gate counts for two circuits in CSV format:
+     [CH;CS;CZ;CCZ;CCX;CU1;total].
+     Used by benchmark scripts for gate-count comparison.
+     Returns only the counts, no newline at the end.
+
+     Example:
+     {[
+       dune exec -- ./bin/main.exe -nb_gates_csv circuit1.qasm circuit2.qasm
+       # Output: "10;5;3;0;2;1;21"
+     ]} *)
+
+(** [-metrics <c.qasm>]
+     Outputs the total gate count for a single circuit.
+     Used internally for benchmarking purposes.
+
+     Example:
+     {[
+       dune exec -- ./bin/main.exe -metrics circuit.qasm
+       # Output: "21"
+     ]} *)
+
 (**/**)
 
 (** {1 Entry Point} *)

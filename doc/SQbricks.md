@@ -167,10 +167,25 @@ les bits attendus à zéro de ceux attendus à un afin de préserver exactement 
 condition. Une valeur trop large pour le registre ou pour la représentation
 entière de SQbricks est rejetée explicitement.
 
-Certaines entrées mal formées issues de bibliothèques de benchmark sont
-acceptées avec un warning afin de ne pas modifier les jeux de données externes.
-Cette tolérance ne rend pas le circuit bien formé et les étapes suivantes
-peuvent toujours le refuser.
+#### Comportement avec les constructions mal formées
+
+Pour des raisons de compatibilité avec les jeux de benchmarks externes,
+SQbricks accepte certaines constructions mal formées **en émettant un avertissement**
+(warning) sur `stderr` tout en continuant l'analyse :
+
+- **Déclarations de registres avec une largeur invalide** :
+  `qreg q[0]` ou `qreg q[-1]` recevront un avertissement et le parser utilisera
+  un offset de 0. **Ces circuits ne sont pas bien formés** et peuvent être rejetés
+  lors des étapes suivantes (exécution symbolique, deferred measurement).
+
+- **Accès à un indice hors limites** :
+  `q[100]` pour un registre `q` de taille 10 émet un avertissement et utilise
+  l'indice plat `offset + index`. **Ces circuits ne sont pas bien formés** et peuvent
+  être rejetés avec une erreur typée (`ErrorInvalidQubitIndex`, `ErrorInvalidProgram`) lors
+  des étapes suivantes.
+
+Cette tolérance ne rend pas le circuit bien formé. Les étapes suivantes
+(exécution symbolique, deferred measurement) peuvent toujours le refuser explicitement.
 
 Limites de compatibilité actuelles :
 
@@ -195,6 +210,25 @@ sous-ensemble OpenQASM/OWM actuel, `Program.Macros.c3xdecomp` fournit une
 décomposition exacte d'une porte X à trois contrôles, sans ancilla et sans phase
 globale. Les portes H avec plusieurs contrôles restent exécutables
 symboliquement mais n'ont pas encore de décomposition OpenQASM générale.
+
+### Décomposition de portes multi-contrôlées
+
+SQbricks fournit des décompositions exactes pour certaines portes multi-contrôlées
+non supportées nativement par OpenQASM ou par les outils externes. Ces décompositions
+sont validées mathématiquement et testées pour garantir l'équivalence sémantique
+avec la porte originale.
+
+| Porte | Fonction OCaml | Description | Preuve |
+|-------|----------------|-------------|-------|
+| **C3X** | `Program.Macros.c3xdecomp co1 co2 co3 ta` | Décomposition exacte d'une porte X à 3 contrôles, sans qubit auxiliaire et sans phase globale. Utilisée par OWM et l'export OpenQASM. | Lemme 7.5 de Barenco et al. (1995) |
+| **CCX** | `Program.Macros.ccx c1 c2 ta` | Porte Toffoli (CCX) standard. | Standard |
+| **CCZ** | `Program.Macros.ccz c1 c2 ta` | Porte CCZ standard. | Standard |
+| **CCS** | `Program.Macros.ccs c1 c2 ta` | Porte CCS (contrôlée-S). | Standard |
+| **CCT** | `Program.Macros.cct c1 c2 ta` | Porte CCT (contrôlée-T). | Standard |
+
+**Remarque** : La décomposition C3X est particulièrement importante car elle permet
+de traiter des circuits avec des portes à 3 contrôles dans le workflow OWM sans
+avoir besoin de qubits auxiliaires supplémentaires.
 
 ## Traduction en mesures différées
 

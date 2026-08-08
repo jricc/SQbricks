@@ -159,9 +159,25 @@ bits expected to be zero from bits expected to be one in order to preserve the
 condition exactly. A value that does not fit the register or the SQbricks
 integer representation is rejected explicitly.
 
-Some malformed inputs from benchmark libraries are accepted with a warning so
-that external datasets do not need to be modified. This tolerance does not
-make the circuit well formed, and later stages may still reject it.
+#### Behavior with malformed constructs
+
+For compatibility with external benchmark suites, SQbricks accepts certain
+malformed constructs **while emitting a warning** on `stderr` and continuing
+parsing:
+
+- **Register declarations with invalid width**:
+  `qreg q[0]` or `qreg q[-1]` will emit a warning and the parser will use an offset of 0.
+  **These circuits are not well formed** and may be rejected during later stages
+  (symbolic execution, deferred measurement).
+
+- **Out-of-bounds register access**:
+  `q[100]` for a register `q` of size 10 emits a warning and uses the flat index
+  `offset + index`. **These circuits are not well formed** and may be rejected
+  with a typed error (`ErrorInvalidQubitIndex`, `ErrorInvalidProgram`) during later
+  stages.
+
+This tolerance does not make the circuit well formed. Later stages
+(symbolic execution, deferred measurement) may still reject it explicitly.
 
 Current compatibility limits are:
 
@@ -185,6 +201,25 @@ OpenQASM/OWM subset, `Program.Macros.c3xdecomp` provides an exact decomposition
 of a three-controlled X gate without ancillas or global phase. H gates with
 several controls remain symbolically executable but do not yet have a general
 OpenQASM decomposition.
+
+### Multi-controlled gate decomposition
+
+SQbricks provides exact decompositions for certain multi-controlled gates
+not natively supported by OpenQASM or by external tools. These decompositions
+are mathematically validated and tested to ensure semantic equivalence
+with the original gate.
+
+| Gate | OCaml Function | Description | Proof |
+|------|----------------|-------------|-------|
+| **C3X** | `Program.Macros.c3xdecomp co1 co2 co3 ta` | Exact decomposition of a 3-controlled X gate, without ancilla qubits or global phase. Used by OWM and OpenQASM export. | Lemma 7.5 from Barenco et al. (1995) |
+| **CCX** | `Program.Macros.ccx c1 c2 ta` | Standard Toffoli (CCX) gate. | Standard |
+| **CCZ** | `Program.Macros.ccz c1 c2 ta` | Standard CCZ gate. | Standard |
+| **CCS** | `Program.Macros.ccs c1 c2 ta` | Controlled-S (CCS) gate. | Standard |
+| **CCT** | `Program.Macros.cct c1 c2 ta` | Controlled-T (CCT) gate. | Standard |
+
+**Note**: The C3X decomposition is particularly important as it allows handling
+circuits with 3-controlled gates in the OWM workflow without requiring
+additional ancilla qubits.
 
 ## Deferred measurement translation
 

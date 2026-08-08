@@ -48,3 +48,14 @@ quantum circuits.
 - The post-HH large benchmark is not conclusive enough to support a global
   performance-improvement claim. Performance changes must be reported only for
   the individually measured cases.
+
+## [Unreleased]
+
+### Performance
+
+- Improved HH reduction rule with path-variable prefiltering and removal of redundant simplifications (15-16% speedup on targeted large cases like `owm/gf2^9mult_89_413`).
+- Optimized `Poly.lift` for dyadic coefficients (1/4, 1/8) with early truncation, reducing `tele/grover_17` phase lift time from 11s to 0.01s.
+
+### Added
+
+- Exact decomposition of 3-controlled X gates (`Program.Macros.c3xdecomp`) for OWM and OpenQASM export, without ancilla qubits or global phase.
