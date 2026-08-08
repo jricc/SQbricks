@@ -111,6 +111,19 @@ val execution : ?debug:bool -> ?input_state:Path_sum.t -> t -> Path_sum.t
 type inverse_error = NonReversibleProgram of t
 
 val inverse_result : ?debug:bool -> t -> (t, inverse_error) result
+
+(** {2 Program Construction Errors} *)
+
+type program_error =
+  | UnsupportedGate of string
+      (** A gate is not supported by SQbricks. The string describes the gate. *)
+  | InconsistentGateCount of int * int
+      (** The gate counts of two programs do not match.
+          The pair contains [(count1, count2)]. *)
+  | InvalidProgram of string
+      (** A generic program construction error. The string describes the issue. *)
+
+(**/**)
 (** [inverse_result ?debug prog] computes the inverse of [prog] or reports the
     first non-reversible subprogram. *)
 
@@ -236,8 +249,15 @@ module Macros : sig
   val cx : int -> int -> t
   (** [cx control target] CNOT gate. *)
 
-  val cy : 'a -> 'b -> t
-  (** [cy control target] Controlled Y gate (not implemented). *)
+  val cy_result : int -> int -> (t, program_error) result
+  (** [cy_result control target] returns [Ok (Controlled Y gate)] or
+      [Error (UnsupportedGate "Control Ry")].
+      Controlled Y is not currently supported in SQbricks. *)
+
+  val cy : int -> int -> t
+  (** [cy control target] Controlled Y gate (not implemented).
+      **Deprecated**: Use [cy_result] for typed error handling.
+      This function raises [Failure] with "Control Ry doesn't implemented". *)
 
   val ch : int -> int -> t
   (** [ch control target] Controlled Hadamard. *)

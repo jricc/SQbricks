@@ -76,14 +76,14 @@ let to_qasm ?(one_creg = false) ?(debug = false) (p : Program.t) : t =
     | Apply (U1 (s, k), [ co1; co2 ], [ ta ]) ->
         aux (ccu1decomp ~s:(Q.to_int s) k co1 co2 ta)
     | Apply (U1 _, _, _) ->
-        failwith
-          (sprintf "To_openqasm.to_qasm.aux, program = %s\n" (ProgS.pretty p))
+        invalid_arg
+          (sprintf "To_openqasm: unsupported U1 gate in program:\n%s" (ProgS.pretty p))
     | Apply (g, co, (_ :: _ :: _ as targets)) ->
         aux (multi_apply co targets g E)
     | Apply (_, _, []) -> ID
     | Apply _ ->
-        failwith
-          (sprintf "To_openqasm.to_qasm, unsupported gate application:\n%s"
+        invalid_arg
+          (sprintf "To_openqasm: unsupported gate application:\n%s"
              (ProgS.pretty p))
     | Measure (k, ta) -> MEASURE (k, ta)
     | It ([ k ], Sequence (p1, p2)) -> aux (it k p1 -- it k p2)
@@ -92,8 +92,8 @@ let to_qasm ?(one_creg = false) ?(debug = false) (p : Program.t) : t =
     | Sequence (p1, p2) -> SEQUENCE (aux p1, aux p2)
     | InitQ ta -> RESET ta
     | _ ->
-        failwith
-          (sprintf "To_openqasm.to_qasm.aux, Program = %s\n" (ProgS.pretty p))
+        invalid_arg
+          (sprintf "To_openqasm: unsupported program construct:\n%s" (ProgS.pretty p))
   in
   let output = aux p in
   if wc = 0 then SEQUENCE (QREG wq, output)

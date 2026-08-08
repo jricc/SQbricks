@@ -35,6 +35,15 @@ type t =
   | InitQ of int
   | Not of int
 
+(* Errors for program construction and validation *)
+type program_error =
+  | UnsupportedGate of string
+      (** A gate is not supported by SQbricks. The string describes the gate. *)
+  | InconsistentGateCount of int * int
+      (** The gate counts of two programs do not match. *)
+  | InvalidProgram of string
+      (** A generic program construction error. *)
+
 let format p =
   let rec aux p =
     match p with
@@ -227,7 +236,7 @@ let rec nb_gate p =
       let nb2 = nb_gate p2 in
       (* above 248159 gates : stack overflow *)
       if nb1 > 248158 || nb2 > 200000 then
-        failwith (sprintf "Program.nb_gate, nb1 = %d, nb2 = % d" nb1 nb2)
+        invalid_arg (sprintf "Program.nb_gate: potential stack overflow (nb1=%d, nb2=%d)" nb1 nb2)
       else nb1 + nb2
   | _ -> 0
 
@@ -461,6 +470,8 @@ module Macros = struct
     format (aux l)
 
   let cx co ta : t = Apply (X, [ co ], [ ta ])
+  let cy_result _ _ : (t, program_error) result =
+    Error (UnsupportedGate "Control Ry")
   let cy _ _ : t = failwith "Control Ry doesn't implemented"
   let ccx co1 co2 ta : t = Apply (X, [ co1; co2 ], [ ta ])
   let toffoli co1 co2 ta : t = ccx co1 co2 ta
