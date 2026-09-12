@@ -475,7 +475,15 @@ module HH = struct
      smallest-Q scores partitions (x0 before x0 xor x1); the first-valid
      control stops at the first match without partitioning or scoring. *)
   let select_hh_match ~smallest_q ?max_valid_matches ?(indexed = false)
-      ?(debug = false) (ps : Path_sum.t) path_variables =
+      ?min_score_gain ?(debug = false) (ps : Path_sum.t) path_variables =
+    let chosen_match first_match best =
+      match (min_score_gain, first_match, best) with
+      | Some minimum, Some (_, _, first_score, _, _),
+        Some (_, _, best_score, _, _)
+        when first_score - best_score < minimum ->
+          first_match
+      | _ -> best
+    in
     let select () =
       let width = Array.length ps.ket in
       let candidates =
@@ -484,12 +492,17 @@ module HH = struct
       in
       let total_path_variables = List.length path_variables in
       let phase_candidates = List.length candidates in
-      let selection_stats visited analyzed valid scored best =
+      let selection_stats visited analyzed valid scored first_valid_score best =
         let chosen_position, chosen_valid_rank, chosen_score =
           match best with
           | Some (_, _, score, position, valid_rank) ->
               (position, valid_rank, score)
           | None -> (-1, -1, -1)
+        in
+        let score_gain =
+          if 0 <= first_valid_score && 0 <= chosen_score then
+            first_valid_score - chosen_score
+          else -1
         in
         ( total_path_variables,
           phase_candidates,
@@ -499,38 +512,59 @@ module HH = struct
           scored,
           chosen_position,
           chosen_valid_rank,
-          chosen_score )
+          chosen_score,
+          first_valid_score,
+          score_gain )
       in
       let selected_match best =
         Option.map (fun (y0, yi, _, _, _) -> (y0, yi)) best
       in
-      let rec scan position analyzed valid scored best = function
+      let rec scan position analyzed valid scored first_valid_score first_match
+          best = function
         | [] ->
-            ( Ok (selected_match best),
-              selection_stats (position - 1) analyzed valid scored best )
+            let chosen = chosen_match first_match best in
+            ( Ok (selected_match chosen),
+              selection_stats (position - 1) analyzed valid scored
+                first_valid_score chosen )
         | y0 :: remaining ->
             if not (List.mem y0 candidates) then
-              scan (position + 1) analyzed valid scored best remaining
+              scan (position + 1) analyzed valid scored first_valid_score
+                first_match best remaining
             else
               match analyze_y0 y0 ~debug ps with
               | Error reduction_error ->
+                  let chosen = chosen_match first_match best in
                   ( Error reduction_error,
-                    selection_stats position (analyzed + 1) valid scored best )
+                    selection_stats position (analyzed + 1) valid scored
+                      first_valid_score chosen )
               | Ok None ->
-                  scan (position + 1) (analyzed + 1) valid scored best remaining
+                  scan (position + 1) (analyzed + 1) valid scored
+                    first_valid_score first_match best remaining
               | Ok (Some yi) when not smallest_q ->
                   let selected = Some (y0, yi, -1, position, valid + 1) in
                   ( Ok (Some (y0, yi)),
                     selection_stats position (analyzed + 1) (valid + 1) scored
-                      selected )
+                      first_valid_score selected )
               | Ok (Some yi) -> (
                   match partition_hh_phase ps.phase width y0 yi with
                   | Error reduction_error ->
+                      let chosen = chosen_match first_match best in
                       ( Error reduction_error,
                         selection_stats position (analyzed + 1) (valid + 1)
-                          scored best )
+                          scored first_valid_score chosen )
                   | Ok (q, _, _) ->
                       let score = Poly.size q in
+                      let candidate =
+                        Some (y0, yi, score, position, valid + 1)
+                      in
+                      let first_valid_score =
+                        if Int.equal valid 0 then score else first_valid_score
+                      in
+                      let first_match =
+                        match first_match with
+                        | None -> candidate
+                        | Some _ -> first_match
+                      in
                       let valid = valid + 1 in
                       let best =
                         match best with
@@ -544,12 +578,15 @@ module HH = struct
                       let scored = scored + 1 in
                       match max_valid_matches with
                       | Some limit when limit <= valid ->
-                          ( Ok (selected_match best),
-                            selection_stats position analyzed valid scored best )
+                          let chosen = chosen_match first_match best in
+                          ( Ok (selected_match chosen),
+                            selection_stats position analyzed valid scored
+                              first_valid_score chosen )
                       | _ ->
-                          scan (position + 1) analyzed valid scored best remaining)
+                          scan (position + 1) analyzed valid scored
+                            first_valid_score first_match best remaining)
       in
-      scan 1 0 0 0 None path_variables
+      scan 1 0 0 0 (-1) None None path_variables
     in
     let select_scanning = select in
     let width = Array.length ps.ket in
@@ -564,12 +601,17 @@ module HH = struct
         index_hh_phase ps.phase width path_variables
       in
       let total_path_variables = List.length path_variables in
-      let selection_stats visited analyzed valid scored best =
+      let selection_stats visited analyzed valid scored first_valid_score best =
         let chosen_position, chosen_valid_rank, chosen_score =
           match best with
           | Some (_, _, score, position, valid_rank) ->
               (position, valid_rank, score)
           | None -> (-1, -1, -1)
+        in
+        let score_gain =
+          if 0 <= first_valid_score && 0 <= chosen_score then
+            first_valid_score - chosen_score
+          else -1
         in
         ( total_path_variables,
           phase_candidates,
@@ -579,28 +621,36 @@ module HH = struct
           scored,
           chosen_position,
           chosen_valid_rank,
-          chosen_score )
+          chosen_score,
+          first_valid_score,
+          score_gain )
       in
       let selected_match best =
         Option.map (fun (y0, yi, _, _, _) -> (y0, yi)) best
       in
-      let rec scan position analyzed valid scored best = function
+      let rec scan position analyzed valid scored first_valid_score first_match
+          best = function
         | [] ->
-            ( Ok (selected_match best),
-              selection_stats (position - 1) analyzed valid scored best )
+            let chosen = chosen_match first_match best in
+            ( Ok (selected_match chosen),
+              selection_stats (position - 1) analyzed valid scored
+                first_valid_score chosen )
         | y0 :: remaining -> (
             match IntMap.find_opt y0 analyses with
             | None ->
-                scan (position + 1) analyzed valid scored best remaining
+                scan (position + 1) analyzed valid scored first_valid_score
+                  first_match best remaining
             | Some analysis when analysis.yi_candidates_rev = [] ->
-                scan (position + 1) analyzed valid scored best remaining
+                scan (position + 1) analyzed valid scored first_valid_score
+                  first_match best remaining
             | Some analysis ->
                 let analyzed = analyzed + 1 in
                 if
                   Path_sum.Ket.member y0 ps.ket
                   || analysis.invalid_coefficient
                 then
-                  scan (position + 1) analyzed valid scored best remaining
+                  scan (position + 1) analyzed valid scored first_valid_score
+                    first_match best remaining
                 else
                   let yi =
                     List.find_opt
@@ -612,9 +662,21 @@ module HH = struct
                   in
                   match yi with
                   | None ->
-                      scan (position + 1) analyzed valid scored best remaining
+                      scan (position + 1) analyzed valid scored first_valid_score
+                        first_match best remaining
                   | Some yi ->
                       let score = indexed_q_size y0 yi analysis in
+                      let candidate =
+                        Some (y0, yi, score, position, valid + 1)
+                      in
+                      let first_valid_score =
+                        if Int.equal valid 0 then score else first_valid_score
+                      in
+                      let first_match =
+                        match first_match with
+                        | None -> candidate
+                        | Some _ -> first_match
+                      in
                       let valid = valid + 1 in
                       let best =
                         match best with
@@ -624,10 +686,10 @@ module HH = struct
                             best
                         | _ -> Some (y0, yi, score, position, valid)
                       in
-                      scan (position + 1) analyzed valid (scored + 1) best
-                        remaining)
+                      scan (position + 1) analyzed valid (scored + 1)
+                        first_valid_score first_match best remaining)
       in
-      scan 1 0 0 0 None path_variables
+      scan 1 0 0 0 (-1) None None path_variables
     in
     let select () =
       if use_index then select_indexed () else select_scanning ()
@@ -643,12 +705,14 @@ module HH = struct
           ~finally:(fun () -> close_out_noerr channel)
           (fun () ->
             let mode =
-              if use_index then "indexed"
-              else
-                match (smallest_q, max_valid_matches) with
-                | false, _ -> "first"
-                | true, Some limit -> sprintf "smallest%d" limit
-                | true, None -> "smallest"
+              match min_score_gain with
+              | Some _ -> "guarded"
+              | None when use_index -> "indexed"
+              | None -> (
+                  match (smallest_q, max_valid_matches) with
+                  | false, _ -> "first"
+                  | true, Some limit -> sprintf "smallest%d" limit
+                  | true, None -> "smallest")
             in
             fprintf channel "HH_SELECTION_BEGIN pid=%d mode=%s\n%!"
               (Unix.getpid ()) mode;
@@ -665,7 +729,9 @@ module HH = struct
                   scored,
                   chosen_position,
                   chosen_valid_rank,
-                  chosen_score ) =
+                  chosen_score,
+                  first_valid_score,
+                  score_gain ) =
               stats
             in
             (* Includes prefilter and validation, plus scoring for smallest-Q,
@@ -676,11 +742,11 @@ module HH = struct
               "HH_SELECTION_END pid=%d mode=%s wall_s=%.6f cpu_s=%.6f \
                path_variables=%d phase_candidates=%d visited=%d analyzed=%d valid=%d \
                scored=%d chosen_position=%d chosen_valid_rank=%d \
-               chosen_score=%d\n%!"
+               chosen_score=%d first_valid_score=%d score_gain=%d\n%!"
               (Unix.getpid ()) mode wall_s cpu_s total_path_variables
               phase_candidates
               visited analyzed valid scored chosen_position chosen_valid_rank
-              chosen_score;
+              chosen_score first_valid_score score_gain;
             result)
 
   let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
@@ -737,7 +803,7 @@ module HH = struct
         | _ -> ps.path_var
       in
       (* All are disabled by default. The scanning exhaustive mode is the
-         oracle, followed by the 32-match variant and the indexed prototype;
+         oracle, followed by the 32-match, indexed and guarded variants;
          every scoring mode wins over first-valid. *)
       let exhaustive_smallest_q =
         Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q" = Some "1"
@@ -748,12 +814,25 @@ module HH = struct
       let indexed_smallest_q =
         Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q_INDEXED" = Some "1"
       in
+      let guarded_smallest_q =
+        Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q_GUARDED" = Some "1"
+      in
       let indexed =
         (not exhaustive_smallest_q)
         && (not smallest_q_32)
         && indexed_smallest_q
       in
-      let smallest_q = exhaustive_smallest_q || smallest_q_32 || indexed in
+      let guarded =
+        (not exhaustive_smallest_q)
+        && (not smallest_q_32)
+        && (not indexed)
+        && guarded_smallest_q
+      in
+      (* The observed QFT gains were all one; require two removed Q terms
+         before departing from the first valid match. *)
+      let smallest_q =
+        exhaustive_smallest_q || smallest_q_32 || indexed || guarded
+      in
       let max_valid_matches =
         if exhaustive_smallest_q then None
         else if smallest_q_32 then Some 32
@@ -763,8 +842,10 @@ module HH = struct
       if smallest_q || first_valid then
         let rec reduce_rechecked (acc : Path_sum.t) path_variables =
           match
-            select_hh_match ~smallest_q ?max_valid_matches ~indexed ~debug
-              acc path_variables
+            select_hh_match ~smallest_q ?max_valid_matches
+              ~indexed:(indexed || guarded)
+              ?min_score_gain:(if guarded then Some 2 else None)
+              ~debug acc path_variables
           with
           | Error reduction_error -> Error reduction_error
           | Ok None -> Ok acc
