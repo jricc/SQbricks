@@ -76,6 +76,20 @@ module HH = struct
   let simplify p = Poly.simplify p
   let qsimplify p = Qubit.simplify p
 
+  let rec monome_variables (monome : Monome.t) variables =
+    match monome with
+    | Scal _ -> variables
+    | Qubit qubit -> List.rev_append (Qubit.extract_var qubit) variables
+    | Prod (m1, m2) -> monome_variables m2 (monome_variables m1 variables)
+
+  let add_occurrence occurrences variable =
+    let count =
+      match IntMap.find_opt variable occurrences with
+      | Some count -> count
+      | None -> 0
+    in
+    IntMap.add variable (count + 1) occurrences
+
   (* Validate y0 and select yi in one phase traversal. For example, with
      [1/2*y0*y1 + 1/2*y0*y2], the traversal counts both pairs and keeps y1,
      the first valid candidate in the canonical phase order. *)
@@ -84,21 +98,6 @@ module HH = struct
     if Path_sum.Ket.member y0 ps.ket then Ok None
     else
       let width = Array.length ps.ket in
-      let rec monome_variables (monome : Monome.t) variables =
-        match monome with
-        | Scal _ -> variables
-        | Qubit qubit -> List.rev_append (Qubit.extract_var qubit) variables
-        | Prod (m1, m2) ->
-            monome_variables m2 (monome_variables m1 variables)
-      in
-      let add_occurrence occurrences variable =
-        let count =
-          match IntMap.find_opt variable occurrences with
-          | Some count -> count
-          | None -> 0
-        in
-        IntMap.add variable (count + 1) occurrences
-      in
       let candidate (monome : Monome.t) =
         match monome with
         | Prod (Scal coefficient, Prod (Qubit (Var v1), Qubit (Var v2)))
@@ -162,6 +161,126 @@ module HH = struct
               aux remaining_phase candidates occurrences
       in
       aux ps.phase [] IntMap.empty
+
+  type indexed_y0_analysis = {
+    invalid_coefficient : bool;
+    occurrences : int IntMap.t;
+    yi_candidates_rev : int list;
+    half_terms_rev : Monome.t list;
+  }
+
+  let empty_indexed_y0_analysis =
+    {
+      invalid_coefficient = false;
+      occurrences = IntMap.empty;
+      yi_candidates_rev = [];
+      half_terms_rev = [];
+    }
+
+  let update_indexed_y0 y0 update analyses =
+    let analysis =
+      match IntMap.find_opt y0 analyses with
+      | Some analysis -> analysis
+      | None -> empty_indexed_y0_analysis
+    in
+    IntMap.add y0 (update analysis) analyses
+
+  (* Build all data needed by smallest-Q in one canonical phase traversal.
+     Terms are shared between records; scoring later only counts the terms
+     that would be inserted into Q for the selected yi. *)
+  let index_hh_phase (phase : Poly.t) width path_variables =
+    let active_path_variables =
+      List.fold_left
+        (fun variables path_variable ->
+          IntMap.add path_variable () variables)
+        IntMap.empty path_variables
+    in
+    let is_active path_variable =
+      IntMap.mem path_variable active_path_variables
+    in
+    let update_body analyses coefficient m1 =
+      let all_variables =
+        monome_variables m1 [] |> List.sort_uniq Int.compare
+      in
+      let path_variables_in_body =
+        List.filter (fun variable -> width <= variable) all_variables
+      in
+      List.fold_left
+        (fun analyses y0 ->
+          if not (is_active y0) then analyses
+          else
+            update_indexed_y0 y0
+              (fun analysis ->
+                match coefficient with
+                | Some coefficient when coefficient <> div2 ->
+                    { analysis with invalid_coefficient = true }
+                | _ ->
+                    let occurrences =
+                      List.fold_left add_occurrence analysis.occurrences
+                        path_variables_in_body
+                    in
+                    let half_terms_rev =
+                      match coefficient with
+                      | Some coefficient when Q.equal coefficient div2 ->
+                          m1 :: analysis.half_terms_rev
+                      | _ -> analysis.half_terms_rev
+                    in
+                    { analysis with occurrences; half_terms_rev })
+              analyses)
+        analyses all_variables
+    in
+    let add_candidate y0 yi analyses phase_candidates =
+      let phase_candidates = IntMap.add y0 () phase_candidates in
+      let analyses =
+        if is_active y0 then
+          update_indexed_y0 y0
+            (fun analysis ->
+              {
+                analysis with
+                yi_candidates_rev = yi :: analysis.yi_candidates_rev;
+              })
+            analyses
+        else analyses
+      in
+      (analyses, phase_candidates)
+    in
+    let rec traverse phase analyses phase_candidates =
+      if Poly.equal phase empty then
+        (analyses, IntMap.cardinal phase_candidates)
+      else
+        let monome, remaining_phase = (find phase, del phase) in
+        let analyses =
+          match monome with
+          | Prod (Scal coefficient, m1) ->
+              update_body analyses (Some coefficient) m1
+          | Prod (_, m1) -> update_body analyses None m1
+          | _ -> analyses
+        in
+        let analyses, phase_candidates =
+          match monome with
+          | Prod (Scal coefficient, Prod (Qubit (Var v1), Qubit (Var v2)))
+            when Q.equal coefficient div2 ->
+              let analyses, phase_candidates =
+                if width <= v2 then
+                  add_candidate v1 v2 analyses phase_candidates
+                else (analyses, phase_candidates)
+              in
+              if Int.equal v1 v2 then (analyses, phase_candidates)
+              else if width <= v1 then
+                add_candidate v2 v1 analyses phase_candidates
+              else (analyses, phase_candidates)
+          | _ -> (analyses, phase_candidates)
+        in
+        traverse remaining_phase analyses phase_candidates
+    in
+    traverse phase IntMap.empty IntMap.empty
+
+  let indexed_q_size y0 yi analysis =
+    List.fold_left
+      (fun size m1 ->
+        if member yi m1 then size
+        else match remove y0 m1 with Some _ -> size + 1 | None -> size)
+      0 analysis.half_terms_rev
 
   (* For example:
        phase = 1/2*y0*yi + 1/2*y0*x0 + 1/4*yi + 1/8*x1
@@ -355,8 +474,8 @@ module HH = struct
   (* Temporary comparison with the same candidate traversal and yi choice:
      smallest-Q scores partitions (x0 before x0 xor x1); the first-valid
      control stops at the first match without partitioning or scoring. *)
-  let select_hh_match ~smallest_q ?max_valid_matches ?(debug = false)
-      (ps : Path_sum.t) path_variables =
+  let select_hh_match ~smallest_q ?max_valid_matches ?(indexed = false)
+      ?(debug = false) (ps : Path_sum.t) path_variables =
     let select () =
       let width = Array.length ps.ket in
       let candidates =
@@ -432,6 +551,87 @@ module HH = struct
       in
       scan 1 0 0 0 None path_variables
     in
+    let select_scanning = select in
+    let width = Array.length ps.ket in
+    let unbounded =
+      match max_valid_matches with None -> true | Some _ -> false
+    in
+    let use_index =
+      indexed && smallest_q && width > 0 && not debug && unbounded
+    in
+    let select_indexed () =
+      let analyses, phase_candidates =
+        index_hh_phase ps.phase width path_variables
+      in
+      let total_path_variables = List.length path_variables in
+      let selection_stats visited analyzed valid scored best =
+        let chosen_position, chosen_valid_rank, chosen_score =
+          match best with
+          | Some (_, _, score, position, valid_rank) ->
+              (position, valid_rank, score)
+          | None -> (-1, -1, -1)
+        in
+        ( total_path_variables,
+          phase_candidates,
+          visited,
+          analyzed,
+          valid,
+          scored,
+          chosen_position,
+          chosen_valid_rank,
+          chosen_score )
+      in
+      let selected_match best =
+        Option.map (fun (y0, yi, _, _, _) -> (y0, yi)) best
+      in
+      let rec scan position analyzed valid scored best = function
+        | [] ->
+            ( Ok (selected_match best),
+              selection_stats (position - 1) analyzed valid scored best )
+        | y0 :: remaining -> (
+            match IntMap.find_opt y0 analyses with
+            | None ->
+                scan (position + 1) analyzed valid scored best remaining
+            | Some analysis when analysis.yi_candidates_rev = [] ->
+                scan (position + 1) analyzed valid scored best remaining
+            | Some analysis ->
+                let analyzed = analyzed + 1 in
+                if
+                  Path_sum.Ket.member y0 ps.ket
+                  || analysis.invalid_coefficient
+                then
+                  scan (position + 1) analyzed valid scored best remaining
+                else
+                  let yi =
+                    List.find_opt
+                      (fun yi ->
+                        match IntMap.find_opt yi analysis.occurrences with
+                        | Some count -> Int.equal count 1
+                        | None -> false)
+                      (List.rev analysis.yi_candidates_rev)
+                  in
+                  match yi with
+                  | None ->
+                      scan (position + 1) analyzed valid scored best remaining
+                  | Some yi ->
+                      let score = indexed_q_size y0 yi analysis in
+                      let valid = valid + 1 in
+                      let best =
+                        match best with
+                        (* Strict comparison preserves path-variable order. *)
+                        | Some (_, _, best_score, _, _)
+                          when best_score <= score ->
+                            best
+                        | _ -> Some (y0, yi, score, position, valid)
+                      in
+                      scan (position + 1) analyzed valid (scored + 1) best
+                        remaining)
+      in
+      scan 1 0 0 0 None path_variables
+    in
+    let select () =
+      if use_index then select_indexed () else select_scanning ()
+    in
     match Sys.getenv_opt "SQBRICKS_PROFILE_HH_COST_FILE" with
     | None -> fst (select ())
     | Some file ->
@@ -443,10 +643,12 @@ module HH = struct
           ~finally:(fun () -> close_out_noerr channel)
           (fun () ->
             let mode =
-              match (smallest_q, max_valid_matches) with
-              | false, _ -> "first"
-              | true, Some limit -> sprintf "smallest%d" limit
-              | true, None -> "smallest"
+              if use_index then "indexed"
+              else
+                match (smallest_q, max_valid_matches) with
+                | false, _ -> "first"
+                | true, Some limit -> sprintf "smallest%d" limit
+                | true, None -> "smallest"
             in
             fprintf channel "HH_SELECTION_BEGIN pid=%d mode=%s\n%!"
               (Unix.getpid ()) mode;
@@ -534,15 +736,24 @@ module HH = struct
             List.rev_append absent_from_ket present_in_ket
         | _ -> ps.path_var
       in
-      (* All are disabled by default. Exhaustive smallest-Q wins over its
-         32-match variant; either scoring mode wins over first-valid. *)
+      (* All are disabled by default. The scanning exhaustive mode is the
+         oracle, followed by the 32-match variant and the indexed prototype;
+         every scoring mode wins over first-valid. *)
       let exhaustive_smallest_q =
         Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q" = Some "1"
       in
       let smallest_q_32 =
         Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q_32" = Some "1"
       in
-      let smallest_q = exhaustive_smallest_q || smallest_q_32 in
+      let indexed_smallest_q =
+        Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q_INDEXED" = Some "1"
+      in
+      let indexed =
+        (not exhaustive_smallest_q)
+        && (not smallest_q_32)
+        && indexed_smallest_q
+      in
+      let smallest_q = exhaustive_smallest_q || smallest_q_32 || indexed in
       let max_valid_matches =
         if exhaustive_smallest_q then None
         else if smallest_q_32 then Some 32
@@ -552,8 +763,8 @@ module HH = struct
       if smallest_q || first_valid then
         let rec reduce_rechecked (acc : Path_sum.t) path_variables =
           match
-            select_hh_match ~smallest_q ?max_valid_matches ~debug acc
-              path_variables
+            select_hh_match ~smallest_q ?max_valid_matches ~indexed ~debug
+              acc path_variables
           with
           | Error reduction_error -> Error reduction_error
           | Ok None -> Ok acc
