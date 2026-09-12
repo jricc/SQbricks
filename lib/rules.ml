@@ -352,6 +352,135 @@ module HH = struct
             profile_state "after" ps_output;
             Ok (Some ps_output))
 
+  (* Temporary comparison with the same candidate traversal and yi choice:
+     smallest-Q scores partitions (x0 before x0 xor x1); the first-valid
+     control stops at the first match without partitioning or scoring. *)
+  let select_hh_match ~smallest_q ?max_valid_matches ?(debug = false)
+      (ps : Path_sum.t) path_variables =
+    let select () =
+      let width = Array.length ps.ket in
+      let candidates =
+        if width <= 0 then ps.path_var
+        else path_variables_with_possible_yi ps.phase width
+      in
+      let total_path_variables = List.length path_variables in
+      let phase_candidates = List.length candidates in
+      let selection_stats visited analyzed valid scored best =
+        let chosen_position, chosen_valid_rank, chosen_score =
+          match best with
+          | Some (_, _, score, position, valid_rank) ->
+              (position, valid_rank, score)
+          | None -> (-1, -1, -1)
+        in
+        ( total_path_variables,
+          phase_candidates,
+          visited,
+          analyzed,
+          valid,
+          scored,
+          chosen_position,
+          chosen_valid_rank,
+          chosen_score )
+      in
+      let selected_match best =
+        Option.map (fun (y0, yi, _, _, _) -> (y0, yi)) best
+      in
+      let rec scan position analyzed valid scored best = function
+        | [] ->
+            ( Ok (selected_match best),
+              selection_stats (position - 1) analyzed valid scored best )
+        | y0 :: remaining ->
+            if not (List.mem y0 candidates) then
+              scan (position + 1) analyzed valid scored best remaining
+            else
+              match analyze_y0 y0 ~debug ps with
+              | Error reduction_error ->
+                  ( Error reduction_error,
+                    selection_stats position (analyzed + 1) valid scored best )
+              | Ok None ->
+                  scan (position + 1) (analyzed + 1) valid scored best remaining
+              | Ok (Some yi) when not smallest_q ->
+                  let selected = Some (y0, yi, -1, position, valid + 1) in
+                  ( Ok (Some (y0, yi)),
+                    selection_stats position (analyzed + 1) (valid + 1) scored
+                      selected )
+              | Ok (Some yi) -> (
+                  match partition_hh_phase ps.phase width y0 yi with
+                  | Error reduction_error ->
+                      ( Error reduction_error,
+                        selection_stats position (analyzed + 1) (valid + 1)
+                          scored best )
+                  | Ok (q, _, _) ->
+                      let score = Poly.size q in
+                      let valid = valid + 1 in
+                      let best =
+                        match best with
+                        (* Strict comparison preserves arrival order on ties. *)
+                        | Some (_, _, best_score, _, _)
+                          when best_score <= score ->
+                            best
+                        | _ -> Some (y0, yi, score, position, valid)
+                      in
+                      let analyzed = analyzed + 1 in
+                      let scored = scored + 1 in
+                      match max_valid_matches with
+                      | Some limit when limit <= valid ->
+                          ( Ok (selected_match best),
+                            selection_stats position analyzed valid scored best )
+                      | _ ->
+                          scan (position + 1) analyzed valid scored best remaining)
+      in
+      scan 1 0 0 0 None path_variables
+    in
+    match Sys.getenv_opt "SQBRICKS_PROFILE_HH_COST_FILE" with
+    | None -> fst (select ())
+    | Some file ->
+        let channel =
+          open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ]
+            0o644 file
+        in
+        Fun.protect
+          ~finally:(fun () -> close_out_noerr channel)
+          (fun () ->
+            let mode =
+              match (smallest_q, max_valid_matches) with
+              | false, _ -> "first"
+              | true, Some limit -> sprintf "smallest%d" limit
+              | true, None -> "smallest"
+            in
+            fprintf channel "HH_SELECTION_BEGIN pid=%d mode=%s\n%!"
+              (Unix.getpid ()) mode;
+            let wall_start = Unix.gettimeofday () in
+            let cpu_start = Sys.time () in
+            let result, stats = select () in
+            let cpu_s = Sys.time () -. cpu_start in
+            let wall_s = Unix.gettimeofday () -. wall_start in
+            let ( total_path_variables,
+                  phase_candidates,
+                  visited,
+                  analyzed,
+                  valid,
+                  scored,
+                  chosen_position,
+                  chosen_valid_rank,
+                  chosen_score ) =
+              stats
+            in
+            (* Includes prefilter and validation, plus scoring for smallest-Q,
+               even the final scan with no match. Positions are one-based in
+               the current path-variable list; -1 means no choice or no score.
+               Already included in HH time. *)
+            fprintf channel
+              "HH_SELECTION_END pid=%d mode=%s wall_s=%.6f cpu_s=%.6f \
+               path_variables=%d phase_candidates=%d visited=%d analyzed=%d valid=%d \
+               scored=%d chosen_position=%d chosen_valid_rank=%d \
+               chosen_score=%d\n%!"
+              (Unix.getpid ()) mode wall_s cpu_s total_path_variables
+              phase_candidates
+              visited analyzed valid scored chosen_position chosen_valid_rank
+              chosen_score;
+            result)
+
   let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
     let width = Array.length ps.ket in
@@ -390,12 +519,6 @@ module HH = struct
             else aux acc candidates y0_remain
         | _ -> Ok acc
       in
-      (* Keep malformed zero-width inputs on the error path through
-         [analyze_y0]; candidate filtering is only valid for positive widths. *)
-      let candidates =
-        if width <= 0 then ps.path_var
-        else path_variables_with_possible_yi ps.phase width
-      in
       let path_variables =
         match Sys.getenv_opt "SQBRICKS_HH_REVERSE_ABSENT_ORDER" with
         | Some "1" when 0 < width ->
@@ -411,7 +534,52 @@ module HH = struct
             List.rev_append absent_from_ket present_in_ket
         | _ -> ps.path_var
       in
-      aux ps candidates path_variables
+      (* All are disabled by default. Exhaustive smallest-Q wins over its
+         32-match variant; either scoring mode wins over first-valid. *)
+      let exhaustive_smallest_q =
+        Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q" = Some "1"
+      in
+      let smallest_q_32 =
+        Sys.getenv_opt "SQBRICKS_HH_SMALLEST_Q_32" = Some "1"
+      in
+      let smallest_q = exhaustive_smallest_q || smallest_q_32 in
+      let max_valid_matches =
+        if exhaustive_smallest_q then None
+        else if smallest_q_32 then Some 32
+        else None
+      in
+      let first_valid = Sys.getenv_opt "SQBRICKS_HH_FIRST_VALID" = Some "1" in
+      if smallest_q || first_valid then
+        let rec reduce_rechecked (acc : Path_sum.t) path_variables =
+          match
+            select_hh_match ~smallest_q ?max_valid_matches ~debug acc
+              path_variables
+          with
+          | Error reduction_error -> Error reduction_error
+          | Ok None -> Ok acc
+          | Ok (Some (y0, yi)) -> (
+              match hh_aux y0 yi ~debug acc with
+              | Error reduction_error -> Error reduction_error
+              | Ok None ->
+                  reduce_rechecked acc
+                    (List.filter (fun variable -> not (Int.equal variable y0))
+                       path_variables)
+              | Ok (Some acc_reduced) ->
+                  (* A late winner must not discard earlier candidates. Keep
+                     their order and recheck matches (and smallest-Q scores),
+                     e.g. Q = x0 xor y3 becomes Q = x0 after y3 <- 0. *)
+                  reduce_rechecked acc_reduced
+                    (remove_matched_path_variables path_variables y0 yi))
+        in
+        reduce_rechecked ps path_variables
+      else
+        (* Keep malformed zero-width inputs on the error path through
+           [analyze_y0]; candidate filtering is only valid for positive widths. *)
+        let candidates =
+          if width <= 0 then ps.path_var
+          else path_variables_with_possible_yi ps.phase width
+        in
+        aux ps candidates path_variables
     else
       (* The user proposes y0. *)
       match analyze_y0 y0_to_remove ps with

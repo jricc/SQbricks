@@ -331,6 +331,12 @@ Use the full quality process for non-trivial changes.
 
 ## Testing rules
 
+- Keep temporary tests for prototypes, profiling, and experimental heuristics
+  in ignored local files under `_tmp/`, outside `test/` and permanent unit-test
+  suites. Do not register them in `make tests` or existing Dune test aliases.
+- Move experimental tests into permanent suites only after explicit user
+  approval of their integration. Tests-first development of a prototype must
+  also follow this isolation rule.
 - Prefer small, deterministic tests.
 - Keep tests minimal: use the smallest circuit and input data that isolate the
   behavior being checked.
