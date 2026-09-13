@@ -44,21 +44,36 @@ val equal : t -> t -> bool
 (** {1 Gate Application} *)
 
 module Apply_gates : sig
-  val apply_hadamard : Path_sum.t -> int list -> int -> Path_sum.t
+  val apply_hadamard :
+    ?simplify_all:bool -> Path_sum.t -> int list -> int -> Path_sum.t
   (** [apply_hadamard ps controls target] applies a Hadamard gate to target
-      qubit, controlled by qubits in [controls]. *)
+      qubit, controlled by qubits in [controls]. When [simplify_all] is false,
+      [ps] must already be simplified; only the changed ket component is
+      simplified. *)
 
   val apply_u1 :
-    ?debug:bool -> Q.t -> Path_sum.t -> int list -> int -> Path_sum.t
+    ?debug:bool ->
+    ?simplify_all:bool ->
+    Q.t ->
+    Path_sum.t ->
+    int list ->
+    int ->
+    Path_sum.t
   (** [apply_u1 k ps controls target] applies a U1 gate with parameter [k] to
-      target qubit, controlled by qubits in [controls]. *)
+      target qubit, controlled by qubits in [controls]. When [simplify_all] is
+      false, [ps] must already be simplified; its unchanged ket is reused. *)
 
-  val apply_not : Path_sum.t -> int list -> int -> Path_sum.t
-  (** [apply_not ps controls target] applies a quantum NOT gate. *)
+  val apply_not :
+    ?simplify_all:bool -> Path_sum.t -> int list -> int -> Path_sum.t
+  (** [apply_not ps controls target] applies a quantum NOT gate. When
+      [simplify_all] is false, [ps] must already be simplified; only the
+      changed ket component is simplified and the unchanged phase is reused. *)
 
   val apply_classical_not : Path_sum.t -> int -> Path_sum.t
   (** [apply_classical_not ps target] applies a classical NOT gate. *)
 
-  val apply_gp : Q.t -> Path_sum.t -> int list -> Path_sum.t
-  (** [apply_gp k ps controls] applies a global phase gate. *)
+  val apply_gp :
+    ?simplify_all:bool -> Q.t -> Path_sum.t -> int list -> Path_sum.t
+  (** [apply_gp k ps controls] applies a global phase gate. When [simplify_all]
+      is false, [ps] must already be simplified; its unchanged ket is reused. *)
 end

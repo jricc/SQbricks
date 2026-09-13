@@ -299,6 +299,53 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let _, wq = widths p in
   let input_width = Array.length input_state.ket in
   let width = Int.max wq input_width in
+  let local_gate_simplification =
+    Sys.getenv_opt "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" = Some "1"
+  in
+  let state_is_simplified = ref false in
+
+  (* The first effective gate keeps the public full-simplification contract.
+     Later gates may simplify only the component they change because the
+     preceding gate returned a fully simplified path-sum. *)
+  let mark_simplified output =
+    state_is_simplified := true;
+    output
+  in
+
+  let apply_hadamard ps controls target =
+    if not local_gate_simplification then
+      Apply_gates.apply_hadamard ps controls target
+    else
+      Apply_gates.apply_hadamard ~simplify_all:(not !state_is_simplified) ps
+        controls target
+      |> mark_simplified
+  in
+
+  let apply_not ps controls target =
+    if not local_gate_simplification then
+      Apply_gates.apply_not ps controls target
+    else
+      Apply_gates.apply_not ~simplify_all:(not !state_is_simplified) ps controls
+        target
+      |> mark_simplified
+  in
+
+  let apply_u1 angle ps controls target =
+    if not local_gate_simplification then
+      Apply_gates.apply_u1 ~debug angle ps controls target
+    else
+      Apply_gates.apply_u1 ~debug ~simplify_all:(not !state_is_simplified) angle
+        ps controls target
+      |> mark_simplified
+  in
+
+  let apply_gp angle ps controls =
+    if not local_gate_simplification then Apply_gates.apply_gp angle ps controls
+    else
+      Apply_gates.apply_gp ~simplify_all:(not !state_is_simplified) angle ps
+        controls
+      |> mark_simplified
+  in
 
   let canonical_rotation_angle (s : Q.t) (k : int) : Q.t option =
     let angle = if k < 0 then Q.mul_2exp s (-k) else Q.div_2exp s k in
@@ -349,15 +396,15 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       | Apply (_, co, ta) when error_apply co ta ->
           Error (InvalidGateApplication (width, p))
       | Measure _ | It _ | InitQ _ | Not _ -> Error (HybridProgram p)
-      | Apply (H, co, ta) -> Ok (apply_forall Apply_gates.apply_hadamard ps co ta)
-      | Apply (X, co, ta) -> Ok (apply_forall Apply_gates.apply_not ps co ta)
+      | Apply (H, co, ta) -> Ok (apply_forall apply_hadamard ps co ta)
+      | Apply (X, co, ta) -> Ok (apply_forall apply_not ps co ta)
       | Apply (GP (s, k), co, _) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
           | Some angle when Q.equal angle Q.zero -> Ok ps
           | Some angle ->
               (* GP is targetless: targets are tolerated in Program.t but ignored. *)
-              Ok (Apply_gates.apply_gp angle ps co))
+              Ok (apply_gp angle ps co))
       | Apply (U1 (s, k), co, ta) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
@@ -365,7 +412,7 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
           | Some angle ->
               if debug then
                 printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
-              Ok (apply_forall (Apply_gates.apply_u1 ~debug angle) ps co ta))
+              Ok (apply_forall (apply_u1 angle) ps co ta))
       | E -> Ok ps
       | Sequence (p1, p2) -> (
           match aux p1 ps with Error error -> Error error | Ok ps' -> aux p2 ps')

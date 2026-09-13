@@ -782,7 +782,37 @@ let of_qubit ?(debug = false) (q : Qubit.t) (s : Q.t) : t =
   Indeed, we have the following equality:
   e^{2π * 1/2 * (x0 + x1 - 2 * x0 * x1)} = e^{2π * 1/2 * (x0 + x1)}
   *)
-let of_qubit_2_pi_result ?(debug = false) (q : Qubit.t) :
+let fast_of_qubit_2_pi =
+  Sys.getenv_opt "SQBRICKS_FAST_OF_QUBIT_2_PI" = Some "1"
+
+(* In a formatted XOR such as [x0 + (x1 + x2)], the recursive algorithm
+   simplifies [x1 + x2] and then the complete sum. This experimental path
+   collects the three monomials first and simplifies the heap once. *)
+let of_qubit_2_pi_single_pass_result (q : Qubit.t) :
+    (t, of_qubit_error) result =
+  let rec collect (q : Qubit.t) acc =
+    match q with
+    | SumMod2 (SumMod2 _, _) -> Error UnformattedQubitSum
+    | SumMod2 (q1, q2) -> (
+        match collect q1 acc with
+        | Error error -> Error error
+        | Ok acc -> collect q2 acc)
+    | _ -> (
+        match Monome.of_qubit_to_result q with
+        | Ok monome -> Ok (monome ++ acc)
+        | Error error -> Error (of_qubit_error_of_monome error))
+  in
+  match q with
+  | SumMod2 _ -> (
+      match collect q empty with
+      | Error error -> Error error
+      | Ok poly -> Ok (simplify_monomes poly))
+  | _ -> (
+      match Monome.of_qubit_to_result q with
+      | Ok monome -> Ok (monome ++ empty)
+      | Error error -> Error (of_qubit_error_of_monome error))
+
+let of_qubit_2_pi_recursive_result ?(debug = false) (q : Qubit.t) :
     (t, of_qubit_error) result =
   let rec aux (q : Qubit.t) =
     match q with
@@ -809,6 +839,11 @@ let of_qubit_2_pi_result ?(debug = false) (q : Qubit.t) :
         | Error error -> Error (of_qubit_error_of_monome error))
   in
   aux q
+
+let of_qubit_2_pi_result ?(debug = false) (q : Qubit.t) :
+    (t, of_qubit_error) result =
+  if fast_of_qubit_2_pi then of_qubit_2_pi_single_pass_result q
+  else of_qubit_2_pi_recursive_result ~debug q
 
 let of_qubit_2_pi ?(debug = false) (q : Qubit.t) : t =
   match of_qubit_2_pi_result ~debug q with

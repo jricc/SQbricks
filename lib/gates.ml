@@ -45,6 +45,83 @@ let equal g1 g2 =
   | GP (s1, k1), GP (s2, k2) when Q.equal s1 s2 -> k1 = k2
   | _ -> false
 
+(* Temporary profiler for locating gate-application costs. Measurements are
+   aggregated in memory because writing one line per gate would perturb short
+   operations. Nested stages therefore overlap with the [total] measurement. *)
+module Gate_cost_profile = struct
+  type measurement = {
+    mutable calls : int;
+    mutable wall_seconds : float;
+    mutable cpu_seconds : float;
+  }
+
+  type state = {
+    channel : out_channel;
+    measurements : (string * int * int * string, measurement) Hashtbl.t;
+  }
+
+  let state =
+    match Sys.getenv_opt "SQBRICKS_PROFILE_GATE_COST_FILE" with
+    | None -> None
+    | Some filename ->
+        let channel =
+          open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ] 0o644
+            filename
+        in
+        fprintf channel "GATE_PROFILE_BEGIN pid=%d\n%!" (Unix.getpid ());
+        Some { channel; measurements = Hashtbl.create 32 }
+
+  let enabled = match state with None -> false | Some _ -> true
+
+  let add_measurement measurements key wall_seconds cpu_seconds =
+    let measurement =
+      match Hashtbl.find_opt measurements key with
+      | Some measurement -> measurement
+      | None ->
+          let measurement = { calls = 0; wall_seconds = 0.; cpu_seconds = 0. } in
+          Hashtbl.add measurements key measurement;
+          measurement
+    in
+    measurement.calls <- measurement.calls + 1;
+    measurement.wall_seconds <- measurement.wall_seconds +. wall_seconds;
+    measurement.cpu_seconds <- measurement.cpu_seconds +. cpu_seconds
+
+  let measure gate control_count width stage operation =
+    match state with
+    | None -> operation ()
+    | Some { measurements; _ } ->
+        let wall_start = Unix.gettimeofday () in
+        let cpu_start = Sys.time () in
+        Fun.protect
+          ~finally:(fun () ->
+            add_measurement measurements (gate, control_count, width, stage)
+              (Unix.gettimeofday () -. wall_start)
+              (Sys.time () -. cpu_start))
+          operation
+
+  let write_measurements { channel; measurements } =
+    let entries =
+      Hashtbl.fold
+        (fun key measurement entries -> (key, measurement) :: entries)
+        measurements []
+      |> List.fast_sort (fun (key1, _) (key2, _) -> Stdlib.compare key1 key2)
+    in
+    List.iter
+      (fun ((gate, control_count, width, stage), measurement) ->
+        fprintf channel
+          "GATE_PROFILE gate=%s controls=%d width=%d stage=%s calls=%d wall_s=%.6f cpu_s=%.6f\n"
+          gate control_count width stage measurement.calls
+          measurement.wall_seconds measurement.cpu_seconds)
+      entries;
+    fprintf channel "GATE_PROFILE_END pid=%d\n%!" (Unix.getpid ());
+    close_out_noerr channel
+
+  let () =
+    match state with
+    | None -> ()
+    | Some state -> at_exit (fun () -> write_measurements state)
+end
+
 module Apply_gates = struct
   type poly = Poly.PolyHeap.t
 
@@ -66,7 +143,43 @@ module Apply_gates = struct
   let distribution = Poly.distribution
   let int_sort l = List.fast_sort Int.compare l
 
-  let apply_hadamard ps co ta : Path_sum.t =
+  let simplify_gate_output ?(simplify_all = true) ?target ~phase_changed gate
+      control_count ps =
+    if simplify_all && not Gate_cost_profile.enabled then
+      Rules.Simplification.simplify ps
+    else
+      let width = Array.length ps.ket in
+      let ket =
+        if simplify_all then
+          Gate_cost_profile.measure gate control_count width "ket_simplification"
+            (fun () -> Ket.simplify ps.ket)
+        else
+          match target with
+          | None -> ps.ket
+          | Some target ->
+              Gate_cost_profile.measure gate control_count width
+                "target_ket_simplification" (fun () ->
+                  let ket = Ket.copy ps.ket in
+                  ket.(target) <- Qubit.simplify ket.(target);
+                  ket)
+      in
+      let phase =
+        if simplify_all || phase_changed then
+          Gate_cost_profile.measure gate control_count width
+            "phase_simplification" (fun () -> Poly.simplify ps.phase)
+        else ps.phase
+      in
+      { phase; ket; path_var = ps.path_var }
+
+  let profile_gate gate ps controls operation =
+    Gate_cost_profile.measure gate (List.length controls)
+      (Array.length ps.ket) "total" operation
+
+  let profile_gate_stage gate ps controls stage operation =
+    Gate_cost_profile.measure gate (List.length controls)
+      (Array.length ps.ket) stage operation
+
+  let apply_hadamard_impl ~simplify_all ps co ta : Path_sum.t =
     (* \(1/2 (x_{co} x_{ta} y) + 1/8 ((1-x_{co}) (1-2y)) \) *)
     let apply_hadamard_phase (xta : Qubit.t) (y0 : int) (control : Qubit.t) :
         poly =
@@ -79,14 +192,38 @@ module Apply_gates = struct
             @@ distribution ~s1:div4 (Qubit (Var y0)) p_control))
     in
     let apply_hadamard_without_control ps ta y0 : Path_sum.t =
-      let p : poly =
-        distribution (Scal div2)
-          (Poly.simplify_monomes (of_qubit_2_pi (Prod (Var y0, ps.ket.(ta)))))
-        @@ ps.phase
+      let lifted_target =
+        profile_gate_stage "H" ps co "target_lift" (fun () ->
+            let simplified_target =
+              profile_gate_stage "H" ps co "target_qubit_simplification"
+                (fun () -> Qubit.simplify (Prod (Var y0, ps.ket.(ta))))
+            in
+            profile_gate_stage "H" ps co "target_poly_conversion" (fun () ->
+                Poly.of_qubit_2_pi simplified_target))
       in
-      let output_ket = Ket.copy ps.ket in
-      output_ket.(ta) <- Var y0;
-      { phase = p; ket = output_ket; path_var = int_sort (y0 :: ps.path_var) }
+      let simplified_delta =
+        profile_gate_stage "H" ps co "delta_simplification" (fun () ->
+            Poly.simplify_monomes lifted_target)
+      in
+      let scaled_delta =
+        profile_gate_stage "H" ps co "delta_distribution" (fun () ->
+            distribution (Scal div2) simplified_delta)
+      in
+      let p : poly =
+        profile_gate_stage "H" ps co "phase_merge" (fun () ->
+            scaled_delta @@ ps.phase)
+      in
+      let output_ket =
+        profile_gate_stage "H" ps co "ket_update" (fun () ->
+            let output_ket = Ket.copy ps.ket in
+            output_ket.(ta) <- Var y0;
+            output_ket)
+      in
+      let path_var =
+        profile_gate_stage "H" ps co "path_var_sort" (fun () ->
+            int_sort (y0 :: ps.path_var))
+      in
+      { phase = p; ket = output_ket; path_var }
     in
     let apply_hadamard_ket (input_ket : Ket.t) ta y0 control : Ket.t =
       let output_ket = Ket.copy input_ket in
@@ -97,24 +234,45 @@ module Apply_gates = struct
       output_ket
     in
     let y0 =
-      if List.equal Int.equal ps.path_var [] then Array.length ps.ket
-      else ListBis.max_int ps.path_var + 1
+      profile_gate_stage "H" ps co "fresh_path_var" (fun () ->
+          if List.equal Int.equal ps.path_var [] then Array.length ps.ket
+          else ListBis.max_int ps.path_var + 1)
     in
     let ps_output : Path_sum.t =
       match co with
       | [] -> apply_hadamard_without_control ps ta y0
       | _ ->
-          let control = Qubit.simplify (apply_control ps.ket co) in
+          let control =
+            profile_gate_stage "H" ps co "control_update" (fun () ->
+                Qubit.simplify (apply_control ps.ket co))
+          in
           let xta = ps.ket.(ta) in
+          let phase =
+            profile_gate_stage "H" ps co "phase_update" (fun () ->
+                ps.phase @@ apply_hadamard_phase xta y0 control)
+          in
+          let ket =
+            profile_gate_stage "H" ps co "ket_update" (fun () ->
+                apply_hadamard_ket ps.ket ta y0 control)
+          in
+          let path_var =
+            profile_gate_stage "H" ps co "path_var_sort" (fun () ->
+                int_sort (y0 :: ps.path_var))
+          in
           {
-            phase = ps.phase @@ apply_hadamard_phase xta y0 control;
-            ket = apply_hadamard_ket ps.ket ta y0 control;
-            path_var = int_sort (y0 :: ps.path_var);
+            phase;
+            ket;
+            path_var;
           }
     in
-    Rules.Simplification.simplify ps_output
+    simplify_gate_output ~simplify_all ~target:ta ~phase_changed:true "H"
+      (List.length co) ps_output
 
-  let apply_not ps co ta =
+  let apply_hadamard ?(simplify_all = true) ps co ta =
+    profile_gate "H" ps co (fun () ->
+        apply_hadamard_impl ~simplify_all ps co ta)
+
+  let apply_not_impl ~simplify_all ps co ta =
     let (q : Qubit.t) =
       match co with
       | [] -> One +++ ps.ket.(ta)
@@ -125,9 +283,13 @@ module Apply_gates = struct
     let ps_output =
       { phase = ps.phase; ket = output_ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    simplify_gate_output ~simplify_all ~target:ta ~phase_changed:false "X"
+      (List.length co) ps_output
 
-  let apply_u1 ?(debug = false) (angle' : Q.t) ps co ta =
+  let apply_not ?(simplify_all = true) ps co ta =
+    profile_gate "X" ps co (fun () -> apply_not_impl ~simplify_all ps co ta)
+
+  let apply_u1_impl ?(debug = false) ~simplify_all (angle' : Q.t) ps co ta =
     let width = Array.length ps.ket in
     if debug then
       printf "Gates.apply_u1, angle' = %s\n\n%!" (Q.to_string angle');
@@ -142,33 +304,62 @@ module Apply_gates = struct
     in
     if debug then printf "Gates.apply_u1, angle = %s\n\n%!" (Q.to_string angle);
     let p_ta =
-      if Q.equal angle div2 || Q.equal angle divm2 then
-        of_qubit_2_pi ps.ket.(ta)
-      else of_qubit ~debug ps.ket.(ta) angle
+      profile_gate_stage "U1" ps co "target_lift" (fun () ->
+          let simplified_target =
+            profile_gate_stage "U1" ps co "target_qubit_simplification"
+              (fun () -> Qubit.simplify ps.ket.(ta))
+          in
+          profile_gate_stage "U1" ps co "target_poly_conversion" (fun () ->
+              if Q.equal angle div2 || Q.equal angle divm2 then
+                Poly.of_qubit_2_pi simplified_target
+              else Poly.of_qubit ~debug simplified_target angle))
     in
     if debug then
       printf "Gates.apply_u1, p_ta = %s\n\n%!" (PS.pretty p_ta width);
     let p_output =
       match co with
       | [] ->
-          let p = distribution (Scal angle) p_ta in
+          let p =
+            profile_gate_stage "U1" ps co "phase_distribution" (fun () ->
+                distribution (Scal angle) p_ta)
+          in
           if debug then
             printf "Gates.apply_u1, p = %s\n\n%!" (PS.pretty p width);
-          ps.phase @@ Poly.simplify p
+          let simplified_delta =
+            profile_gate_stage "U1" ps co "delta_simplification" (fun () ->
+                Poly.simplify p)
+          in
+          profile_gate_stage "U1" ps co "phase_merge" (fun () ->
+              ps.phase @@ simplified_delta)
       | _ ->
           let p_control =
-            if Q.equal angle div2 || Q.equal angle divm2 then
-              of_qubit_2_pi (apply_control ps.ket co)
-            else of_qubit (apply_control ps.ket co) angle
+            profile_gate_stage "U1" ps co "control_lift" (fun () ->
+                if Q.equal angle div2 || Q.equal angle divm2 then
+                  of_qubit_2_pi (apply_control ps.ket co)
+                else of_qubit (apply_control ps.ket co) angle)
           in
-          ps.phase @@ distribution (Scal angle) (Poly.prod p_control p_ta)
+          let product =
+            profile_gate_stage "U1" ps co "phase_product" (fun () ->
+                Poly.prod p_control p_ta)
+          in
+          let scaled_product =
+            profile_gate_stage "U1" ps co "phase_distribution" (fun () ->
+                distribution (Scal angle) product)
+          in
+          profile_gate_stage "U1" ps co "phase_merge" (fun () ->
+              ps.phase @@ scaled_product)
     in
     let ps_output =
       { phase = p_output; ket = ps.ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    simplify_gate_output ~simplify_all ~phase_changed:true "U1"
+      (List.length co) ps_output
 
-  let apply_gp (angle' : Q.t) ps co =
+  let apply_u1 ?(debug = false) ?(simplify_all = true) angle ps co ta =
+    profile_gate "U1" ps co (fun () ->
+        apply_u1_impl ~debug ~simplify_all angle ps co ta)
+
+  let apply_gp_impl ~simplify_all (angle' : Q.t) ps co =
     let angle =
       let k = find_k angle'.den in
       if Q.lt angle' Q.zero then
@@ -188,7 +379,12 @@ module Apply_gates = struct
     let ps_output =
       { phase = p_output; ket = ps.ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    simplify_gate_output ~simplify_all ~phase_changed:true "GP"
+      (List.length co) ps_output
+
+  let apply_gp ?(simplify_all = true) angle ps co =
+    profile_gate "GP" ps co (fun () ->
+        apply_gp_impl ~simplify_all angle ps co)
 
   let apply_classical_not ps ta =
     let output_ket = Ket.copy ps.ket in

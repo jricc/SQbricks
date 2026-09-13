@@ -119,7 +119,68 @@ let comp q1 q2 =
   in
   aux q1 q2
 
-let rec simplify (q : t) =
+module AnfMonomial = struct
+  type t = int list
+
+  let compare = Stdlib.compare
+end
+
+module Anf = Set.Make (AnfMonomial)
+
+let anf_toggle monomial polynomial =
+  if Anf.mem monomial polynomial then Anf.remove monomial polynomial
+  else Anf.add monomial polynomial
+
+let anf_sum left right = Anf.fold anf_toggle left right
+
+let rec anf_union_variables left right =
+  match (left, right) with
+  | [], variables | variables, [] -> variables
+  | left_head :: left_tail, right_head :: right_tail ->
+      if left_head < right_head then
+        left_head :: anf_union_variables left_tail right
+      else if right_head < left_head then
+        right_head :: anf_union_variables left right_tail
+      else left_head :: anf_union_variables left_tail right_tail
+
+let anf_product left right =
+  Anf.fold
+    (fun left_monomial product ->
+      Anf.fold
+        (fun right_monomial product ->
+          anf_toggle
+            (anf_union_variables left_monomial right_monomial)
+            product)
+        right product)
+    left Anf.empty
+
+let rec qubit_to_anf = function
+  | Zero -> Anf.empty
+  | One -> Anf.singleton []
+  | Var variable -> Anf.singleton [ variable ]
+  | SumMod2 (left, right) -> anf_sum (qubit_to_anf left) (qubit_to_anf right)
+  | Prod (left, right) -> anf_product (qubit_to_anf left) (qubit_to_anf right)
+
+let rec anf_monomial_to_qubit = function
+  | [] -> One
+  | [ variable ] -> Var variable
+  | variable :: variables ->
+      Prod (Var variable, anf_monomial_to_qubit variables)
+
+let rec anf_sum_to_qubit = function
+  | [] -> Zero
+  | [ qubit ] -> qubit
+  | qubit :: qubits -> SumMod2 (qubit, anf_sum_to_qubit qubits)
+
+(* This experimental path constructs the Boolean algebraic normal form
+   directly. For example, [(x0 + x1) * x1] becomes [x0*x1 + x1] without
+   repeatedly traversing intermediate distributed expressions. *)
+let simplify_anf qubit =
+  qubit_to_anf qubit |> Anf.elements |> List.map anf_monomial_to_qubit
+  |> List.fast_sort (fun left right -> -(comp left right))
+  |> anf_sum_to_qubit
+
+let rec simplify_recursive (q : t) =
   let continue = ref false in
   let rec aux (q : t) =
     match q with
@@ -214,7 +275,21 @@ let rec simplify (q : t) =
     | _ -> q
   in
   let ps = aux q in
-  if !continue then simplify ps else ps
+  if !continue then simplify_recursive ps else ps
+
+let fast_qubit_simplify =
+  Sys.getenv_opt "SQBRICKS_FAST_QUBIT_SIMPLIFY" = Some "1"
+
+let rec contains_sum = function
+  | SumMod2 _ -> true
+  | Prod (left, right) -> contains_sum left || contains_sum right
+  | Zero | One | Var _ -> false
+
+let simplify qubit =
+  (* Phase simplification contains many sum-free monomials, for which building
+     ANF sets costs more than the recursive canonicalizer. *)
+  if fast_qubit_simplify && contains_sum qubit then simplify_anf qubit
+  else simplify_recursive qubit
 
 let rec member v q =
   match q with
