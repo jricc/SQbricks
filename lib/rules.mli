@@ -109,9 +109,15 @@ module Case : sig
       variable and recombining the two reduced branches. *)
 
   val case :
-    ?debug:bool -> Path_sum.t -> (Path_sum.t, reduction_error) result
-  (** [case ?debug ps] applies at most one [Case] reduction. It returns the
-      original path sum when the rule does not match.
+    ?debug:bool ->
+    ?phase_is_simplified:bool ->
+    Path_sum.t ->
+    (Path_sum.t, reduction_error) result
+  (** [case ?debug ?phase_is_simplified ps] applies at most one [Case]
+      reduction. It returns the original path sum when the rule does not
+      match. [phase_is_simplified] defaults to [false]. A caller may set it to
+      [true] only when [ps.phase] has already been simplified with
+      [Poly.simplify].
 
       The matched phase has the two equivalent forms:
 

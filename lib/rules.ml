@@ -472,6 +472,35 @@ module Case = struct
       (fun path_variable -> not (Path_sum.Ket.member path_variable ps.ket))
       ps.path_var
 
+  let odd_quarter_occurrences phase =
+    let increment occurrences variable =
+      let count =
+        match IntMap.find_opt variable occurrences with
+        | Some count -> count
+        | None -> 0
+      in
+      IntMap.add variable (count + 1) occurrences
+    in
+    let rec aux remaining_phase occurrences =
+      if Poly.is_empty remaining_phase then occurrences
+      else
+        let monome = Monome.simplify (Poly.find remaining_phase) in
+        let remaining_phase = Poly.del remaining_phase in
+        let occurrences =
+          match Monome.monome_to_scalar_monome monome with
+          | Some (coefficient, body) when is_odd_quarter coefficient -> (
+              match Monome.to_qubit_result body with
+              | Ok boolean_term ->
+                  List.fold_left increment occurrences
+                    (List.sort_uniq Int.compare
+                       (Qubit.extract_var boolean_term))
+              | Error _ -> occurrences)
+          | _ -> occurrences
+        in
+        aux remaining_phase occurrences
+    in
+    aux phase IntMap.empty
+
   let condition_variable_is_valid (ps : Path_sum.t) condition_variable yi yj =
     let width = Array.length ps.Path_sum.ket in
     0 <= condition_variable
@@ -538,9 +567,8 @@ module Case = struct
           (match_condition_variable ps internal_variables yi yi_factor)
           (quarter_variables yi_factor)
 
-  let find_match (ps : Path_sum.t) =
-    let internal_variables = internal_path_variables ps in
-    first_match (match_yi ps internal_variables) internal_variables
+  let find_match (ps : Path_sum.t) internal_variables yi_candidates =
+    first_match (match_yi ps internal_variables) yi_candidates
 
   let phase_without_variable phase variable =
     match HH.extract_R phase variable with
@@ -593,13 +621,36 @@ module Case = struct
     if debug then printf "Rule_case.case, output =\n%s\n%!" (PSS.pretty output);
     output
 
-  let case ?(debug = false) (ps : Path_sum.t) :
+  let case ?(debug = false) ?(phase_is_simplified = false) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
     if debug then printf "Rule_case.case, input =\n%s\n%!" (PSS.pretty ps);
-    let normalized = { ps with phase = Poly.simplify ~debug ps.phase } in
-    match find_match normalized with
-    | None -> Ok ps
-    | Some matched_case -> Ok (apply_match ~debug normalized matched_case)
+    let internal_variables = internal_path_variables ps in
+    (* Case eliminates two distinct internal variables. Avoid normalizing and
+       scanning the phase when that necessary condition cannot hold. *)
+    match internal_variables with
+    | _ :: _ :: _ ->
+        let normalized =
+          if phase_is_simplified then ps
+          else { ps with phase = Poly.simplify ~debug ps.phase }
+        in
+        (* In the yi orientation, exactly one odd-quarter term remains after
+           factoring yi; every other term must form a Boolean half-phase. *)
+        let quarter_occurrences = odd_quarter_occurrences normalized.phase in
+        let candidate_variables =
+          List.filter
+            (fun variable ->
+              match IntMap.find_opt variable quarter_occurrences with
+              | Some 1 -> true
+              | Some _ | None -> false)
+            internal_variables
+        in
+        let matched_case =
+          find_match normalized internal_variables candidate_variables
+        in
+        (match matched_case with
+        | None -> Ok ps
+        | Some matched_case -> Ok (apply_match ~debug normalized matched_case))
+    | _ -> Ok ps
 end
 
 module Rename = struct

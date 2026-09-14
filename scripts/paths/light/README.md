@@ -84,3 +84,11 @@ Set `SQBRICKS_LIGHT_PROGRESS` to control the display:
 - `auto` enables it only in an interactive terminal. This is the default.
 - `always` forces it.
 - `never` disables it.
+
+## Case capability
+
+The `case` suite compares the corrected Clifford+T identity with a two-qubit
+identity circuit in Sequence and Parallel. Run it with
+`bash scripts/benchmarks-light.sh --suite case`. Both expected statuses are
+`EQ`. This small case checks proof capability; its timing is not tracked
+against the performance baseline.

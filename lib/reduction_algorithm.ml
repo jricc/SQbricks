@@ -52,7 +52,9 @@ let reduction_algorithm ?(debug = false) input =
     | Ok state_hh ->
         if debug then
           printf "Reduction_algorithm, state_hh =\n%s\n\n" (PSS.pretty state_hh);
-        match Rules.Case.case ~debug state_hh with
+        (* [state_simpl] is simplified before HH. HH either returns it
+           unchanged or produces a simplified phase after each match. *)
+        match Rules.Case.case ~debug ~phase_is_simplified:true state_hh with
         | Error reduction_error -> Error reduction_error
         | Ok state_case ->
             if debug then

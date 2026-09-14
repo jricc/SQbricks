@@ -543,10 +543,11 @@ module Macros = struct
   let cct co1 co2 ta : t = ccu1 3 co1 co2 ta
   let ch co ta : t = Apply (H, [ co ], [ ta ])
 
-  (* Decomposition of CH in {u1, cx, h}. *)
+  (* Decomposition of CH in {u1, cx, h}. The final H-CX-H corrects the
+     extra controlled Z without introducing a controlled phase gate. *)
   let chdecomp co ta : t =
     ss ta -- h ta -- tt ta -- h ta -- sinv ta -- cx co ta -- ss ta -- h ta
-    -- tinv ta -- h ta -- sinv ta -- cx co ta
+    -- tinv ta -- h ta -- sinv ta -- cx co ta -- h ta -- cx co ta -- h ta
 
   (* Controlled-H decomposition from Feynman's SOP verifier. *)
   let chdecomp_feynman co ta : t =

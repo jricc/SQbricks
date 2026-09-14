@@ -243,7 +243,9 @@ module Macros : sig
   (** [ch control target] Controlled Hadamard. *)
 
   val chdecomp : int -> int -> t
-  (** [chdecomp control target] CH gate decomposition. *)
+  (** [chdecomp control target] decomposes CH into single-qubit phase gates,
+      H and CX, preserving global phase. Control and target must be distinct
+      valid qubit indices in the circuit where the result is executed. *)
 
   val chdecomp_feynman : int -> int -> t
   (** [chdecomp_feynman control target] is the controlled-H decomposition used

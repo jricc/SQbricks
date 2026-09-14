@@ -8,3 +8,4 @@ unit-vs-hybrid;qft_98;lift;-;EQ;yes;benchmarks/VeriQbench/combinational/qft/qft_
 veriqc;DQC_qft_5;lift;EQ;EQ;no;benchmarks/VeriQC/DQC_qft_5_1.qasm;benchmarks/VeriQC/DQC_qft_5.qasm
 veriqc;DQC_teleportation;lift;EQ;EQ;no;benchmarks/VeriQC/DQC_teleportation_1.qasm;benchmarks/VeriQC/DQC_teleportation.qasm
 sanity-hybrid;dqc_teleportation_FALSE_gate;lift;NC;NC;no;benchmarks/VeriQbench/dynamic/dqc_teleportation.qasm;benchmarks/buggy/dqc_teleportation_FALSE_gate.qasm
+case;clifford_t_identity;unit;EQ;EQ;no;benchmarks/case/clifford_t_identity.qasm;benchmarks/case/identity_2.qasm

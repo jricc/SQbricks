@@ -384,6 +384,89 @@ let test_case_requires_internal_path_variables () =
   check string "non-internal Case variable" (PSS.exact input)
     (PSS.exact (apply_valid_case input))
 
+let test_case_handles_renamed_unordered_path_variables () =
+  (* The minimal motif with yi=Var 7 and yj=Var 3: names are noncontiguous,
+     and path_var order differs from numeric order. *)
+  let phase =
+    Prod (Scal div4, Prod (Qubit (v 7), Qubit x0))
+    +++ (Prod (Scal div2, Prod (Qubit (v 7), Qubit (v 3)))
+         +++ (Prod (Scal div4, Qubit (v 3))
+              +++ (Prod (Scal (3 /// 4), Prod (Qubit x0, Qubit (v 3)))
+                   +++ Poly.empty)))
+  in
+  let input : Path_sum.t = { phase; ket = [| x0 |]; path_var = [ 7; 3 ] } in
+  let expected : Path_sum.t =
+    { phase = p0; ket = [| x0 |]; path_var = [] }
+  in
+  check string "renamed Case identity" (PSS.exact expected)
+    (PSS.exact (apply_valid_case input))
+
+let test_case_preserves_internal_condition () =
+  (* s=Var 1 is an internal condition; Case removes only yi=Var 2 and
+     yj=Var 3. Its independent phase 1/8-s/4 must remain. *)
+  let context =
+    Scal div8 +++ (Prod (Scal (3 /// 4), Qubit (v 1)) +++ Poly.empty)
+  in
+  let phase =
+    Prod (Scal div4, Prod (Qubit (v 2), Qubit (v 1)))
+    +++ (Prod (Scal div2, Prod (Qubit (v 2), Qubit (v 3)))
+         +++ (Prod (Scal div4, Qubit (v 3))
+              +++ (Prod (Scal (3 /// 4), Prod (Qubit (v 1), Qubit (v 3)))
+                   +++ context)))
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| x0 |]; path_var = [ 1; 2; 3 ] }
+  in
+  let expected : Path_sum.t =
+    { phase = context; ket = [| x0 |]; path_var = [ 1 ] }
+  in
+  check string "internal condition and context retained" (PSS.exact expected)
+    (PSS.exact (apply_valid_case input))
+
+let test_case_requires_internal_second_variable () =
+  (* Only yj occurs in the ket; it cannot be eliminated as an internal sum. *)
+  let input : Path_sum.t =
+    { phase = minimal_case_phase; ket = [| v 2 |]; path_var = [ 1; 2 ] }
+  in
+  check string "observable second Case variable" (PSS.exact input)
+    (PSS.exact (apply_valid_case input))
+
+let test_case_detects_variable_inside_ket_expression () =
+  (* An occurrence inside XOR is observable just like a bare ket variable. *)
+  let input : Path_sum.t =
+    {
+      phase = minimal_case_phase;
+      ket = [| x0 ++ v 1 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  check string "Case variable inside ket expression" (PSS.exact input)
+    (PSS.exact (apply_valid_case input))
+
+let test_case_rejects_eighth_phase_on_candidate () =
+  (* The added yi/8 prevents the half-phase Boolean equation required by Case. *)
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div8, Qubit (v 1)) +++ minimal_case_phase;
+      ket = [| x0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  check string "non-Boolean half-phase factor" (PSS.exact input)
+    (PSS.exact (apply_valid_case input))
+
+let test_case_requires_coupling_between_candidates () =
+  (* Without yi*yj/2, summing one candidate cannot constrain the other. *)
+  let phase =
+    Prod (Scal div4, Prod (Qubit (v 1), Qubit x0))
+    +++ (Prod (Scal div4, Qubit (v 2))
+         +++ (Prod (Scal (3 /// 4), Prod (Qubit x0, Qubit (v 2)))
+              +++ Poly.empty))
+  in
+  let input : Path_sum.t = { phase; ket = [| x0 |]; path_var = [ 1; 2 ] } in
+  check string "missing Case coupling" (PSS.exact input)
+    (PSS.exact (apply_valid_case input))
+
 let case_rule =
   [
     ( "case reduces its minimal identity",
@@ -401,6 +484,24 @@ let case_rule =
     ( "case requires two internal path variables",
       `Quick,
       test_case_requires_internal_path_variables );
+    ( "case handles renamed unordered path variables",
+      `Quick,
+      test_case_handles_renamed_unordered_path_variables );
+    ( "case preserves an internal condition and its phase",
+      `Quick,
+      test_case_preserves_internal_condition );
+    ( "case requires an internal second variable",
+      `Quick,
+      test_case_requires_internal_second_variable );
+    ( "case detects a variable inside a ket expression",
+      `Quick,
+      test_case_detects_variable_inside_ket_expression );
+    ( "case rejects an eighth-phase candidate",
+      `Quick,
+      test_case_rejects_eighth_phase_on_candidate );
+    ( "case requires coupling between its candidates",
+      `Quick,
+      test_case_requires_coupling_between_candidates );
   ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)
