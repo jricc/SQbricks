@@ -42,6 +42,12 @@ let _condition_to_continue ?(debug = false) (input : Path_sum.t)
   (len_out < len_in && 0 < len_out) || nb_of_sum_out < nb_of_sum_in
 
 let reduction_algorithm ?(debug = false) input =
+  let one_hh_match_per_call =
+    Sys.getenv_opt "SQBRICKS_HH_ONE_MATCH_PER_CALL" = Some "1"
+  in
+  let variable_replacement_before_hh =
+    Sys.getenv_opt "SQBRICKS_VARIABLE_REPLACEMENT_BEFORE_HH" = Some "1"
+  in
   let profile_channel =
     match Sys.getenv_opt "SQBRICKS_PROFILE_HH_COST_FILE" with
     | None -> None
@@ -99,13 +105,61 @@ let reduction_algorithm ?(debug = false) input =
     if debug then
       printf "Reduction_algorithm, state_simpl =\n%s\n\n"
         (PSS.pretty state_simpl);
-    profile_state "before_hh" state_simpl;
-    match profile_step "hh" (fun () -> Rules.HH.hh ~debug state_simpl) with
-    | Error reduction_error -> Error reduction_error
-    | Ok state_hh ->
-        profile_state "after_hh" state_hh;
-        if debug then
-          printf "Reduction_algorithm, state_hh =\n%s\n\n" (PSS.pretty state_hh);
+    let continue_without_variable_replacement state_hh =
+      let state_fact =
+        let rec factorize state_in =
+          let state_out =
+            profile_step "factorization" (fun () ->
+                Rules.Variable_replacement.variable_replacement_factorisation
+                  state_in ~debug)
+          in
+          profile_state "factorization_candidate" state_out;
+          if debug then
+            printf "Reduction_algorithm.aux, state_out =\n%s\n\n"
+              (PSS.pretty state_out);
+          let condition =
+            profile_step "factorization_condition" (fun () ->
+                _condition_to_continue state_in state_out ~debug)
+          in
+          if debug then
+            printf "Reduction_algorithm.aux, condition = %b\n\n" condition;
+          if condition then factorize state_out else state_in
+        in
+        factorize state_hh
+      in
+      profile_state "after_factorization" state_fact;
+      if debug then
+        printf "Reduction_algorithm, state_fact =\n%s\n\n"
+          (PSS.pretty state_fact);
+      let state_repl =
+        profile_step "affine_replacement" (fun () ->
+            Rules.Variable_replacement.replace_not_path_var_by_var state_fact)
+      in
+      profile_state "after_affine_replacement" state_repl;
+      if debug then
+        printf "Reduction_algorithm, state_repl =\n%s\n\n"
+          (PSS.pretty state_repl);
+      if
+        profile_step "continue_condition" (fun () ->
+            _condition_to_continue acc state_repl)
+      then aux state_repl
+      else Ok state_repl
+    in
+    let continue_after_hh state_before_hh state_hh =
+      profile_state "after_hh" state_hh;
+      if debug then
+        printf "Reduction_algorithm, state_hh =\n%s\n\n" (PSS.pretty state_hh);
+      let continue_after_no_variable_replacement () =
+        if
+          (one_hh_match_per_call || variable_replacement_before_hh)
+          && List.length state_hh.path_var
+             < List.length state_before_hh.path_var
+        then aux state_hh
+        else continue_without_variable_replacement state_hh
+      in
+      if variable_replacement_before_hh then
+        continue_after_no_variable_replacement ()
+      else
         match
           profile_step "variable_replacement" (fun () ->
               Rules.Variable_replacement.variable_replacement ~debug state_hh)
@@ -117,46 +171,30 @@ let reduction_algorithm ?(debug = false) input =
               printf "Reduction_algorithm, state_replace =\n%s\n\n"
                 (PSS.pretty state_replace);
             aux state_replace
-        | Ok None ->
-            let state_fact =
-              let rec aux state_in =
-                let state_out =
-                  profile_step "factorization" (fun () ->
-                      Rules.Variable_replacement.variable_replacement_factorisation
-                        state_in ~debug)
-                in
-                profile_state "factorization_candidate" state_out;
-                if debug then
-                  printf "Reduction_algorithm.aux, state_out =\n%s\n\n"
-                    (PSS.pretty state_out);
-                let condition =
-                  profile_step "factorization_condition" (fun () ->
-                      _condition_to_continue state_in state_out ~debug)
-                in
-                if debug then
-                  printf "Reduction_algorithm.aux, condition = %b\n\n" condition;
-                if condition then aux state_out else state_in
-              in
-              aux state_hh
-            in
-            profile_state "after_factorization" state_fact;
-            if debug then
-              printf "Reduction_algorithm, state_fact =\n%s\n\n"
-                (PSS.pretty state_fact);
-            let state_repl =
-              profile_step "affine_replacement" (fun () ->
-                  Rules.Variable_replacement.replace_not_path_var_by_var
-                    state_fact)
-            in
-            profile_state "after_affine_replacement" state_repl;
-            if debug then
-              printf "Reduction_algorithm, state_repl =\n%s\n\n"
-                (PSS.pretty state_repl);
-            if
-              profile_step "continue_condition" (fun () ->
-                  _condition_to_continue acc state_repl)
-            then aux state_repl
-            else Ok state_repl
+        | Ok None -> continue_after_no_variable_replacement ()
+    in
+    let apply_hh state =
+      profile_state "before_hh" state;
+      match profile_step "hh" (fun () -> Rules.HH.hh ~debug state) with
+      | Error reduction_error -> Error reduction_error
+      | Ok state_hh -> continue_after_hh state state_hh
+    in
+    if variable_replacement_before_hh then
+      (* A successful replacement restarts simplification and priority
+         selection; when none applies, the iteration proceeds with HH. *)
+      match
+        profile_step "variable_replacement" (fun () ->
+            Rules.Variable_replacement.variable_replacement ~debug state_simpl)
+      with
+      | Error reduction_error -> Error reduction_error
+      | Ok (Some state_replace) ->
+          profile_state "after_variable_replacement" state_replace;
+          if debug then
+            printf "Reduction_algorithm, state_replace =\n%s\n\n"
+              (PSS.pretty state_replace);
+          aux state_replace
+      | Ok None -> apply_hh state_simpl
+    else apply_hh state_simpl
   in
   Fun.protect
     ~finally:(fun () ->

@@ -753,6 +753,11 @@ module HH = struct
       (Path_sum.t, reduction_error) result =
     let width = Array.length ps.ket in
     if Int.equal y0_to_remove (-1) then
+      (* The fixed schedule gives the other reductions a turn after one
+         successful automatic HH match. Explicit y0 requests are already local. *)
+      let one_match_per_call =
+        Sys.getenv_opt "SQBRICKS_HH_ONE_MATCH_PER_CALL" = Some "1"
+      in
       (* Try y0 in order of arrival *)
       let rec aux (acc : Path_sum.t) candidates = function
         | y0 :: y0_remain ->
@@ -779,9 +784,12 @@ module HH = struct
                        (* [hh_aux] already simplifies its phase and ket. For
                           example, [1/2*y0*y1 + 1/2*y2*y3] becomes the already
                           simplified [1/2*y2*y3], so do not simplify it again. *)
-                       aux acc_reduced
-                         (path_variables_with_possible_yi acc_reduced.phase width)
-                         y0_remain)
+                       if one_match_per_call then Ok acc_reduced
+                       else
+                         aux acc_reduced
+                           (path_variables_with_possible_yi acc_reduced.phase
+                              width)
+                           y0_remain)
                   | Ok None -> aux acc candidates y0_remain)
               | Ok None -> aux acc candidates y0_remain
             else aux acc candidates y0_remain
@@ -860,8 +868,10 @@ module HH = struct
                   (* A late winner must not discard earlier candidates. Keep
                      their order and recheck matches (and smallest-Q scores),
                      e.g. Q = x0 xor y3 becomes Q = x0 after y3 <- 0. *)
-                  reduce_rechecked acc_reduced
-                    (remove_matched_path_variables path_variables y0 yi))
+                  if one_match_per_call then Ok acc_reduced
+                  else
+                    reduce_rechecked acc_reduced
+                      (remove_matched_path_variables path_variables y0 yi))
         in
         reduce_rechecked ps path_variables
       else
@@ -1161,6 +1171,36 @@ module Variable_replacement = struct
    Example: phase = x0y0 + x0y1, ket = |y0 + y1>
    After replacement: phase[y0 <- y0 + y1] = x0y0, ket[y0 <- y0 + y1] = |y0> *)
   let variable_replacement_factorisation ?(debug = false) (state : Path_sum.t) =
+    let profile_file = Sys.getenv_opt "SQBRICKS_PROFILE_HH_COST_FILE" in
+    let pairs_examined = ref 0 in
+    let syntactic_matches = ref 0 in
+    let accepted = ref 0 in
+    let rejected = ref 0 in
+    let phase_substitution_wall_s = ref 0. in
+    let phase_substitution_cpu_s = ref 0. in
+    let ket_substitution_wall_s = ref 0. in
+    let ket_substitution_cpu_s = ref 0. in
+    let simplification_wall_s = ref 0. in
+    let simplification_cpu_s = ref 0. in
+    let count counter =
+      match profile_file with None -> () | Some _ -> incr counter
+    in
+    let profile_step wall_s cpu_s operation =
+      match profile_file with
+      | None -> operation ()
+      | Some _ ->
+          let wall_start = Unix.gettimeofday () in
+          let cpu_start = Sys.time () in
+          let result = operation () in
+          cpu_s := !cpu_s +. (Sys.time () -. cpu_start);
+          wall_s := !wall_s +. (Unix.gettimeofday () -. wall_start);
+          result
+    in
+    let wall_start, cpu_start =
+      match profile_file with
+      | None -> (0., 0.)
+      | Some _ -> (Unix.gettimeofday (), Sys.time ())
+    in
     if debug then
       printf "Rules.variable_replacement_factorisation, state =\n%s\n%!"
         (PSS.pretty state);
@@ -1187,6 +1227,7 @@ module Variable_replacement = struct
         (* if ok then Some acc_state else  *)
         None
       else
+        let () = count pairs_examined in
         let m1 = Poly.find p in
         let p1 = Poly.del p in
         let m2 = Poly.find p1 in
@@ -1202,6 +1243,7 @@ module Variable_replacement = struct
             Prod (Scal q2, Prod (Qubit (Var v3), Qubit (Var v4))) )
           when Q.equal q1 q2 && Q.equal q1 Rational.div2 && v1 = v3
                && width <= v2 && width <= v4 ->
+            let () = count syntactic_matches in
             let new_qubit : Qubit.t = SumMod2 (Var v2, Var v4) in
 
             let new_poly : Poly.t =
@@ -1222,9 +1264,14 @@ module Variable_replacement = struct
                 "Rules.variable_replacement_factorisation, new_poly = %s\n\n%!"
                 (PS.pretty new_poly width));
 
-            let poly_subst = Poly.substitute_poly poly v2 new_poly in
+            let poly_subst =
+              profile_step phase_substitution_wall_s phase_substitution_cpu_s
+                (fun () -> Poly.substitute_poly poly v2 new_poly)
+            in
             let ket_subst =
-              substitute_qubit_in_ket acc_state.ket new_qubit (Var v2)
+              profile_step ket_substitution_wall_s ket_substitution_cpu_s
+                (fun () ->
+                  substitute_qubit_in_ket acc_state.ket new_qubit (Var v2))
             in
 
             if debug then (
@@ -1253,7 +1300,10 @@ module Variable_replacement = struct
                  %!"
                 (PSS.pretty out_state);
 
-            let out_state_simplified = Simplification.simplify out_state in
+            let out_state_simplified =
+              profile_step simplification_wall_s simplification_cpu_s (fun () ->
+                  Simplification.simplify out_state)
+            in
 
             if debug then
               printf
@@ -1278,23 +1328,54 @@ module Variable_replacement = struct
                  %!"
                 number_of_sum_input number_of_sum_out_state_simplified;
 
-            if number_of_sum_input <= number_of_sum_out_state_simplified then
+            if number_of_sum_input <= number_of_sum_out_state_simplified then (
+              count rejected;
               (* simplification not useful, continue with next monome *)
-              factorize_step p1 acc_state
+              factorize_step p1 acc_state)
             (* else if number_of_sum_input = number_of_sum_out_state_simplified
             then Some acc_state *)
-              else
+              else (
+              count accepted;
               (* simplification done, restart from scratch with new state *)
-              Some out_state_simplified
+              Some out_state_simplified)
             (* factorize_step out_state_simplified.phase out_state_simplified true *)
         | _, _ ->
             (* no simplification, continue with next monome *)
             factorize_step p1 acc_state
     in
 
-    match factorize_step state.phase state with
-    | Some new_state -> new_state
-    | None -> state
+    let result =
+      match factorize_step state.phase state with
+      | Some new_state -> new_state
+      | None -> state
+    in
+    (match profile_file with
+    | None -> ()
+    | Some file ->
+        let wall_s = Unix.gettimeofday () -. wall_start in
+        let cpu_s = Sys.time () -. cpu_start in
+        let channel =
+          open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ] 0o644
+            file
+        in
+        Fun.protect
+          ~finally:(fun () -> close_out_noerr channel)
+          (fun () ->
+            fprintf channel
+              "FACTORIZATION_PROFILE pid=%d phase_terms_before=%d \
+               phase_terms_after=%d ket_sums_before=%d ket_sums_after=%d \
+               pairs_examined=%d syntactic_matches=%d accepted=%d rejected=%d \
+               phase_substitution_wall_s=%.6f phase_substitution_cpu_s=%.6f \
+               ket_substitution_wall_s=%.6f ket_substitution_cpu_s=%.6f \
+               simplification_wall_s=%.6f simplification_cpu_s=%.6f \
+               total_wall_s=%.6f total_cpu_s=%.6f\n%!"
+              (Unix.getpid ()) (Poly.size state.phase) (Poly.size result.phase)
+              (Ket.number_of_sum state.ket) (Ket.number_of_sum result.ket)
+              !pairs_examined !syntactic_matches !accepted !rejected
+              !phase_substitution_wall_s !phase_substitution_cpu_s
+              !ket_substitution_wall_s !ket_substitution_cpu_s
+              !simplification_wall_s !simplification_cpu_s wall_s cpu_s));
+    result
 
   let replace_not_path_var_by_var ?(debug = false) (input_state : Path_sum.t) =
     let width = Array.length input_state.ket in
