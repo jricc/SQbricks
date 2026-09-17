@@ -295,6 +295,137 @@ let execution_error_message = function
       sprintf "Program.execution.GP/U1, non-dyadic angle, p = %s"
         (String.pretty p)
 
+(* Temporary profiler for observing path-sum growth during circuit execution.
+   Samples are buffered so that enabling the trace does not add file I/O after
+   every gate. Size traversals still add profiling overhead. *)
+module Path_sum_growth_profile = struct
+  type config = { filename : string; sample_every : int }
+
+  type state = {
+    buffer : Buffer.t;
+    config : config;
+    execution_id : int;
+    mutable gate_index : int;
+    mutable last_sampled_index : int;
+    mutable last_gate : (Gates.t * int * int) option;
+    mutable last_path_sum : Path_sum.t;
+  }
+
+  let config =
+    match Sys.getenv_opt "SQBRICKS_PROFILE_PATH_SUM_GROWTH_FILE" with
+    | None -> None
+    | Some filename ->
+        let sample_every =
+          match Sys.getenv_opt "SQBRICKS_PROFILE_PATH_SUM_GROWTH_EVERY" with
+          | None -> 1
+          | Some value -> (
+              match int_of_string_opt value with
+              | Some sample_every when 0 < sample_every -> sample_every
+              | _ ->
+                  invalid_arg
+                    "SQBRICKS_PROFILE_PATH_SUM_GROWTH_EVERY must be a positive integer")
+        in
+        Some { filename; sample_every }
+
+  let next_execution_id = ref 0
+
+  let gate_name = function
+    | Gates.H -> "H"
+    | Gates.X -> "X"
+    | Gates.U1 _ -> "U1"
+    | Gates.GP _ -> "GP"
+
+  let rec qubit_metrics = function
+    | Qubit.Zero | Qubit.One | Qubit.Var _ -> (0, 1)
+    | Qubit.Prod (left, right) ->
+        let left_sums, left_nodes = qubit_metrics left in
+        let right_sums, right_nodes = qubit_metrics right in
+        (left_sums + right_sums, left_nodes + right_nodes + 1)
+    | Qubit.SumMod2 (left, right) ->
+        let left_sums, left_nodes = qubit_metrics left in
+        let right_sums, right_nodes = qubit_metrics right in
+        (left_sums + right_sums + 1, left_nodes + right_nodes + 1)
+
+  let ket_metrics ket =
+    Array.fold_left
+      (fun (sum_count, node_count) qubit ->
+        let qubit_sums, qubit_nodes = qubit_metrics qubit in
+        (sum_count + qubit_sums, node_count + qubit_nodes))
+      (0, 0) ket
+
+  let add_sample state =
+    let gate, control_count, target_count =
+      match state.last_gate with
+      | None -> ("INPUT", 0, 0)
+      | Some (gate, control_count, target_count) ->
+          (gate_name gate, control_count, target_count)
+    in
+    let ket_sums, ket_nodes = ket_metrics state.last_path_sum.ket in
+    bprintf state.buffer
+      "PATH_SUM_GROWTH pid=%d execution=%d gate_index=%d gate=%s controls=%d targets=%d width=%d path_vars=%d phase_terms=%d ket_sums=%d ket_nodes=%d\n"
+      (Unix.getpid ()) state.execution_id state.gate_index gate control_count
+      target_count
+      (Array.length state.last_path_sum.ket)
+      (List.length state.last_path_sum.path_var)
+      (Poly.size state.last_path_sum.phase) ket_sums ket_nodes;
+    state.last_sampled_index <- state.gate_index
+
+  let start initial_path_sum =
+    match config with
+    | None -> None
+    | Some config ->
+        incr next_execution_id;
+        let state =
+          {
+            buffer = Buffer.create 4096;
+            config;
+            execution_id = !next_execution_id;
+            gate_index = 0;
+            last_sampled_index = -1;
+            last_gate = None;
+            last_path_sum = initial_path_sum;
+          }
+        in
+        bprintf state.buffer
+          "PATH_SUM_GROWTH_BEGIN pid=%d execution=%d sample_every=%d\n"
+          (Unix.getpid ()) state.execution_id config.sample_every;
+        add_sample state;
+        Some state
+
+  let record state gate controls targets path_sum =
+    match state with
+    | None -> ()
+    | Some state ->
+        state.gate_index <- state.gate_index + 1;
+        state.last_gate <- Some (gate, List.length controls, List.length targets);
+        state.last_path_sum <- path_sum;
+        if state.gate_index mod state.config.sample_every = 0 then
+          add_sample state
+
+  let finish state succeeded =
+    match state with
+    | None -> ()
+    | Some state ->
+        if state.last_sampled_index <> state.gate_index then add_sample state;
+        bprintf state.buffer
+          "PATH_SUM_GROWTH_END pid=%d execution=%d gates=%d status=%s\n"
+          (Unix.getpid ()) state.execution_id state.gate_index
+          (if succeeded then "ok" else "error");
+        let channel =
+          open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ] 0o644
+            state.config.filename
+        in
+        let file_descriptor = Unix.descr_of_out_channel channel in
+        Unix.lockf file_descriptor Unix.F_LOCK 0;
+        Fun.protect
+          ~finally:(fun () ->
+            Unix.lockf file_descriptor Unix.F_ULOCK 0;
+            close_out_noerr channel)
+          (fun () ->
+            output_string channel (Buffer.contents state.buffer);
+            flush channel)
+end
+
 let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let _, wq = widths p in
   let input_width = Array.length input_state.ket in
@@ -361,6 +492,7 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   in
 
   let execution_aux (p : t) (ps : Path_sum.t) =
+    let growth_profile = Path_sum_growth_profile.start ps in
     let rec apply_forall apply (ps : Path_sum.t) co (ta : int list) =
       match ta with
       | i :: [] -> apply ps co i
@@ -396,28 +528,46 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       | Apply (_, co, ta) when error_apply co ta ->
           Error (InvalidGateApplication (width, p))
       | Measure _ | It _ | InitQ _ | Not _ -> Error (HybridProgram p)
-      | Apply (H, co, ta) -> Ok (apply_forall apply_hadamard ps co ta)
-      | Apply (X, co, ta) -> Ok (apply_forall apply_not ps co ta)
+      | Apply (H, co, ta) ->
+          let output = apply_forall apply_hadamard ps co ta in
+          Path_sum_growth_profile.record growth_profile H co ta output;
+          Ok output
+      | Apply (X, co, ta) ->
+          let output = apply_forall apply_not ps co ta in
+          Path_sum_growth_profile.record growth_profile X co ta output;
+          Ok output
       | Apply (GP (s, k), co, _) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
-          | Some angle when Q.equal angle Q.zero -> Ok ps
+          | Some angle when Q.equal angle Q.zero ->
+              Path_sum_growth_profile.record growth_profile (GP (s, k)) co [] ps;
+              Ok ps
           | Some angle ->
               (* GP is targetless: targets are tolerated in Program.t but ignored. *)
-              Ok (apply_gp angle ps co))
+              let output = apply_gp angle ps co in
+              Path_sum_growth_profile.record growth_profile (GP (s, k)) co []
+                output;
+              Ok output)
       | Apply (U1 (s, k), co, ta) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
-          | Some angle when Q.equal angle Q.zero -> Ok ps
+          | Some angle when Q.equal angle Q.zero ->
+              Path_sum_growth_profile.record growth_profile (U1 (s, k)) co ta ps;
+              Ok ps
           | Some angle ->
               if debug then
                 printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
-              Ok (apply_forall (apply_u1 angle) ps co ta))
+              let output = apply_forall (apply_u1 angle) ps co ta in
+              Path_sum_growth_profile.record growth_profile (U1 (s, k)) co ta
+                output;
+              Ok output)
       | E -> Ok ps
       | Sequence (p1, p2) -> (
           match aux p1 ps with Error error -> Error error | Ok ps' -> aux p2 ps')
     in
-    aux p ps
+    let result = aux p ps in
+    Path_sum_growth_profile.finish growth_profile (Result.is_ok result);
+    result
   in
 
   if debug then printf "Program.execution, width = %d\n\n" width;
