@@ -1115,12 +1115,38 @@ module Variable_replacement = struct
   let variable_replacement ?(debug = false) (input : Path_sum.t) :
       (Path_sum.t option, reduction_error) result =
     let width = Array.length input.ket in
+    let profile_file = Sys.getenv_opt "SQBRICKS_PROFILE_HH_COST_FILE" in
 
     if debug then
       printf "Reduction_rules.variable_replacement, input.phase = %s\n\n"
         (PS.pretty input.phase width);
 
-    let ps = Simplification.simplify input in
+    let ps =
+      match profile_file with
+      | None -> Simplification.simplify input
+      | Some file ->
+          let wall_start = Unix.gettimeofday () in
+          let cpu_start = Sys.time () in
+          let simplified = Simplification.simplify input in
+          let cpu_s = Sys.time () -. cpu_start in
+          let wall_s = Unix.gettimeofday () -. wall_start in
+          let channel =
+            open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ]
+              0o644 file
+          in
+          Fun.protect
+            ~finally:(fun () -> close_out_noerr channel)
+            (fun () ->
+              fprintf channel
+                "VARIABLE_REPLACEMENT_SIMPLIFICATION pid=%d width=%d \
+                 path_vars=%d phase_terms_before=%d phase_terms_after=%d \
+                 ket_sums_before=%d ket_sums_after=%d wall_s=%.6f cpu_s=%.6f\n%!"
+                (Unix.getpid ()) width (List.length input.path_var)
+                (Poly.size input.phase) (Poly.size simplified.phase)
+                (Ket.number_of_sum input.ket)
+                (Ket.number_of_sum simplified.ket) wall_s cpu_s);
+          simplified
+    in
 
     if debug then
       printf "Reduction_rules.variable_replacement, ps.phase = %s\n\n"
