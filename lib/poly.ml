@@ -775,20 +775,10 @@ let of_qubit ?(debug = false) (q : Qubit.t) (s : Q.t) : t =
   | Ok poly -> poly
   | Error UnformattedQubitSum -> failwith "q must be formatted"
 
-(*
-  Simplified version of `of_qubit`.
-  Applicable when the qubit to be lifted is in a monomial
-  whose scalar coefficient is 1/2.
-  Indeed, we have the following equality:
-  e^{2π * 1/2 * (x0 + x1 - 2 * x0 * x1)} = e^{2π * 1/2 * (x0 + x1)}
-  *)
-let fast_of_qubit_2_pi =
-  Sys.getenv_opt "SQBRICKS_FAST_OF_QUBIT_2_PI" = Some "1"
-
 (* In a formatted XOR such as [x0 + (x1 + x2)], the recursive algorithm
-   simplifies [x1 + x2] and then the complete sum. This experimental path
-   collects the three monomials first and simplifies the heap once. *)
-let of_qubit_2_pi_single_pass_result (q : Qubit.t) :
+   would simplify [x1 + x2] and then the complete sum. Collect all monomials
+   first so that the heap is simplified only once. *)
+let of_qubit_2_pi_result ?(debug = false) (q : Qubit.t) :
     (t, of_qubit_error) result =
   let rec collect (q : Qubit.t) acc =
     match q with
@@ -806,44 +796,11 @@ let of_qubit_2_pi_single_pass_result (q : Qubit.t) :
   | SumMod2 _ -> (
       match collect q empty with
       | Error error -> Error error
-      | Ok poly -> Ok (simplify_monomes poly))
+      | Ok poly -> Ok (simplify_monomes ~debug poly))
   | _ -> (
       match Monome.of_qubit_to_result q with
       | Ok monome -> Ok (monome ++ empty)
       | Error error -> Error (of_qubit_error_of_monome error))
-
-let of_qubit_2_pi_recursive_result ?(debug = false) (q : Qubit.t) :
-    (t, of_qubit_error) result =
-  let rec aux (q : Qubit.t) =
-    match q with
-    | SumMod2 (SumMod2 _, _) -> Error UnformattedQubitSum
-    | SumMod2 (q1, q2) -> (
-        match aux q1 with
-        | Error error -> Error error
-        | Ok p1 -> (
-            if debug then
-              printf "Phase.of_qubit_2_pi, p1 = %s\n" (String.exact p1);
-            match aux q2 with
-            | Error error -> Error error
-            | Ok p2 ->
-                if debug then
-                  printf "Phase.of_qubit_2_pi, p2 = %s\n" (String.exact p2);
-                let p_output = simplify_monomes (p1 @@ p2) in
-                if debug then
-                  printf "Phase.of_qubit_2_pi, p_output = %s\n\n"
-                    (String.exact p_output);
-                Ok p_output))
-    | _ -> (
-        match Monome.of_qubit_to_result q with
-        | Ok monome -> Ok (monome ++ empty)
-        | Error error -> Error (of_qubit_error_of_monome error))
-  in
-  aux q
-
-let of_qubit_2_pi_result ?(debug = false) (q : Qubit.t) :
-    (t, of_qubit_error) result =
-  if fast_of_qubit_2_pi then of_qubit_2_pi_single_pass_result q
-  else of_qubit_2_pi_recursive_result ~debug q
 
 let of_qubit_2_pi ?(debug = false) (q : Qubit.t) : t =
   match of_qubit_2_pi_result ~debug q with
