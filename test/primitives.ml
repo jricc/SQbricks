@@ -297,19 +297,25 @@ let hh =
 
 let minimal_case_phase : Poly.t =
   (* P = 1/4 y0*x0 + 1/2 y0*y1 + 1/4 y1*(1-x0).
-     This is the smallest direct instance of Amy's Case rule. *)
+     This is the smallest direct instance of Amy's Case rule, with x=x0,
+     yi=y0, yj=y1 and Q=Q'=0. Its reduction has phase zero. *)
   Prod (Scal div4, Prod (Qubit (v 1), Qubit x0))
   +++ (Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2)))
        +++ (Prod (Scal div4, Qubit (v 2))
             +++ (Prod (Scal (3 /// 4), Prod (Qubit x0, Qubit (v 2)))
                  +++ Poly.empty)))
 
+(* Applies Case for tests whose input is known to be well formed, and turns an
+   unexpected typed error into an immediate Alcotest failure. *)
 let apply_valid_case input =
   match Rules.Case.case input with
   | Ok output -> output
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+(* Input: the minimal phase, ket [|x0|], path variables [y0;y1].
+   Expected: phase zero, the same ket, and no path variables.
+   Detail: x0=0 forces y1=0; x0=1 forces y0=0. *)
 let test_case_reduces_minimal_identity () =
   let input : Path_sum.t =
     { phase = minimal_case_phase; ket = [| x0 |]; path_var = [ 1; 2 ] }
@@ -320,6 +326,9 @@ let test_case_reduces_minimal_identity () =
   check string "minimal Case identity" (PSS.exact expected)
     (PSS.exact (apply_valid_case input))
 
+(* Input: the same minimal path sum, passed to the complete reducer.
+   Expected: the same zero-phase output as the direct Case call.
+   This checks that Case is reachable at the intended pipeline position. *)
 let test_reduction_algorithm_applies_case () =
   let input : Path_sum.t =
     { phase = minimal_case_phase; ket = [| x0 |]; path_var = [ 1; 2 ] }
@@ -330,9 +339,10 @@ let test_reduction_algorithm_applies_case () =
   check string "Case through reduction algorithm" (PSS.exact expected)
     (PSS.exact (reduce_valid_path_sum input))
 
+(* Input: the minimal phase plus the independent context x0/8.
+   Expected: Case removes its motif and preserves exactly x0/8, the ket, and
+   no path variables. *)
 let test_case_preserves_phase_context () =
-  (* The rule removes only its interference pattern. An independent phase term
-     must remain unchanged. *)
   let context = Prod (Scal div8, Qubit x0) +++ Poly.empty in
   let input : Path_sum.t =
     {
@@ -347,6 +357,10 @@ let test_case_preserves_phase_context () =
   check string "phase context after Case" (PSS.exact expected)
     (PSS.exact (apply_valid_case input))
 
+(* Input: width two, yi=y0, yj=y1 and Q=Q'=x1.
+   Expected: both internal variables disappear and the residual phase is
+   3*x1/4, with ket [|x0,x1|].
+   Detail: each branch substitutes its remaining internal variable with x1. *)
 let test_case_applies_nonzero_substitutions () =
   (* With x = x0, Q = Q' = x1, yi = y0 and yj = y1:
      P = 1/4 yi*x + 1/2 yi*(yj + x1) + 1/4 yj*(1-x) + 1/2 yj*x1.
@@ -375,18 +389,19 @@ let test_case_applies_nonzero_substitutions () =
   check string "nonzero Case substitutions" (PSS.exact expected)
     (PSS.exact (apply_valid_case input))
 
+(* Input: the minimal phase with observable ket [|y0|].
+   Expected: the complete path sum is unchanged because yi is not internal. *)
 let test_case_requires_internal_path_variables () =
-  (* y0 occurs in the ket, so it is observable rather than internal. Case must
-     leave the path sum unchanged. *)
   let input : Path_sum.t =
     { phase = minimal_case_phase; ket = [| v 1 |]; path_var = [ 1; 2 ] }
   in
   check string "non-internal Case variable" (PSS.exact input)
     (PSS.exact (apply_valid_case input))
 
+(* Input: the minimal motif renamed to yi=7 and yj=3, with declaration order
+   [7;3]. Expected: phase zero, unchanged ket [|x0|], no path variables.
+   This checks independence from contiguous names and numeric ordering. *)
 let test_case_handles_renamed_unordered_path_variables () =
-  (* The minimal motif with yi=Var 7 and yj=Var 3: names are noncontiguous,
-     and path_var order differs from numeric order. *)
   let phase =
     Prod (Scal div4, Prod (Qubit (v 7), Qubit x0))
     +++ (Prod (Scal div2, Prod (Qubit (v 7), Qubit (v 3)))
@@ -401,9 +416,10 @@ let test_case_handles_renamed_unordered_path_variables () =
   check string "renamed Case identity" (PSS.exact expected)
     (PSS.exact (apply_valid_case input))
 
+(* Input: the condition s=y0 is itself internal, while yi=y1 and yj=y2 form
+   the minimal motif with the independent context 1/8-s/4.
+   Expected: yi and yj disappear; s and its context remain unchanged. *)
 let test_case_preserves_internal_condition () =
-  (* s=Var 1 is an internal condition; Case removes only yi=Var 2 and
-     yj=Var 3. Its independent phase 1/8-s/4 must remain. *)
   let context =
     Scal div8 +++ (Prod (Scal (3 /// 4), Qubit (v 1)) +++ Poly.empty)
   in
@@ -423,16 +439,19 @@ let test_case_preserves_internal_condition () =
   check string "internal condition and context retained" (PSS.exact expected)
     (PSS.exact (apply_valid_case input))
 
+(* Input: the minimal phase with observable ket [|y1|].
+   Expected: the complete path sum is unchanged because yj is not internal. *)
 let test_case_requires_internal_second_variable () =
-  (* Only yj occurs in the ket; it cannot be eliminated as an internal sum. *)
   let input : Path_sum.t =
     { phase = minimal_case_phase; ket = [| v 2 |]; path_var = [ 1; 2 ] }
   in
   check string "observable second Case variable" (PSS.exact input)
     (PSS.exact (apply_valid_case input))
 
+(* Input: the minimal phase with ket [|x0 xor y0|].
+   Expected: unchanged input. The occurrence of yi under XOR still makes it
+   observable and therefore ineligible for Case. *)
 let test_case_detects_variable_inside_ket_expression () =
-  (* An occurrence inside XOR is observable just like a bare ket variable. *)
   let input : Path_sum.t =
     {
       phase = minimal_case_phase;
@@ -443,8 +462,10 @@ let test_case_detects_variable_inside_ket_expression () =
   check string "Case variable inside ket expression" (PSS.exact input)
     (PSS.exact (apply_valid_case input))
 
+(* Input: the minimal phase plus yi/8.
+   Expected: unchanged input because the yi factor can no longer be converted
+   entirely into the required odd-quarter term and Boolean half-phase. *)
 let test_case_rejects_eighth_phase_on_candidate () =
-  (* The added yi/8 prevents the half-phase Boolean equation required by Case. *)
   let input : Path_sum.t =
     {
       phase = Prod (Scal div8, Qubit (v 1)) +++ minimal_case_phase;
@@ -455,8 +476,10 @@ let test_case_rejects_eighth_phase_on_candidate () =
   check string "non-Boolean half-phase factor" (PSS.exact input)
     (PSS.exact (apply_valid_case input))
 
+(* Input: both quarter-branch terms of the minimal motif, but no yi*yj/2.
+   Expected: unchanged input because neither sum constrains the other internal
+   variable, so the complete Case pattern is absent. *)
 let test_case_requires_coupling_between_candidates () =
-  (* Without yi*yj/2, summing one candidate cannot constrain the other. *)
   let phase =
     Prod (Scal div4, Prod (Qubit (v 1), Qubit x0))
     +++ (Prod (Scal div4, Qubit (v 2))

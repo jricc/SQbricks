@@ -64,14 +64,20 @@ let test_sqv_result ?(debug = true) ?(algo = Equiv.Sequence)
     (Equiv.result_to_string expected)
     (Equiv.result_to_string greeting)
 
+(* Input circuit used by Case integration: two copies of the Clifford+T block
+   [X(control); Tinv(target); CH; X(control); T(target); CX].
+   Expected semantics: exact two-qubit identity. The explicit decomposition is
+   retained so the generated path sum can expose the Case motif. *)
 let case_clifford_t_identity =
-  (* Use SQbricks' existing controlled-H decomposition first. The motif test
-     below checks whether its generated path sum exposes Case. *)
   let block =
     x 0 -- tinv 1 -- chdecomp 0 1 -- x 0 -- tt 1 -- cx 0 1
   in
   block -- block
 
+(* Input: symbolic execution of [case_clifford_t_identity].
+   Expected after HH: the exact four-variable path sum written below.
+   Expected after Case: the exact two-variable path sum written below, with
+   unchanged ket and exactly two variables removed. *)
 let test_case_clifford_t_identity_exposes_case_motif () =
   let open Monome in
   (* Six H gates per block create y0,...,y11. After HH, y2,y5,y8,y11
@@ -152,6 +158,10 @@ let test_case_clifford_t_identity_exposes_case_motif () =
   check int "path variables eliminated by Case" 2
     (List.length after_hh.path_var - List.length after_case.path_var)
 
+(* Input for each CH constructor: equal wires, one negative wire, and an
+   explicit two-qubit state too small for wires (0,2).
+   Expected: InvalidGateApplication for invalid indices and
+   InputStateTooSmall (3,2) for the insufficient explicit width. *)
 let test_controlled_h_rejects_invalid_indices controlled_h () =
   (* Check each macro at execution, where its wire indices are validated. *)
   List.iter
@@ -176,61 +186,91 @@ let test_controlled_h_rejects_invalid_indices controlled_h () =
 
 let case_integration =
   [
+    (* Input: corrected CH and Feynman CH on wires (0,1), Sequence.
+       Expected: [true], meaning subcircuit equivalence. *)
     ( "existing and Feynman controlled-H decompositions are equivalent",
       `Quick,
       test_prog_equiv ~debug:false ~algo:Equiv.Sequence (chdecomp 0 1)
         (chdecomp_feynman 0 1) );
+    (* Input: corrected CH compared with itself, Sequence.
+       Expected: [true]; this isolates basic execution of that macro. *)
     ( "existing controlled-H decomposition is self-equivalent",
       `Quick,
       test_prog_equiv ~debug:false ~algo:Equiv.Sequence (chdecomp 0 1)
         (chdecomp 0 1) );
+    (* Input: Feynman CH compared with itself, Sequence.
+       Expected: [true]; this isolates basic execution of that macro. *)
     ( "Feynman controlled-H decomposition is self-equivalent",
       `Quick,
       test_prog_equiv ~debug:false ~algo:Equiv.Sequence
         (chdecomp_feynman 0 1)
         (chdecomp_feynman 0 1) );
+    (* Input: the two-block Clifford+T identity circuit.
+       Expected: exact path sums after HH and Case, as checked by the helper. *)
     ( "circuit execution exposes a Case motif",
       `Quick,
       test_case_clifford_t_identity_exposes_case_motif );
+    (* Input: the two-block circuit and the empty identity, Sequence.
+       Expected: [true]; Case and the following HH reduction prove identity. *)
     ( "Clifford+T identity via Sequence",
       `Quick,
       test_prog_equiv ~debug:false ~algo:Equiv.Sequence
         case_clifford_t_identity id );
+    (* Input: the same circuit and identity, Parallel.
+       Expected: [true] through the Parallel equivalence pipeline. *)
     ( "Clifford+T identity via Parallel",
       `Quick,
       test_prog_equiv ~debug:false ~algo:Equiv.Parallel
         case_clifford_t_identity id );
+    (* Input: Feynman CH then corrected CH on wires (0,1), Sequence.
+       Expected result: [SubCircuitEquivalent], checked as a typed result. *)
     ( "Sequence: Feynman CH = corrected CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (chdecomp_feynman 0 1) (chdecomp 0 1) );
+    (* Input: native CH compared with itself, Parallel.
+       Expected result: [SubCircuitEquivalent]. *)
     ( "Parallel: native CH = native CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (ch 0 1) (ch 0 1) );
+    (* Input: corrected CH compared with itself, Parallel.
+       Expected result: [SubCircuitEquivalent]. *)
     ( "Parallel: corrected CH = corrected CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (chdecomp 0 1) (chdecomp 0 1) );
+    (* Input: Feynman CH compared with itself, Parallel.
+       Expected result: [SubCircuitEquivalent]. *)
     ( "Parallel: Feynman CH = Feynman CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (chdecomp_feynman 0 1)
         (chdecomp_feynman 0 1) );
+    (* Input: corrected and Feynman CH with control 1 and target 0, Sequence.
+       Expected result: [SubCircuitEquivalent]; wire order is reversed. *)
     ( "Sequence: reversed corrected CH = Feynman CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (chdecomp 1 0) (chdecomp_feynman 1 0) );
+    (* Input: corrected and Feynman CH on wires (0,2), Sequence.
+       Expected result: [SubCircuitEquivalent], including spectator wire 1. *)
     ( "Sequence: spaced corrected CH = Feynman CH with spectator",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (chdecomp 0 2) (chdecomp_feynman 0 2) );
+    (* Input: invalid and undersized applications of native CH.
+       Expected: the typed index and width errors checked by the helper. *)
     ( "native CH rejects invalid indices and insufficient input width",
       `Quick,
       test_controlled_h_rejects_invalid_indices ch );
+    (* Input: invalid and undersized applications of corrected CH.
+       Expected: the same typed errors as native CH. *)
     ( "corrected CH rejects invalid indices and insufficient input width",
       `Quick,
       test_controlled_h_rejects_invalid_indices chdecomp );
+    (* Input: invalid and undersized applications of Feynman CH.
+       Expected: the same typed errors as native CH. *)
     ( "Feynman CH rejects invalid indices and insufficient input width",
       `Quick,
       test_controlled_h_rejects_invalid_indices chdecomp_feynman );
@@ -239,74 +279,113 @@ let case_integration =
 (* These expected equivalences remain inconclusive outside the implemented
    Case matching conditions. Keep them executable without blocking Case tests.
    CASE-NNN preserves the original Case integration index used in diagnostics.
+   Every entry expects [SubCircuitEquivalent]; with the current reducer, each
+   enabled entry returns [SubCircuitInconclusive].
    Enable with SQBRICKS_TEST_CH_CAPABILITIES=1 and select
    "CH capabilities deferred" in the unitary executable. *)
 let ch_capabilities_deferred =
   [
+    (* Input: native CH against itself on (0,1), Sequence.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-006: Sequence: native CH = native CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (ch 0 1) (ch 0 1) );
+    (* Input: native CH against corrected CH on (0,1), Sequence.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-007: Sequence: native CH = corrected CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (ch 0 1) (chdecomp 0 1) );
+    (* Input: corrected CH against native CH on (0,1), Sequence.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-008: Sequence: corrected CH = native CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (chdecomp 0 1) (ch 0 1) );
+    (* Input: native CH against Feynman CH on (0,1), Sequence.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-009: Sequence: native CH = Feynman CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (ch 0 1) (chdecomp_feynman 0 1) );
+    (* Input: Feynman CH against native CH on (0,1), Sequence.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-010: Sequence: Feynman CH = native CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (chdecomp_feynman 0 1) (ch 0 1) );
+    (* Input: native CH against corrected CH on (0,1), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-013: Parallel: native CH = corrected CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (ch 0 1) (chdecomp 0 1) );
+    (* Input: corrected CH against native CH on (0,1), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-014: Parallel: corrected CH = native CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (chdecomp 0 1) (ch 0 1) );
+    (* Input: native CH against Feynman CH on (0,1), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-015: Parallel: native CH = Feynman CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (ch 0 1) (chdecomp_feynman 0 1) );
+    (* Input: Feynman CH against native CH on (0,1), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-016: Parallel: Feynman CH = native CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (chdecomp_feynman 0 1) (ch 0 1) );
+    (* Input: corrected CH against Feynman CH on (0,1), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-017: Parallel: corrected CH = Feynman CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (chdecomp 0 1) (chdecomp_feynman 0 1) );
+    (* Input: Feynman CH against corrected CH on (0,1), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-018: Parallel: Feynman CH = corrected CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (chdecomp_feynman 0 1) (chdecomp 0 1) );
+    (* Input: native CH against corrected CH on reversed wires (1,0), Sequence.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-021: Sequence: reversed native CH = corrected CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (ch 1 0) (chdecomp 1 0) );
+    (* Input: native CH against corrected CH on reversed wires (1,0), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-023: Parallel: reversed native CH = corrected CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (ch 1 0) (chdecomp 1 0) );
+    (* Input: corrected CH against Feynman CH on reversed wires (1,0), Parallel.
+       Expected: SubCircuitEquivalent; current reducer result: inconclusive. *)
     ( "CASE-024: Parallel: reversed corrected CH = Feynman CH",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (chdecomp 1 0) (chdecomp_feynman 1 0) );
+    (* Input: native CH against corrected CH on spaced wires (0,2), Sequence.
+       Expected: SubCircuitEquivalent with spectator wire 1; currently
+       inconclusive. *)
     ( "CASE-025: Sequence: spaced native CH = corrected CH with spectator",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Sequence
         Equiv.SubCircuitEquivalent (ch 0 2) (chdecomp 0 2) );
+    (* Input: native CH against corrected CH on spaced wires (0,2), Parallel.
+       Expected: SubCircuitEquivalent with spectator wire 1; currently
+       inconclusive. *)
     ( "CASE-027: Parallel: spaced native CH = corrected CH with spectator",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
         Equiv.SubCircuitEquivalent (ch 0 2) (chdecomp 0 2) );
+    (* Input: corrected CH against Feynman CH on spaced wires (0,2), Parallel.
+       Expected: SubCircuitEquivalent with spectator wire 1; currently
+       inconclusive. *)
     ( "CASE-028: Parallel: spaced corrected CH = Feynman CH with spectator",
       `Quick,
       test_sqv_result ~debug:false ~algo:Equiv.Parallel
