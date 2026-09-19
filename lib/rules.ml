@@ -354,21 +354,32 @@ module HH = struct
 end
 
 module Case = struct
+  (* Stores a complete Case match before rewriting the path sum. Keeping the
+     match separate ensures that rejected candidates never modify the input. *)
   type matched_case = {
+    (* Boolean variable [x] selecting the zero and one branches. *)
     condition_variable : int;
+    (* Internal variables eliminated by Case. *)
     yi : int;
     yj : int;
+    (* Replacement for [yi] in the [x = 1] branch. *)
     yi_substitution : Qubit.t;
+    (* Replacement for [yj] in the [x = 0] branch. *)
     yj_substitution : Qubit.t;
   }
 
+  (* Recognizes coefficients that can provide the odd quarter term required
+     by either orientation of Case. *)
   let is_odd_quarter coefficient =
     Q.equal coefficient div4
     || Q.equal coefficient divm4
     || Q.equal coefficient (3 /// 4)
     || Q.equal coefficient ((-3) /// 4)
 
+  (* Extracts the sum of quotients of all phase terms containing [variable].
+     A nested Boolean sum that cannot be factored rejects this orientation. *)
   let factor_out variable phase =
+    (* Consumes the phase while accumulating the quotients. *)
     let rec aux remaining_phase factor =
       if Poly.is_empty remaining_phase then Some (Poly.simplify factor)
       else
@@ -382,7 +393,10 @@ module Case = struct
     in
     aux phase Poly.empty
 
+  (* Lists the variables that occur as a linear odd-quarter term in a
+     previously extracted factor. They are possible condition variables. *)
   let quarter_variables factor =
+    (* Scans the factor once and accumulates candidate variable indices. *)
     let rec aux remaining_factor variables =
       if Poly.is_empty remaining_factor then
         List.sort_uniq Int.compare variables
@@ -401,7 +415,10 @@ module Case = struct
     in
     aux factor []
 
+  (* Converts a phase made only of half-coefficient Boolean terms into the
+     equivalent XOR expression. Any other coefficient or shape is rejected. *)
   let half_phase_to_boolean phase =
+    (* Rebuilds the XOR while consuming the normalized phase. *)
     let rec aux remaining_phase boolean_expression =
       if Poly.is_empty remaining_phase then
         Some (Qubit.simplify boolean_expression)
@@ -425,6 +442,8 @@ module Case = struct
     in
     aux (Poly.simplify phase) Qubit.Zero
 
+  (* Removes the required [x/4] term from the [yi] factor, then reads the
+     remaining half-phase as the equation [yj xor Q]. *)
   let first_boolean_factor condition_variable factor =
     let without_quarter_term =
       Poly.(
@@ -435,6 +454,8 @@ module Case = struct
     in
     half_phase_to_boolean without_quarter_term
 
+  (* Removes the required [(1-x)/4] terms from the [yj] factor, then reads the
+     remaining half-phase as the equation [yi xor Q']. *)
   let second_boolean_factor condition_variable factor =
     let without_case_terms =
       Poly.(
@@ -445,12 +466,16 @@ module Case = struct
     in
     half_phase_to_boolean without_case_terms
 
+  (* Solves [variable xor replacement = 0] when [variable] occurs exactly once
+     as a direct XOR summand and nowhere inside another summand. *)
   let solve_for variable equation =
+    (* Flattens an XOR tree into its direct summands. *)
     let rec summands acc = function
       | Qubit.SumMod2 (left, right) -> summands (summands acc left) right
       | Qubit.Zero -> acc
       | term -> term :: acc
     in
+    (* Removes the unique direct occurrence and rebuilds the replacement. *)
     let rec remove_variable found remaining_terms = function
       | [] when found ->
           Some
@@ -467,12 +492,17 @@ module Case = struct
     in
     remove_variable false [] (summands [] (Qubit.simplify equation))
 
+  (* Keeps the declared path variables absent from the ket. Only these
+     variables may be eliminated without changing the observable output. *)
   let internal_path_variables (ps : Path_sum.t) =
     List.filter
       (fun path_variable -> not (Path_sum.Ket.member path_variable ps.ket))
       ps.path_var
 
+  (* Counts, for each variable, the odd-quarter phase monomials in which it
+     occurs. Case's [yi] orientation requires exactly one such occurrence. *)
   let odd_quarter_occurrences phase =
+    (* Increments one variable count in the occurrence map. *)
     let increment occurrences variable =
       let count =
         match IntMap.find_opt variable occurrences with
@@ -481,6 +511,8 @@ module Case = struct
       in
       IntMap.add variable (count + 1) occurrences
     in
+    (* Scans every phase monomial and counts each variable at most once in that
+       monomial. *)
     let rec aux remaining_phase occurrences =
       if Poly.is_empty remaining_phase then occurrences
       else
@@ -501,6 +533,8 @@ module Case = struct
     in
     aux phase IntMap.empty
 
+  (* Accepts [x] when it is distinct from [yi] and [yj] and denotes either an
+     input variable or a declared path variable. *)
   let condition_variable_is_valid (ps : Path_sum.t) condition_variable yi yj =
     let width = Array.length ps.Path_sum.ket in
     0 <= condition_variable
@@ -510,6 +544,7 @@ module Case = struct
     (condition_variable < width
     || ListBis.member condition_variable ps.Path_sum.path_var Int.equal)
 
+  (* Returns the first successful match while preserving candidate order. *)
   let rec first_match matcher = function
     | [] -> None
     | candidate :: candidates -> (
@@ -517,6 +552,9 @@ module Case = struct
         | Some _ as matched -> matched
         | None -> first_match matcher candidates)
 
+  (* Completes a candidate orientation after [yi] and [x] are fixed: it solves
+     the zero branch for [yj], checks the complementary [yj] factor, then
+     solves the one branch for [yi]. *)
   let match_yj ps yi condition_variable first_equation yj =
     if not (condition_variable_is_valid ps condition_variable yi yj) then None
     else
@@ -546,6 +584,8 @@ module Case = struct
                           yj_substitution;
                         }))
 
+  (* Specializes the first Case equation to [x = 0], then tries each internal
+     variable as [yj]. *)
   let match_condition_variable ps internal_variables yi yi_factor
       condition_variable =
     match first_boolean_factor condition_variable yi_factor with
@@ -559,6 +599,8 @@ module Case = struct
           (match_yj ps yi condition_variable first_equation)
           internal_variables
 
+  (* Factors one [yi] candidate and tries every quarter-term variable in that
+     factor as the Case condition [x]. *)
   let match_yi (ps : Path_sum.t) internal_variables yi =
     match factor_out yi ps.phase with
     | None -> None
@@ -567,14 +609,20 @@ module Case = struct
           (match_condition_variable ps internal_variables yi yi_factor)
           (quarter_variables yi_factor)
 
+  (* Tries the prefiltered [yi] candidates in declaration order and returns at
+     most one complete Case match. *)
   let find_match (ps : Path_sum.t) internal_variables yi_candidates =
     first_match (match_yi ps internal_variables) yi_candidates
 
+  (* Extracts the part of the phase independent of [variable]. A complete
+     match guarantees this extraction; [Poly.zero] is the defensive fallback. *)
   let phase_without_variable phase variable =
     match HH.extract_R phase variable with
     | Some remaining_phase -> remaining_phase
     | None -> Poly.zero
 
+  (* Computes one selected branch: remove its eliminated variable, specialize
+     [x], then apply the substitution forced by the half-phase equation. *)
   let branch_phase ~debug phase condition_variable condition_value
       removed_variable substituted_variable substitution =
     let remaining_phase = phase_without_variable phase removed_variable in
@@ -588,6 +636,8 @@ module Case = struct
       (Poly.substitute_rules_hh ~debug selected_phase substituted_variable
          substitution)
 
+  (* Recombines branch phases as [(1-x)P0 + xP1], represented by
+     [P0 + xP1 - xP0]. *)
   let combine_branches condition_variable zero_branch one_branch =
     let condition = Monome.Qubit (Qubit.Var condition_variable) in
     let condition_times_one = Poly.distribution condition one_branch in
@@ -598,6 +648,8 @@ module Case = struct
       (Poly.merge zero_branch
          (Poly.merge condition_times_one minus_condition_times_zero))
 
+  (* Applies a validated match, leaves the ket unchanged, and removes [yi] and
+     [yj] from the declared path variables. *)
   let apply_match ?(debug = false) (ps : Path_sum.t) matched_case =
     let zero_branch =
       branch_phase ~debug ps.phase matched_case.condition_variable Qubit.Zero
@@ -621,6 +673,8 @@ module Case = struct
     if debug then printf "Rule_case.case, output =\n%s\n%!" (PSS.pretty output);
     output
 
+  (* Normalizes the phase when needed, searches for one complete Case motif,
+     and returns the original path sum unchanged when no motif matches. *)
   let case ?(debug = false) ?(phase_is_simplified = false) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
     if debug then printf "Rule_case.case, input =\n%s\n%!" (PSS.pretty ps);
