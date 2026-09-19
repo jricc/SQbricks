@@ -69,6 +69,18 @@
 * Keep function-level details in `odoc` comments, public interfaces, and tests.
   Keep unpublished proofs, commit studies, and experimental measurements in a
   private technical report outside this repository.
+* In the private documentation repository, maintain
+  `SQbricks-current-state.md` as the canonical detailed description of the
+  current project state. Rewrite it when accepted behavior, proofs,
+  validations, or active limitations change; do not preserve obsolete states
+  there.
+* Keep documentation roles separate: `SQbricks-technical-report.md` preserves
+  chronological investigations and raw evidence, `ROADMAP.md` describes future
+  work, `TODO.md` tracks concrete open actions, and `doc/SQbricks.md` plus
+  `doc/SQbricks.en.md` describe stable public behavior. The current-state
+  document should summarize current behavior, its justification, validation
+  evidence, and active limitations, with links to historical details instead
+  of copied logs or intermediate measurements.
 
 Before coding, state the minimal solution in 2–5 lines.
 If a more generic design is possible, mention it only as an alternative, but do not implement it unless explicitly requested.
