@@ -775,40 +775,32 @@ let of_qubit ?(debug = false) (q : Qubit.t) (s : Q.t) : t =
   | Ok poly -> poly
   | Error UnformattedQubitSum -> failwith "q must be formatted"
 
-(*
-  Simplified version of `of_qubit`.
-  Applicable when the qubit to be lifted is in a monomial
-  whose scalar coefficient is 1/2.
-  Indeed, we have the following equality:
-  e^{2π * 1/2 * (x0 + x1 - 2 * x0 * x1)} = e^{2π * 1/2 * (x0 + x1)}
-  *)
+(* In a formatted XOR such as [x0 + (x1 + x2)], the recursive algorithm
+   would simplify [x1 + x2] and then the complete sum. Collect all monomials
+   first so that the heap is simplified only once. *)
 let of_qubit_2_pi_result ?(debug = false) (q : Qubit.t) :
     (t, of_qubit_error) result =
-  let rec aux (q : Qubit.t) =
+  let rec collect (q : Qubit.t) acc =
     match q with
     | SumMod2 (SumMod2 _, _) -> Error UnformattedQubitSum
     | SumMod2 (q1, q2) -> (
-        match aux q1 with
+        match collect q1 acc with
         | Error error -> Error error
-        | Ok p1 -> (
-            if debug then
-              printf "Phase.of_qubit_2_pi, p1 = %s\n" (String.exact p1);
-            match aux q2 with
-            | Error error -> Error error
-            | Ok p2 ->
-                if debug then
-                  printf "Phase.of_qubit_2_pi, p2 = %s\n" (String.exact p2);
-                let p_output = simplify_monomes (p1 @@ p2) in
-                if debug then
-                  printf "Phase.of_qubit_2_pi, p_output = %s\n\n"
-                    (String.exact p_output);
-                Ok p_output))
+        | Ok acc -> collect q2 acc)
     | _ -> (
         match Monome.of_qubit_to_result q with
-        | Ok monome -> Ok (monome ++ empty)
+        | Ok monome -> Ok (monome ++ acc)
         | Error error -> Error (of_qubit_error_of_monome error))
   in
-  aux q
+  match q with
+  | SumMod2 _ -> (
+      match collect q empty with
+      | Error error -> Error error
+      | Ok poly -> Ok (simplify_monomes ~debug poly))
+  | _ -> (
+      match Monome.of_qubit_to_result q with
+      | Ok monome -> Ok (monome ++ empty)
+      | Error error -> Error (of_qubit_error_of_monome error))
 
 let of_qubit_2_pi ?(debug = false) (q : Qubit.t) : t =
   match of_qubit_2_pi_result ~debug q with
