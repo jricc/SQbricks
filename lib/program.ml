@@ -426,6 +426,113 @@ module Path_sum_growth_profile = struct
             flush channel)
 end
 
+(* Passive online HH profile. After each H, it inspects only path variables
+   that occurred in the target beforehand. It never changes the path-sum. *)
+module Online_hh_profile = struct
+  type state = {
+    buffer : Buffer.t;
+    filename : string;
+    execution_id : int;
+    mutable gate_index : int;
+  }
+
+  let filename = Sys.getenv_opt "SQBRICKS_PROFILE_HH_ONLINE_FILE"
+  let next_execution_id = ref 0
+
+  let start () =
+    match filename with
+    | None -> None
+    | Some filename ->
+        incr next_execution_id;
+        let state =
+          {
+            buffer = Buffer.create 4096;
+            filename;
+            execution_id = !next_execution_id;
+            gate_index = 0;
+          }
+        in
+        bprintf state.buffer "HH_ONLINE_BEGIN pid=%d execution=%d\n"
+          (Unix.getpid ()) state.execution_id;
+        Some state
+
+  let target_path_variables (path_sum : Path_sum.t) targets =
+    let target_variables =
+      List.fold_left
+        (fun variables target ->
+          List.rev_append (Qubit.extract_var path_sum.ket.(target)) variables)
+        [] targets
+    in
+    (* Filtering the existing list preserves the reduction's candidate order. *)
+    List.filter
+      (fun path_variable -> List.mem path_variable target_variables)
+      path_sum.path_var
+
+  let record state gate controls targets ~(before : Path_sum.t)
+      ~(after : Path_sum.t) =
+    match state with
+    | None -> ()
+    | Some state ->
+        state.gate_index <- state.gate_index + 1;
+        match gate with
+        | Gates.H ->
+            let wall_start = Unix.gettimeofday () in
+            let candidate_y0s = target_path_variables before targets in
+            let estimate =
+              Rules.HH.first_candidate_growth_estimate candidate_y0s after
+            in
+            let wall_s = Unix.gettimeofday () -. wall_start in
+            let common status =
+              bprintf state.buffer
+                "HH_ONLINE_SAMPLE pid=%d execution=%d gate_index=%d controls=%d \
+                 targets=%d candidate_y0s=%d path_vars=%d phase_terms=%d \
+                 status=%s wall_s=%.6f"
+                (Unix.getpid ()) state.execution_id state.gate_index
+                (List.length controls) (List.length targets)
+                (List.length candidate_y0s) (List.length after.path_var)
+                (Poly.size after.phase) status wall_s
+            in
+            (match estimate with
+            | Error (Rules.MalformedPathSum _) ->
+                common "malformed";
+                Buffer.add_char state.buffer '\n'
+            | Ok None ->
+                common "none";
+                Buffer.add_char state.buffer '\n'
+            | Ok (Some estimate) ->
+                common "match";
+                bprintf state.buffer
+                  " y0=%d yi=%d q_terms=%d r_with_yi_terms=%d \
+                   r_without_yi_terms=%d estimated_phase_terms=%d saturated=%d\n"
+                  estimate.y0 estimate.yi estimate.q_terms
+                  estimate.r_with_yi_terms estimate.r_without_yi_terms
+                  estimate.estimated_phase_terms
+                  (if estimate.estimate_saturated then 1 else 0))
+        | _ -> ()
+
+  let finish state succeeded =
+    match state with
+    | None -> ()
+    | Some state ->
+        bprintf state.buffer
+          "HH_ONLINE_END pid=%d execution=%d gates=%d status=%s\n"
+          (Unix.getpid ()) state.execution_id state.gate_index
+          (if succeeded then "ok" else "error");
+        let channel =
+          open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ] 0o644
+            state.filename
+        in
+        let file_descriptor = Unix.descr_of_out_channel channel in
+        Unix.lockf file_descriptor Unix.F_LOCK 0;
+        Fun.protect
+          ~finally:(fun () ->
+            Unix.lockf file_descriptor Unix.F_ULOCK 0;
+            close_out_noerr channel)
+          (fun () ->
+            output_string channel (Buffer.contents state.buffer);
+            flush channel)
+end
+
 let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let _, wq = widths p in
   let input_width = Array.length input_state.ket in
@@ -493,6 +600,13 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
 
   let execution_aux (p : t) (ps : Path_sum.t) =
     let growth_profile = Path_sum_growth_profile.start ps in
+    let online_hh_profile = Online_hh_profile.start () in
+    let record_profiles gate controls targets before after =
+      Path_sum_growth_profile.record growth_profile gate controls targets
+        after;
+      Online_hh_profile.record online_hh_profile gate controls targets ~before
+        ~after
+    in
     let rec apply_forall apply (ps : Path_sum.t) co (ta : int list) =
       match ta with
       | i :: [] -> apply ps co i
@@ -530,36 +644,34 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       | Measure _ | It _ | InitQ _ | Not _ -> Error (HybridProgram p)
       | Apply (H, co, ta) ->
           let output = apply_forall apply_hadamard ps co ta in
-          Path_sum_growth_profile.record growth_profile H co ta output;
+          record_profiles H co ta ps output;
           Ok output
       | Apply (X, co, ta) ->
           let output = apply_forall apply_not ps co ta in
-          Path_sum_growth_profile.record growth_profile X co ta output;
+          record_profiles X co ta ps output;
           Ok output
       | Apply (GP (s, k), co, _) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
           | Some angle when Q.equal angle Q.zero ->
-              Path_sum_growth_profile.record growth_profile (GP (s, k)) co [] ps;
+              record_profiles (GP (s, k)) co [] ps ps;
               Ok ps
           | Some angle ->
               (* GP is targetless: targets are tolerated in Program.t but ignored. *)
               let output = apply_gp angle ps co in
-              Path_sum_growth_profile.record growth_profile (GP (s, k)) co []
-                output;
+              record_profiles (GP (s, k)) co [] ps output;
               Ok output)
       | Apply (U1 (s, k), co, ta) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
           | Some angle when Q.equal angle Q.zero ->
-              Path_sum_growth_profile.record growth_profile (U1 (s, k)) co ta ps;
+              record_profiles (U1 (s, k)) co ta ps ps;
               Ok ps
           | Some angle ->
               if debug then
                 printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
               let output = apply_forall (apply_u1 angle) ps co ta in
-              Path_sum_growth_profile.record growth_profile (U1 (s, k)) co ta
-                output;
+              record_profiles (U1 (s, k)) co ta ps output;
               Ok output)
       | E -> Ok ps
       | Sequence (p1, p2) -> (
@@ -567,6 +679,7 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
     in
     let result = aux p ps in
     Path_sum_growth_profile.finish growth_profile (Result.is_ok result);
+    Online_hh_profile.finish online_hh_profile (Result.is_ok result);
     result
   in
 

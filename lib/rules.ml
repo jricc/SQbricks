@@ -323,6 +323,35 @@ module HH = struct
           (PS.pretty r_without_yi width);
       Ok (q, r_with_yi, r_without_yi)
 
+  type substitution_growth_estimate = {
+    y0 : int;
+    yi : int;
+    q_terms : int;
+    r_with_yi_terms : int;
+    r_without_yi_terms : int;
+    estimated_phase_terms : int;
+    estimate_saturated : bool;
+  }
+
+  let saturating_add left right =
+    if max_int - left < right then (max_int, true)
+    else (left + right, false)
+
+  let saturating_multiply left right =
+    if Int.equal left 0 || Int.equal right 0 then (0, false)
+    else if max_int / left < right then (max_int, true)
+    else (left * right, false)
+
+  (* Lifting an n-term Boolean polynomial produces at most 2^n - 1 terms
+     before simplification. Saturate instead of overflowing on large Q. *)
+  let lifted_term_bound term_count =
+    let rec power_of_two remaining value =
+      if Int.equal remaining 0 then (value - 1, false)
+      else if max_int / 2 < value then (max_int, true)
+      else power_of_two (remaining - 1) (value * 2)
+    in
+    power_of_two term_count 1
+
   let path_variables_with_possible_yi (phase : Poly.t) width =
     let rec aux phase candidates =
       if Poly.equal phase Poly.empty then List.sort_uniq Int.compare candidates
@@ -345,6 +374,63 @@ module HH = struct
         aux remaining_phase candidates
     in
     aux phase []
+
+  let growth_estimate_for_y0 y0 (ps : Path_sum.t) =
+    let width = Array.length ps.ket in
+    match analyze_y0 y0 ps with
+    | Error reduction_error -> Error reduction_error
+    | Ok None -> Ok None
+    | Ok (Some yi) -> (
+        match partition_hh_phase ps.phase width y0 yi with
+        | Error reduction_error -> Error reduction_error
+        | Ok (q, r_with_yi, r_without_yi) ->
+            let q_terms = Poly.size q in
+            let r_with_yi_terms = Poly.size r_with_yi in
+            let r_without_yi_terms = Poly.size r_without_yi in
+            let lifted_terms, lifted_saturated = lifted_term_bound q_terms in
+            let substituted_terms, multiply_saturated =
+              saturating_multiply r_with_yi_terms lifted_terms
+            in
+            let estimated_phase_terms, add_saturated =
+              saturating_add r_without_yi_terms substituted_terms
+            in
+            Ok
+              (Some
+                 {
+                   y0;
+                   yi;
+                   q_terms;
+                   r_with_yi_terms;
+                   r_without_yi_terms;
+                   estimated_phase_terms;
+                   estimate_saturated =
+                     lifted_saturated || multiply_saturated || add_saturated;
+                 }))
+
+  let first_candidate_growth_estimate candidate_y0s (ps : Path_sum.t) =
+    let rec first_match = function
+      | [] -> Ok None
+      | y0 :: remaining when not (List.mem y0 ps.path_var) ->
+          first_match remaining
+      | y0 :: remaining -> (
+          match growth_estimate_for_y0 y0 ps with
+          | Error reduction_error -> Error reduction_error
+          | Ok None -> first_match remaining
+          | Ok (Some _) as estimate -> estimate)
+    in
+    first_match candidate_y0s
+
+  let first_match_growth_estimate (ps : Path_sum.t) =
+    let width = Array.length ps.ket in
+    let candidates =
+      if width <= 0 then ps.path_var
+      else path_variables_with_possible_yi ps.phase width
+    in
+    let candidate_y0s =
+      List.filter (fun path_variable -> List.mem path_variable candidates)
+        ps.path_var
+    in
+    first_candidate_growth_estimate candidate_y0s ps
 
   (* HH removes the summation variable y0 and the constrained variable yi in
      one canonical-to-canonical transformation. *)

@@ -60,6 +60,33 @@ module HH : sig
   (** This module implements the [HH] reduction rule for path variable
       elimination. *)
 
+  type substitution_growth_estimate = {
+    y0 : int;
+    yi : int;
+    q_terms : int;
+    r_with_yi_terms : int;
+    r_without_yi_terms : int;
+    estimated_phase_terms : int;
+    estimate_saturated : bool;
+  }
+  (** Structural upper bound for the unsimplified phase produced by a valid HH
+      match. [estimate_saturated] is [true] when [estimated_phase_terms] was
+      capped at [max_int]. *)
+
+  val first_candidate_growth_estimate :
+    int list ->
+    Path_sum.t ->
+    (substitution_growth_estimate option, reduction_error) result
+  (** [first_candidate_growth_estimate candidate_y0s ps] analyzes the first
+      valid HH match among path variables in [candidate_y0s], in the supplied
+      order, without applying it. *)
+
+  val first_match_growth_estimate :
+    Path_sum.t -> (substitution_growth_estimate option, reduction_error) result
+  (** [first_match_growth_estimate ps] analyzes the first valid HH match in
+      [path_var] order without applying it. The estimate bounds the expansion
+      caused by lifting [Q] before phase simplification. *)
+
   val hh :
     ?debug:bool ->
     ?y0_to_remove:int ->
