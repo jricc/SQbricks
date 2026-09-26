@@ -1431,6 +1431,13 @@ let unitary =
       `Quick,
       test_prog_equiv (rz 2 0 -- gp 3 -- rz 2 0 -- gp 3) (rz 1 0 -- gp 2) );
     ("h -- h = id", `Quick, test_prog_equiv (h 0 -- h 0) id);
+    (* SubCircuit keeps scalar phases, so this validates the exact 1/8 phase
+       instead of accepting an arbitrary global phase. *)
+    ( "(SH)^3 = gp 3",
+      `Quick,
+      test_prog_equiv
+        (h 0 -- ss 0 -- h 0 -- ss 0 -- h 0 -- ss 0)
+        (gp 3) );
     ("x -- x = id", `Quick, test_prog_equiv (x 0 -- x 0) id);
     ( "x 0 -- ss 0 -- h 0 = x 0 -- ss 0 -- h 0",
       `Quick,
@@ -1775,6 +1782,12 @@ let parallel =
         (rz 2 0 -- gp 3 -- rz 2 0 -- gp 3)
         (rz 1 0 -- gp 2) );
     ("h -- h = id", `Quick, test_prog_equiv ~algo:Parallel (h 0 -- h 0) id);
+    (* The parallel equivalence pipeline must prove the same exact identity. *)
+    ( "(SH)^3 = gp 3",
+      `Quick,
+      test_prog_equiv ~algo:Parallel
+        (h 0 -- ss 0 -- h 0 -- ss 0 -- h 0 -- ss 0)
+        (gp 3) );
     ("x -- x = id", `Quick, test_prog_equiv ~algo:Parallel (x 0 -- x 0) id);
     ( "x 0 -- ss 0 -- h 0 = x 0 -- ss 0 -- h 0",
       `Quick,

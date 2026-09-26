@@ -257,6 +257,97 @@ let test_hh_simplifies_remainder_after_substitution () =
   check string "remainder simplified after substitution" (PSS.exact expected)
     (PSS.exact output)
 
+let test_hh_preserves_yi_candidate_order () =
+  (* phase = 1/2 y0y1 + 1/2 y0y2, ket = |y1>.
+     The canonical phase order selects y1, so Q = y2 and the ket becomes |y2>. *)
+  let phase =
+    Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2)))
+    +++ (Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 3))) +++ Poly.empty)
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| v 2 |]; path_var = [ 1; 2; 3 ] }
+  in
+  let expected : Path_sum.t =
+    { phase = p0; ket = [| v 3 |]; path_var = [ 3 ] }
+  in
+  let output =
+    match Rules.HH.hh ~y0_to_remove:1 input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "first yi follows canonical phase order" (PSS.exact expected)
+    (PSS.exact output)
+
+let test_hh_rejects_repeated_y0_yi_pair () =
+  (* Two occurrences of 1/2 y0y1 do not satisfy the unique-pair condition. *)
+  let pair : Monome.t =
+    Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2)))
+  in
+  let input : Path_sum.t =
+    {
+      phase = pair +++ (pair +++ Poly.empty);
+      ket = [| v 2 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let output =
+    match Rules.HH.hh ~y0_to_remove:1 input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "repeated y0-yi pair is rejected" (PSS.exact input)
+    (PSS.exact output)
+
+let test_hh_rejects_y0_with_unauthorized_coefficient () =
+  (* The 1/4 y0x0 term prevents y0 from matching the HH rule. *)
+  let phase =
+    Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2)))
+    +++ (Prod (Scal div4, Prod (Qubit (v 1), Qubit x0)) +++ Poly.empty)
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| v 2 |]; path_var = [ 1; 2 ] }
+  in
+  let output =
+    match Rules.HH.hh ~y0_to_remove:1 input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "unauthorized y0 coefficient is rejected" (PSS.exact input)
+    (PSS.exact output)
+
+let test_hh_preserves_remainder_without_yi () =
+  (* phase = 1/2 y0(yi + x0) + 1/4 yi + 1/8 x1.
+     Only 1/4 yi is substituted; the independent 1/8 x1 term is preserved. *)
+  let phase =
+    Prod (Scal div2, Prod (Qubit (v 2), Qubit (v 3)))
+    +++ (Prod (Scal div2, Prod (Qubit (v 2), Qubit x0))
+         +++ (Prod (Scal div4, Qubit (v 3))
+              +++ (Prod (Scal div8, Qubit x1) +++ Poly.empty)))
+  in
+  let input : Path_sum.t =
+    { phase; ket = [| v 3; x1 |]; path_var = [ 2; 3 ] }
+  in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit x0)
+        +++ (Prod (Scal div8, Qubit x1) +++ Poly.empty);
+      ket = [| x0; x1 |];
+      path_var = [];
+    }
+  in
+  let output =
+    match Rules.HH.hh ~y0_to_remove:2 input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "remainder without yi is preserved" (PSS.exact expected)
+    (PSS.exact output)
+
 let test_reduction_algorithm_reports_malformed_path_sum () =
   let malformed =
     match
@@ -290,6 +381,18 @@ let hh =
     ( "hh simplifies its remainder after substitution",
       `Quick,
       test_hh_simplifies_remainder_after_substitution );
+    ( "hh preserves yi candidate order",
+      `Quick,
+      test_hh_preserves_yi_candidate_order );
+    ( "hh rejects a repeated y0-yi pair",
+      `Quick,
+      test_hh_rejects_repeated_y0_yi_pair );
+    ( "hh rejects y0 with an unauthorized coefficient",
+      `Quick,
+      test_hh_rejects_y0_with_unauthorized_coefficient );
+    ( "hh preserves the remainder without yi",
+      `Quick,
+      test_hh_preserves_remainder_without_yi );
     ( "reduction_algorithm reports malformed path sum",
       `Quick,
       test_reduction_algorithm_reports_malformed_path_sum );
@@ -521,6 +624,1122 @@ let case_rule =
     ( "case requires coupling between its candidates",
       `Quick,
       test_case_requires_coupling_between_candidates );
+  ]
+
+let test_omega_reduces_zero_boolean_polynomial () =
+  (* Q = 0 is the smallest omega instance:
+       phase = 1/4 y0, ket = |x0>, path variables = [y0]
+     Summing over y0 produces phase 1/8 and removes y0. *)
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 1)) +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    { phase = Scal div8 +++ Poly.empty; ket = [| x0 |]; path_var = [] }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = 0" (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match phase 1/4 y0"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+(* Checks the direct rule's normalization contract: two terms 1/8 y0 must be
+   matched as the Q = 0 phase 1/4 y0. *)
+let test_omega_normalizes_phase_before_matching () =
+  let y0 = v 1 in
+  let eighth_y0 : Monome.t =
+    Monome.Prod (Monome.Scal div8, Monome.Qubit y0)
+  in
+  let input : Path_sum.t =
+    {
+      phase = eighth_y0 +++ (eighth_y0 +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    { phase = Scal div8 +++ Poly.empty; ket = [| x0 |]; path_var = [] }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega normalizes its phase" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should normalize 1/8 y0 + 1/8 y0"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_independent_phase_context () =
+  (* Q = 0 with R = 1/2 x0 is the smallest contextual Omega instance:
+       phase = 1/4 y0 + R
+     Omega must replace only the y0 term by 1/8 and preserve R and the ket. *)
+  let phase_context = Prod (Scal div2, Qubit x0) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 1)) +++ phase_context;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Scal div8 +++ phase_context;
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R" (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve an independent phase R"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+(* Checks that xor is rejected only inside Q's ANF monomials, not inside an
+   independent R. For R = 1/8 (x0 xor x1), Omega must preserve R unchanged. *)
+let test_omega_preserves_independent_xor_phase_context () =
+  let y0 = v 2 in
+  let phase_context =
+    Prod (Scal div8, Qubit (Qubit.SumMod2 (x0, x1))) +++ Poly.empty
+  in
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit y0) +++ phase_context;
+      ket = [| x0; x1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Poly.simplify (Scal div8 +++ phase_context);
+      ket = [| x0; x1 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves an xor in R" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve an independent xor in R"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reduces_input_variable_boolean_polynomial () =
+  (* Q = x0, so Q_hat = x0:
+       phase = 1/4 y0 + 1/2 y0 x0
+     Omega produces 1/8 - 1/4 x0. SQbricks stores the negative coefficient
+     modulo one as 3/4, hence phase = 1/8 + 3/4 x0. *)
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit (v 1))
+        +++ (Prod (Scal div2, Prod (Qubit (v 1), Qubit x0)) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0" (PSS.exact expected) (PSS.exact output)
+  | Ok None ->
+      Alcotest.fail "omega should match phase 1/4 y0 + 1/2 y0 x0"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_input_variable () =
+  (* Q = x0 and R = 1/2 x1:
+       1/4 y0 + 1/2 y0 x0 + R -> 1/8 - 1/4 x0 + R. *)
+  let y0 = v 2 in
+  let phase_context = Prod (Scal div2, Qubit x1) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ phase_context);
+      ket = [| x0; x1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0) +++ phase_context);
+      ket = [| x0; x1 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = x0" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = x0"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reduces_input_product_boolean_polynomial () =
+  (* Q = x0 x1 is already a Boolean monomial, so its lift is unchanged:
+       1/4 y0 + 1/2 y0 x0 x1 -> 1/8 + 3/4 x0 x1. *)
+  let y0 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, x0x1)) +++ Poly.empty);
+      ket = [| x0; x1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, x0x1) +++ Poly.empty));
+      ket = [| x0; x1 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0 x1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = x0 x1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+(* Ensures the generic matcher has no small-degree or Monome.Prod-only limit.
+   The Qubit.t product Q = x0 x1 x2 x3 must reduce like any ANF monomial. *)
+let test_omega_reduces_deep_input_product_boolean_polynomial () =
+  let x3 = v 3 in
+  let y0 = v 4 in
+  let input_product : Qubit.t =
+    Qubit.Prod
+      (x0, Qubit.Prod (x1, Qubit.Prod (x2, x3)))
+  in
+  let output_product : Monome.t =
+    Monome.Prod
+      ( Monome.Qubit x0,
+        Monome.Prod
+          ( Monome.Qubit x1,
+            Monome.Prod (Monome.Qubit x2, Monome.Qubit x3) ) )
+  in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod
+               (Scal div2, Prod (Qubit y0, Qubit input_product))
+            +++ Poly.empty);
+      ket = [| x0; x1; x2; x3 |];
+      path_var = [ 4 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, output_product)
+              +++ Poly.empty));
+      ket = [| x0; x1; x2; x3 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0 x1 x2 x3" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = x0 x1 x2 x3"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_input_product () =
+  (* Q = x0 x1 and R = 1/2 x2:
+       1/4 y0 + 1/2 y0 x0 x1 + R -> 1/8 + 3/4 x0 x1 + R. *)
+  let y0 = v 3 in
+  let phase_context = Prod (Scal div2, Qubit x2) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, x0x1)) +++ phase_context);
+      ket = [| x0; x1; x2 |];
+      path_var = [ 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, x0x1) +++ phase_context));
+      ket = [| x0; x1; x2 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = x0 x1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = x0 x1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reduces_mixed_product_boolean_polynomial () =
+  (* Q = x0 y1 and R = 0:
+       1/4 y0 + 1/2 y0 x0 y1 -> 1/8 + 3/4 x0 y1. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let mixed_product = Qubit.Prod (x0, y1) in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod
+               (Scal div2, Prod (Qubit y0, Qubit mixed_product))
+            +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, Qubit mixed_product)
+              +++ Poly.empty));
+      ket = [| x0 |];
+      path_var = [ 2 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0 y1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = x0 y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_mixed_product () =
+  (* Q = x0 y1 and R = 1/2 x1:
+       1/4 y0 + 1/2 y0 x0 y1 + R -> 1/8 + 3/4 x0 y1 + R. *)
+  let y0 = v 2 in
+  let y1 = v 3 in
+  let mixed_product = Qubit.Prod (x0, y1) in
+  let phase_context = Prod (Scal div2, Qubit x1) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit mixed_product))
+            +++ phase_context);
+      ket = [| x0; x1 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, Qubit mixed_product)
+              +++ phase_context));
+      ket = [| x0; x1 |];
+      path_var = [ 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = x0 y1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = x0 y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reduces_path_product_boolean_polynomial () =
+  (* Q = y1 y2 and R = 0:
+       1/4 y0 + 1/2 y0 y1 y2 -> 1/8 + 3/4 y1 y2. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let y2 = v 3 in
+  let path_product = Qubit.Prod (y1, y2) in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit path_product))
+            +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1; 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, Qubit path_product)
+              +++ Poly.empty));
+      ket = [| x0 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = y1 y2" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = y1 y2"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_path_product () =
+  (* Q = y1 y2 with R = 1/2 x0, independent of y0. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let y2 = v 3 in
+  let path_product = Qubit.Prod (y1, y2) in
+  let phase_context = Prod (Scal div2, Qubit x0) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit path_product))
+            +++ phase_context);
+      ket = [| x0 |];
+      path_var = [ 1; 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, Qubit path_product)
+              +++ phase_context));
+      ket = [| x0 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = y1 y2" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = y1 y2"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reconstructs_lifted_xor () =
+  (* Q = x0 xor x1 is represented at the input by its separate ANF terms
+       1/2 y0 x0 + 1/2 y0 x1.
+     Omega constructs Q_hat = x0 + x1 - 2 x0 x1 for the reduced phase, so
+     -1/4 Q_hat includes the pair term 1/2 x0 x1:
+       1/4 y0 + 1/2 y0 x0 + 1/2 y0 x1
+       -> 1/8 + 3/4 x0 + 3/4 x1 + 1/2 x0 x1. *)
+  let y0 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x1)) +++ Poly.empty));
+      ket = [| x0; x1 |];
+      path_var = [ 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0)
+            +++ (Prod (Scal three_quarters, Qubit x1)
+                +++ (Prod (Scal div2, Prod (Qubit x0, Qubit x1))
+                    +++ Poly.empty)));
+      ket = [| x0; x1 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0 xor x1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None ->
+      Alcotest.fail
+        "omega should match phase 1/4 y0 + 1/2 y0 x0 + 1/2 y0 x1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_lifted_xor () =
+  (* Q = x0 xor x1 and R = 1/2 x2:
+       1/4 y0 + 1/2 y0 x0 + 1/2 y0 x1 + R
+       -> 1/8 + 3/4 x0 + 3/4 x1 + 1/2 x0 x1 + R. *)
+  let y0 = v 3 in
+  let phase_context = Prod (Scal div2, Qubit x2) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x1))
+                +++ phase_context));
+      ket = [| x0; x1; x2 |];
+      path_var = [ 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0)
+            +++ (Prod (Scal three_quarters, Qubit x1)
+                +++ (Prod (Scal div2, Prod (Qubit x0, Qubit x1))
+                    +++ phase_context)));
+      ket = [| x0; x1; x2 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = x0 xor x1"
+        (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = x0 xor x1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reconstructs_mixed_lifted_xor () =
+  (* Q = x0 xor y1 and R = 0:
+       1/4 y0 + 1/2 y0 x0 + 1/2 y0 y1
+       -> 1/8 + 3/4 x0 + 3/4 y1 + 1/2 x0 y1. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1)) +++ Poly.empty));
+      ket = [| x0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0)
+            +++ (Prod (Scal three_quarters, Qubit y1)
+                +++ (Prod (Scal div2, Prod (Qubit x0, Qubit y1))
+                    +++ Poly.empty)));
+      ket = [| x0 |];
+      path_var = [ 2 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = x0 xor y1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = x0 xor y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_mixed_lifted_xor () =
+  (* Q = x0 xor y1 and R = 1/2 x1:
+       1/4 y0 + 1/2 y0 x0 + 1/2 y0 y1 + R
+       -> 1/8 + 3/4 x0 + 3/4 y1 + 1/2 x0 y1 + R. *)
+  let y0 = v 2 in
+  let y1 = v 3 in
+  let phase_context = Prod (Scal div2, Qubit x1) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+                +++ phase_context));
+      ket = [| x0; x1 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit x0)
+            +++ (Prod (Scal three_quarters, Qubit y1)
+                +++ (Prod (Scal div2, Prod (Qubit x0, Qubit y1))
+                    +++ phase_context)));
+      ket = [| x0; x1 |];
+      path_var = [ 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = x0 xor y1"
+        (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = x0 xor y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reconstructs_path_variables_lifted_xor () =
+  (* Q = y1 xor y2 and R = 0:
+       1/4 y0 + 1/2 y0 y1 + 1/2 y0 y2
+       -> 1/8 + 3/4 y1 + 3/4 y2 + 1/2 y1 y2. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let y2 = v 3 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y2)) +++ Poly.empty));
+      ket = [| x0 |];
+      path_var = [ 1; 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit y1)
+            +++ (Prod (Scal three_quarters, Qubit y2)
+                +++ (Prod (Scal div2, Prod (Qubit y1, Qubit y2))
+                    +++ Poly.empty)));
+      ket = [| x0 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = y1 xor y2" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = y1 xor y2"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_path_variables_lifted_xor () =
+  (* Q = y1 xor y2 and R = 1/2 x0:
+       1/4 y0 + 1/2 y0 y1 + 1/2 y0 y2 + R
+       -> 1/8 + 3/4 y1 + 3/4 y2 + 1/2 y1 y2 + R. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let y2 = v 3 in
+  let phase_context = Prod (Scal div2, Qubit x0) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+            +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y2))
+                +++ phase_context));
+      ket = [| x0 |];
+      path_var = [ 1; 2; 3 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit y1)
+            +++ (Prod (Scal three_quarters, Qubit y2)
+                +++ (Prod (Scal div2, Prod (Qubit y1, Qubit y2))
+                    +++ phase_context)));
+      ket = [| x0 |];
+      path_var = [ 2; 3 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = y1 xor y2"
+        (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = y1 xor y2"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_keeps_other_path_variable () =
+  (* Q = y1 checks that Omega removes only its matched variable y0:
+       phase = 1/4 y0 + 1/2 y0 y1
+     becomes 1/8 - 1/4 y1, while y1 remains a path variable. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1)) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit y1) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 2 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = y1" (PSS.exact expected) (PSS.exact output)
+  | Ok None ->
+      Alcotest.fail "omega should match phase 1/4 y0 + 1/2 y0 y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_preserves_context_for_path_variable () =
+  (* Q = y1 and R = 1/2 x0:
+       1/4 y0 + 1/2 y0 y1 + R -> 1/8 - 1/4 y1 + R. *)
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let phase_context = Prod (Scal div2, Qubit x0) +++ Poly.empty in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+            +++ phase_context);
+      ket = [| x0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let three_quarters = Q.add div2 div4 in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal div8
+        +++ (Prod (Scal three_quarters, Qubit y1) +++ phase_context);
+      ket = [| x0 |];
+      path_var = [ 2 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega preserves R for Q = y1" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should preserve R for Q = y1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reduces_constant_one_boolean_polynomial () =
+  (* Q = 1: 3/4 y0 = 1/4 y0 + 1/2 y0, so Omega produces 7/8. *)
+  let y0 = v 1 in
+  let three_quarters = Q.add div2 div4 in
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal three_quarters, Qubit y0) +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let seven_eighths = Q.sub Q.one div8 in
+  let expected : Path_sum.t =
+    {
+      phase = Scal seven_eighths +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = 1" (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = 1"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+(* Checks the interaction between Q's constant monomial and one variable.
+   For Q = 1 xor x0, 3/4 y0 + 1/2 y0 x0 becomes 7/8 + 1/4 x0. *)
+let test_omega_reduces_constant_one_xor_input_variable () =
+  let y0 = v 1 in
+  let three_quarters = Q.add div2 div4 in
+  let seven_eighths = Q.sub Q.one div8 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal three_quarters, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0)) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Scal seven_eighths
+        +++ (Prod (Scal div4, Qubit x0) +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with Q = 1 xor x0" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match Q = 1 xor x0"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+let test_omega_reduces_generic_boolean_polynomial () =
+  (* Q = x0 x1 x2 xor x3 xor y1 with an independent R. The three ANF
+     monomials produce three 3/4 terms and three 1/2 pair terms; the triple
+     product has an integer coefficient and vanishes modulo one. *)
+  let x3 = v 3 in
+  let y0 = v 4 in
+  let y1 = v 5 in
+  let three_quarters = Q.add div2 div4 in
+  let input_product_with_x3 : Monome.t =
+    Monome.Prod
+      ( Monome.Qubit x0,
+        Monome.Prod
+          ( Monome.Qubit x1,
+            Monome.Prod (Monome.Qubit x2, Monome.Qubit x3) ) )
+  in
+  let input_product_with_y1 : Monome.t =
+    Monome.Prod
+      ( Monome.Qubit x0,
+        Monome.Prod
+          ( Monome.Qubit x1,
+            Monome.Prod (Monome.Qubit x2, Monome.Qubit y1) ) )
+  in
+  let phase_context =
+    Prod (Scal div8, Prod (Qubit x0, Qubit x3)) +++ Poly.empty
+  in
+  let input : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Prod (Scal div4, Qubit y0)
+          +++ (Prod (Scal div2, Prod (Qubit y0, x0x1x2))
+              +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x3))
+                  +++ (Prod (Scal div2, Prod (Qubit y0, Qubit y1))
+                      +++ phase_context))));
+      ket = [| x0; x1; x2; x3 |];
+      path_var = [ 4; 5 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase =
+        Poly.simplify
+          (Scal div8
+          +++ (Prod (Scal three_quarters, x0x1x2)
+              +++ (Prod (Scal three_quarters, Qubit x3)
+                  +++ (Prod (Scal three_quarters, Qubit y1)
+                      +++ (Prod
+                             (Scal div2, input_product_with_x3)
+                          +++ (Prod
+                                 (Scal div2, input_product_with_y1)
+                              +++ (Prod
+                                     (Scal div2, Prod (Qubit x3, Qubit y1))
+                                  +++ phase_context)))))));
+      ket = [| x0; x1; x2; x3 |];
+      path_var = [ 5 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega with generic Q" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match a generic Boolean Q"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+(* Ensures one blocked candidate does not stop the search. For path variables
+   [y0; y1], y0 occurs in the ket, but y1 still matches the Q = 0 case. *)
+let test_omega_tries_next_path_variable_after_ket_rejection () =
+  let y0 = v 1 in
+  let y1 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit y1) +++ Poly.empty;
+      ket = [| y0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Scal div8 +++ Poly.empty;
+      ket = [| y0 |];
+      path_var = [ 1 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "omega tries the next path variable" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "omega should match the second path variable"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
+(* Checks a well-formed negative case: rejection is Ok None, not an error. *)
+let check_omega_does_not_match label input =
+  match Rules.Omega.omega input with
+  | Ok None -> ()
+  | Ok (Some _) -> Alcotest.fail (label ^ ": omega should not match")
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail (label ^ ": unexpected malformed path sum: " ^ message)
+
+(* Case: y0 occurs in the ket, so summing it out would change the output. *)
+let test_omega_rejects_eliminated_variable_in_ket () =
+  let y0 = v 1 in
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit y0) +++ Poly.empty;
+      ket = [| y0 |];
+      path_var = [ 1 ];
+    }
+  in
+  check_omega_does_not_match "y0 occurs in ket" input
+
+(* Case: the mandatory bare term 1/4 y0 is absent. *)
+let test_omega_rejects_missing_quarter_term () =
+  let y0 = v 1 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div2, Prod (Qubit y0, Qubit x0)) +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  check_omega_does_not_match "1/4 y0 is absent" input
+
+(* Case: a Q monomial is coupled to y0 by 1/4 instead of the required 1/2. *)
+let test_omega_rejects_wrong_coupling_coefficient () =
+  let y0 = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod (Scal div2, Prod (Qubit y0, Qubit x0))
+            +++ (Prod (Scal div4, Prod (Qubit y0, Qubit x1))
+                +++ Poly.empty));
+      ket = [| x0; x1 |];
+      path_var = [ 2 ];
+    }
+  in
+  check_omega_does_not_match "wrong y0 coupling coefficient" input
+
+(* Case: Q contains a symbol that is neither an input nor a declared path
+   variable. *)
+let test_omega_rejects_undeclared_quotient_variable () =
+  let y0 = v 1 in
+  let undeclared_variable = v 2 in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div4, Qubit y0)
+        +++ (Prod
+               (Scal div2, Prod (Qubit y0, Qubit undeclared_variable))
+            +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  check_omega_does_not_match "Q contains an undeclared variable" input
+
+(* Ensures Omega reports an input index incorrectly declared as a path
+   variable before applying an otherwise valid match. For width 1, index 0 is
+   an input variable and cannot be the internal variable y0. *)
+let test_omega_reports_path_variable_below_ket_width () =
+  let malformed_path_sum : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit x0) +++ Poly.empty;
+      ket = [| zero |];
+      path_var = [ 0 ];
+    }
+  in
+  match Rules.Omega.omega malformed_path_sum with
+  | Error (Rules.MalformedPathSum _) -> ()
+  | Ok None ->
+      Alcotest.fail "omega should report the invalid path-variable index"
+  | Ok (Some _) ->
+      Alcotest.fail "omega should not eliminate an input variable"
+
+(* A zero-width ket cannot declare y0. Omega must reject this metadata before
+   matching the otherwise valid phase 1/4 y0. *)
+let test_omega_reports_path_variable_with_zero_width () =
+  let y0 = v 0 in
+  let malformed_path_sum : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit y0) +++ Poly.empty;
+      ket = [||];
+      path_var = [ 0 ];
+    }
+  in
+  match Rules.Omega.omega malformed_path_sum with
+  | Error (Rules.MalformedPathSum _) -> ()
+  | Ok None -> Alcotest.fail "omega should report a zero-width path sum"
+  | Ok (Some _) ->
+      Alcotest.fail "omega should not reduce a zero-width path sum"
+
+(* Ket simplification removes the apparent y0 occurrence: |0 * y0> becomes
+   |0>, then Omega reduces 1/4 y0 to 1/8. *)
+let test_reduction_algorithm_applies_omega_after_ket_simplification () =
+  let y0 = v 1 in
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit y0) +++ Poly.empty;
+      ket = [| Qubit.Prod (zero, y0) |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    { phase = Scal div8 +++ Poly.empty; ket = [| zero |]; path_var = [] }
+  in
+  let output = reduce_valid_path_sum input in
+  check string "Omega after ket simplification" (PSS.exact expected)
+    (PSS.exact output)
+
+let test_reduction_algorithm_applies_omega () =
+  (* This smallest integration case checks that the reduction pipeline invokes
+     Omega: the direct phase 1/4 y0 must become 1/8 and y0 must disappear. *)
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 1)) +++ Poly.empty;
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  let expected : Path_sum.t =
+    { phase = Scal div8 +++ Poly.empty; ket = [| x0 |]; path_var = [] }
+  in
+  let output = reduce_valid_path_sum input in
+  check string "reduction algorithm with Omega" (PSS.exact expected)
+    (PSS.exact output)
+
+let omega =
+  [
+    ( "omega reduces Q = 0",
+      `Quick,
+      test_omega_reduces_zero_boolean_polynomial );
+    ( "omega normalizes its phase before matching",
+      `Quick,
+      test_omega_normalizes_phase_before_matching );
+    ( "omega preserves an independent phase context",
+      `Quick,
+      test_omega_preserves_independent_phase_context );
+    ( "omega preserves an independent xor phase context",
+      `Quick,
+      test_omega_preserves_independent_xor_phase_context );
+    ( "omega reduces Q = x0",
+      `Quick,
+      test_omega_reduces_input_variable_boolean_polynomial );
+    ( "omega preserves context for Q = x0",
+      `Quick,
+      test_omega_preserves_context_for_input_variable );
+    ( "omega reduces Q = x0 x1",
+      `Quick,
+      test_omega_reduces_input_product_boolean_polynomial );
+    ( "omega reduces Q = x0 x1 x2 x3 represented as a qubit product",
+      `Quick,
+      test_omega_reduces_deep_input_product_boolean_polynomial );
+    ( "omega preserves context for Q = x0 x1",
+      `Quick,
+      test_omega_preserves_context_for_input_product );
+    ( "omega reduces Q = x0 y1",
+      `Quick,
+      test_omega_reduces_mixed_product_boolean_polynomial );
+    ( "omega preserves context for Q = x0 y1",
+      `Quick,
+      test_omega_preserves_context_for_mixed_product );
+    ( "omega reduces Q = y1 y2",
+      `Quick,
+      test_omega_reduces_path_product_boolean_polynomial );
+    ( "omega preserves context for Q = y1 y2",
+      `Quick,
+      test_omega_preserves_context_for_path_product );
+    ( "omega reconstructs the lift of Q = x0 xor x1",
+      `Quick,
+      test_omega_reconstructs_lifted_xor );
+    ( "omega preserves context for Q = x0 xor x1",
+      `Quick,
+      test_omega_preserves_context_for_lifted_xor );
+    ( "omega reconstructs the lift of Q = x0 xor y1",
+      `Quick,
+      test_omega_reconstructs_mixed_lifted_xor );
+    ( "omega preserves context for Q = x0 xor y1",
+      `Quick,
+      test_omega_preserves_context_for_mixed_lifted_xor );
+    ( "omega reconstructs the lift of Q = y1 xor y2",
+      `Quick,
+      test_omega_reconstructs_path_variables_lifted_xor );
+    ( "omega preserves context for Q = y1 xor y2",
+      `Quick,
+      test_omega_preserves_context_for_path_variables_lifted_xor );
+    ( "omega keeps another path variable",
+      `Quick,
+      test_omega_keeps_other_path_variable );
+    ( "omega preserves context for Q = y1",
+      `Quick,
+      test_omega_preserves_context_for_path_variable );
+    ( "omega reduces Q = 1",
+      `Quick,
+      test_omega_reduces_constant_one_boolean_polynomial );
+    ( "omega reduces Q = 1 xor x0",
+      `Quick,
+      test_omega_reduces_constant_one_xor_input_variable );
+    ( "omega reduces a generic Boolean Q",
+      `Quick,
+      test_omega_reduces_generic_boolean_polynomial );
+    ( "omega tries the next path variable after a ket rejection",
+      `Quick,
+      test_omega_tries_next_path_variable_after_ket_rejection );
+    ( "omega rejects y0 in the ket",
+      `Quick,
+      test_omega_rejects_eliminated_variable_in_ket );
+    ( "omega rejects a missing 1/4 y0 term",
+      `Quick,
+      test_omega_rejects_missing_quarter_term );
+    ( "omega rejects a wrong coupling coefficient",
+      `Quick,
+      test_omega_rejects_wrong_coupling_coefficient );
+    ( "omega rejects an undeclared quotient variable",
+      `Quick,
+      test_omega_rejects_undeclared_quotient_variable );
+    ( "omega reports a path variable below the ket width",
+      `Quick,
+      test_omega_reports_path_variable_below_ket_width );
+    ( "omega reports a path variable with zero ket width",
+      `Quick,
+      test_omega_reports_path_variable_with_zero_width );
+    ( "reduction algorithm applies omega after ket simplification",
+      `Quick,
+      test_reduction_algorithm_applies_omega_after_ket_simplification );
+    ( "reduction algorithm applies omega",
+      `Quick,
+      test_reduction_algorithm_applies_omega );
   ]
 (* let out_1_qubit = [ 0 ]
 let out_2_qubits = [ 0; 1 ] *)
@@ -2073,6 +3292,26 @@ let test_variable_replacement_returns_typed_replacement () =
   | Ok None -> check bool "replacement expected" true false
   | Error (Rules.MalformedPathSum _) -> check bool "valid path sum" true false
 
+let test_variable_replacement_preserves_path_variable_names () =
+  (* Input:    phase = 1/4*y1, ket = |x0 + y0, y1>
+     Change:   y0' = x0 + y0
+     Expected: phase = 1/4*y1, ket = |y0, y1>
+
+     Reusing y0 avoids moving y1 in both the phase and the ket. *)
+  let phase = Prod (Scal div4, Qubit (v 3)) +++ Poly.empty in
+  let input : Path_sum.t =
+    { phase; ket = [| x0 ++ v 2; v 3 |]; path_var = [ 2; 3 ] }
+  in
+  let expected : Path_sum.t =
+    { phase; ket = [| v 2; v 3 |]; path_var = [ 2; 3 ] }
+  in
+  match Rules.Variable_replacement.variable_replacement input with
+  | Ok (Some output) ->
+      check string "path-variable names" (PSS.exact expected) (PSS.exact output)
+  | Ok None -> Alcotest.fail "expected a variable replacement"
+  | Error (Rules.MalformedPathSum message) ->
+      Alcotest.fail ("unexpected malformed path sum: " ^ message)
+
 let test_variable_replacement_returns_none () =
   let input : Path_sum.t =
     { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
@@ -2362,6 +3601,9 @@ let variable_replacement =
     ( "variable_replacement returns typed replacement",
       `Quick,
       test_variable_replacement_returns_typed_replacement );
+    ( "variable_replacement preserves path-variable names",
+      `Quick,
+      test_variable_replacement_preserves_path_variable_names );
     ( "variable_replacement returns none",
       `Quick,
       test_variable_replacement_returns_none );
@@ -3870,6 +5112,13 @@ let gates_apply =
     ("z", `Quick, test_gates_apply (zz 0) (Path_sum_library.z 0 1));
     ("s", `Quick, test_gates_apply (ss 0) (Path_sum_library.s 0 1));
     ("t", `Quick, test_gates_apply (tt 0) (Path_sum_library.t 0 1));
+    (* Integration case: execution applies H then S, so three repetitions
+       realize (SH)^3. The exact expected phase 1/8 is exp(pi i / 4). *)
+    ( "(SH)^3 = exp(pi i / 4) I",
+      `Quick,
+      test_gates_apply
+        (h 0 -- ss 0 -- h 0 -- ss 0 -- h 0 -- ss 0)
+        Path_sum_library.sh3 );
     ("zinv", `Quick, test_gates_apply (zinv 0) (Path_sum_library.zinv 0 1));
     ("sinv", `Quick, test_gates_apply (sinv 0) (Path_sum_library.sinv 0 1));
     ("tinv", `Quick, test_gates_apply (tinv 0) (Path_sum_library.tinv 0 1));
@@ -3924,6 +5173,7 @@ let () =
       (* ("Normalise Path Variables", normalise_path_var); *)
       ("HH", hh);
       ("Case", case_rule);
+      ("Omega", omega);
       ("Path-sum equality", path_sum_equality);
       ("Path-sum initialization", path_sum_initialization);
       ("Path-sum substitution", path_sum_substitution);

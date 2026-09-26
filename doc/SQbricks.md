@@ -262,6 +262,30 @@ réduction. Une règle qui ne s'applique pas à un path-sum valide est distingu�
 d'un path-sum mal formé ; ce dernier remonte jusqu'à `Equiv` sous la forme
 `ErrorMalformedPathSum`.
 
+La séquence stabilise d'abord la simplification, la règle HH, le changement de
+variable et la factorisation. Elle essaie ensuite la règle Omega en dernier. Si
+Omega élimine une variable de chemin, la séquence complète reprend ; sinon le
+path-sum final est renommé dans une numérotation contiguë.
+
+La réduction HH évite désormais plusieurs parcours redondants de la phase tout
+en conservant l'ordre des candidats, les conditions d'application et la
+transformation mathématique.
+
+La règle Omega d'Amy élimine une variable de chemin `y0` absente du ket lorsque
+la phase a la forme suivante :
+
+```text
+1/4 y0 + 1/2 y0 Q + R  ->  1/8 - 1/4 Q_hat + R
+```
+
+`Q` est un polynôme booléen écrit en forme normale algébrique, c'est-à-dire
+comme un XOR de monômes. À l'entrée, chaque monôme `Mi` de `Q` est représenté
+par un terme de phase distinct `1/2 y0 Mi`. `Q_hat` est le relèvement
+arithmétique de `Q`, construit dans la phase de sortie. Le contexte `R` et `Q`
+doivent être indépendants de `y0`. Une application préserve le ket et `R`,
+retire `y0` de la liste des variables de chemin, puis relance les autres
+réductions. Le matcher ne développe pas un `SumMod2` imbriqué dans un monôme.
+
 Les comparaisons de qubits, monômes, polynômes, kets et path-sums utilisent des
 fonctions `*_result` lorsqu'une incohérence de métadonnées doit être distinguée
 d'une vraie inégalité.
@@ -277,6 +301,11 @@ d'entrée, sans produit ni autre variable de chemin dans le décalage. La
 substitution est appliquée à toute la phase et à tout le ket seulement si elle
 isole davantage de composantes de sortie. Cette restriction est une limite de
 l'implémentation actuelle, pas du changement de variable mathématique général.
+
+Lorsque cela est possible sans ambiguïté, le changement de variable réutilise
+une variable de chemin existante et évite un renommage global inutile. Cette
+optimisation ne change ni la condition de substitution ni la sémantique du
+path-sum.
 
 ## Prototype d'inspection
 
@@ -311,5 +340,3 @@ parcourir les artefacts produits.
 - Comportements validés : tests Alcotest dans `test/`.
 - Runners et formats de benchmark : `scripts/benchmarks-light.sh`,
   `scripts/benchmarks-sqbricks.sh` et `scripts/check-regression-large.sh`.
-- Planification du projet : [`ROADMAP.md`](../ROADMAP.md) et
-  [`TODO.md`](../TODO.md).

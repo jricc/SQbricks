@@ -41,7 +41,11 @@ val reduction_algorithm :
     5. Factorization: repeated reduction while the state becomes smaller.
     6. Constant conversion: replacement of non-path ket expressions by path
        variables.
-    7. Iteration to a fixed point, followed by path-variable renaming.
+    7. Fixed point: restart while one of the preceding transformations makes
+       progress.
+    8. Omega: once the preceding transformations are stable, apply at most one
+       Omega match and restart after a success.
+    9. Renaming: rename path variables after the final Omega non-match.
 
     Example transformation: Initial state:
     - Phase: 1/2*y2 + 1/2*y2 + 1/2*y2*y3 + 1/2*y3*y1 + 1/2*y4*y5 + 1/2*y4*x2
@@ -77,12 +81,19 @@ val reduction_algorithm :
     - Phase: 1/2*y12*y3
     - Ket: |x1, y12, x2, y11, y13>
 
-    7. Normalization: Final state:
+    7. Fixed point:
+    - No preceding transformation makes further progress.
+
+    8. Omega:
+    - No Omega motif applies, so the state is unchanged.
+
+    9. Renaming: Final state:
     - Phase: 1/2*y0*y3
     - Ket: |x1, y0, x2, y1, y2>
 
     Note: The algorithm preserves quantum state equivalence while reducing
-    complexity. *)
+    complexity. Omega is deliberately tried last because the cheaper preceding
+    reductions often eliminate its candidates first. *)
 
 (**/**)
 

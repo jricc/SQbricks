@@ -248,6 +248,29 @@ execution; the original `Program.t` is not rewritten.
 rule that does not apply to a valid path sum is distinguished from a malformed
 path sum; the latter reaches `Equiv` as `ErrorMalformedPathSum`.
 
+The sequence first stabilizes simplification, the HH rule, variable change,
+and factorization. It then tries the Omega rule last. If Omega removes a path
+variable, the complete sequence starts again; otherwise the final path sum is
+renamed to use contiguous indices.
+
+HH reduction now avoids several redundant phase traversals while preserving
+the candidate order, matching conditions, and mathematical transformation.
+
+Amy's Omega rule removes a path variable `y0` that is absent from the ket when
+the phase has the following form:
+
+```text
+1/4 y0 + 1/2 y0 Q + R  ->  1/8 - 1/4 Q_hat + R
+```
+
+`Q` is a Boolean polynomial written in algebraic normal form, that is, as an
+XOR of monomials. At the input, each monomial `Mi` of `Q` is represented by a
+distinct `1/2 y0 Mi` phase term. `Q_hat` is the arithmetic lift of `Q`, built
+in the output phase. Both `Q` and the phase context `R` must be independent of
+`y0`. One application preserves the ket and `R`, removes `y0` from the
+path-variable list, and restarts the other reductions. The matcher does not
+expand a `SumMod2` nested inside one monomial.
+
 Qubit, monomial, polynomial, ket, and path-sum comparisons use `*_result`
 functions when metadata inconsistency must be distinguished from genuine
 inequality.
@@ -262,6 +285,10 @@ variable in the offset. The substitution is applied to the whole phase and ket
 only when it isolates more output components. This restriction is a limit of
 the current implementation, not of the general mathematical change of
 variable.
+
+When this can be done unambiguously, variable change reuses an existing path
+variable and avoids an unnecessary global renaming. This optimization changes
+neither the substitution condition nor the path-sum semantics.
 
 ## Inspection prototype
 
@@ -295,5 +322,3 @@ the generated artifacts.
 - Validated behavior: Alcotest suites under `test/`.
 - Benchmark runners and formats: `scripts/benchmarks-light.sh`,
   `scripts/benchmarks-sqbricks.sh`, and `scripts/check-regression-large.sh`.
-- Project planning: [`ROADMAP.md`](../ROADMAP.md) and
-  [`TODO.md`](../TODO.md).

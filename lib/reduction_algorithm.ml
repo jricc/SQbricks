@@ -105,7 +105,17 @@ let reduction_algorithm ?(debug = false) input =
           printf "Reduction_algorithm, state_repl =\n%s\n\n"
             (PSS.pretty state_repl);
         if _condition_to_continue acc state_repl then aux state_repl
-        else Ok state_repl
+        else
+          (* Existing reductions are stable, so try Omega last. *)
+          match Rules.Omega.omega ~debug state_repl with
+          | Error reduction_error -> Error reduction_error
+          | Ok (Some state_omega) ->
+              if debug then
+                printf "Reduction_algorithm, state_omega =\n%s\n\n"
+                  (PSS.pretty state_omega);
+              (* Omega removed one variable; restart the complete pipeline. *)
+              aux state_omega
+          | Ok None -> Ok state_repl
   in
   match aux input with
   | Ok output -> Ok (Rename.rename output)

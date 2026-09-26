@@ -66,161 +66,370 @@ module Elim = struct
     ps'
 end
 
+module Omega = struct
+  (* Amy's Omega rule eliminates an internal path variable y0 from
+       1/4 y0 + 1/2 y0 Q + R
+     and replaces the phase by 1/8 - 1/4 Q_hat + R.
+
+     Q is read in algebraic normal form (ANF): an xor of Boolean monomials.
+     For example, Q = x0 xor (x1 y1) has the two ANF monomials x0 and x1 y1.
+     Each input monomial Mi is represented by a separate 1/2 y0 Mi phase
+     term: at coefficient 1/2, the lift corrections are integer phases and
+     disappear modulo one. Q_hat, the arithmetic lift of Q, is constructed
+     only for the reduced phase. R must be independent of y0, and y0 must not
+     occur in the ket. *)
+
+  (* Prevents the generic matcher from building Q with an unavailable symbol.
+     An allowed variable is a non-negative input or a declared path variable,
+     but never the eliminated y0. For width = 2, path variables [2; 3], and
+     y0 = 2, variables 0 and 3 are accepted while 2 and 4 are rejected. *)
+  let variable_is_declared y0 width path_variables variable =
+    0 <= variable
+    && not (Int.equal variable y0)
+    && (variable < width
+       || ListBis.member variable path_variables Int.equal)
+
+  (* Checks that a Qubit.t represents one valid ANF monomial. Products are
+     allowed, while SumMod2 is rejected because an xor must be represented by
+     separate ANF monomials. For example, x0 y1 is accepted, but x0 xor y1 is
+     not a single monomial. *)
+  let rec qubit_is_declared y0 width path_variables = function
+    | Qubit.Zero -> false
+    | Qubit.One -> true
+    | Qubit.Var variable ->
+        variable_is_declared y0 width path_variables variable
+    | Qubit.Prod (first_factor, second_factor) ->
+        qubit_is_declared y0 width path_variables first_factor
+        && qubit_is_declared y0 width path_variables second_factor
+    | Qubit.SumMod2 _ -> false
+
+  (* Applies the same ANF validation at the Monome.t layer obtained after y0
+     has been factored out. The only allowed scalar monomial is 1. For example,
+     Qubit x0 * Qubit y1 is accepted, while Scal (1/2) * Qubit x0 is rejected. *)
+  let rec boolean_monome_is_declared y0 width path_variables = function
+    | Monome.Scal scalar -> Q.equal scalar Q.one
+    | Monome.Qubit qubit ->
+        qubit_is_declared y0 width path_variables qubit
+    | Monome.Prod (first_factor, second_factor) ->
+        boolean_monome_is_declared y0 width path_variables first_factor
+        && boolean_monome_is_declared y0 width path_variables second_factor
+
+  (* Splits a normalized phase into Q's ANF monomials and the independent
+     context R. For one y0 candidate, this scans every phase term once instead
+     of enumerating possible shapes or degrees of Q.
+     For 1/4 y0 + 1/2 y0 x0 + 1/2 y0 x1 y1 + R, it returns the monomials
+     [x0; x1 y1] together with R. *)
+  let extract_quotient y0 width path_variables phase =
+    let three_quarters = Q.add div2 div4 in
+    (* Scans each phase term once. required_y0_term_found records the mandatory
+       bare term: 1/4 y0 for a zero constant in Q, or 3/4 y0 when Q contains 1. *)
+    let rec extract remaining_phase required_y0_term_found quotient_monomes
+        phase_context =
+      if Poly.is_empty remaining_phase then
+        if required_y0_term_found then
+          (* Case: every y0-dependent term belongs to the Omega pattern. *)
+          Some (List.rev quotient_monomes, phase_context)
+        else
+          (* Case: the required bare y0 term is absent. *)
+          None
+      else
+        let phase_monome = Poly.find remaining_phase in
+        let remaining_phase = Poly.del remaining_phase in
+        if not (Monome.member y0 phase_monome) then
+          (* Case: this term belongs to R. *)
+          extract remaining_phase required_y0_term_found quotient_monomes
+            (Poly.insert phase_monome phase_context)
+        else
+          match Monome.remove_result y0 phase_monome with
+          | Error Monome.CannotRemoveQubitSum ->
+              (* Case: y0 occurs inside a nested SumMod2, which is not
+                 expanded by this matcher. *)
+              None
+          | Ok None ->
+              (* Case: y0 is present but cannot be factored from this term. *)
+              None
+          | Ok (Some monome_without_y0) -> (
+              match Monome.simplify monome_without_y0 with
+              | Monome.Scal coefficient ->
+                  if required_y0_term_found then
+                    (* Case: more than one bare y0 term remains. *)
+                    None
+                  else if Q.equal coefficient div4 then
+                    (* Case: 1/4 y0, so Q has no constant monomial. *)
+                    extract remaining_phase true quotient_monomes phase_context
+                  else if Q.equal coefficient three_quarters then
+                    (* Case: 3/4 y0, so Q contains the constant monomial 1. *)
+                    extract remaining_phase true
+                      (Monome.Scal Q.one :: quotient_monomes)
+                      phase_context
+                  else
+                    (* Case: the coefficient of bare y0 is invalid. *)
+                    None
+              | Monome.Prod (Monome.Scal coefficient, boolean_monome) ->
+                  if not (Q.equal coefficient div2) then
+                    (* Case: every non-constant Q monomial requires 1/2 y0 M. *)
+                    None
+                  else if
+                    not
+                      (boolean_monome_is_declared y0 width path_variables
+                         boolean_monome)
+                  then
+                    (* Case: M is not a declared Boolean monomial independent
+                       of y0. *)
+                    None
+                  else
+                    (* Case: 1/2 y0 M contributes the ANF monomial M to Q. *)
+                    extract remaining_phase required_y0_term_found
+                      (boolean_monome :: quotient_monomes)
+                      phase_context
+              | _ ->
+                  (* Case: the y0-dependent term has no valid phase
+                     coefficient. *)
+                  None)
+    in
+    extract phase false [] Poly.empty
+
+  (* Reconstructs the pairwise part of -1/4 Q_hat. For a fixed Mi, each later
+     Mj contributes 1/2 Mi Mj exactly once. For Mi = x0 and Mj = x1, this adds
+     1/2 x0 x1. *)
+  let rec insert_pair_terms first_monome remaining_monomes phase =
+    match remaining_monomes with
+    | [] -> phase
+    | second_monome :: other_monomes ->
+        let pair_term =
+          Monome.simplify
+            (Monome.Prod
+               ( Monome.Scal div2,
+                 Monome.Prod (first_monome, second_monome) ))
+        in
+        insert_pair_terms first_monome other_monomes
+          (Poly.insert pair_term phase)
+
+  (* Builds the complete reduced phase from Q = xor_i Mi:
+       1/8 + R - 1/4 sum_i Mi + 1/2 sum_(i<j) Mi Mj.
+     Terms involving three or more Mi have integer coefficients and vanish
+     modulo one. For Q = x0 xor x1, this gives
+     1/8 + 3/4 x0 + 3/4 x1 + 1/2 x0 x1 + R. *)
+  let reduced_phase quotient_monomes phase_context =
+    let three_quarters = Q.add div2 div4 in
+    (* Adds -1/4 Mi, represented by 3/4 Mi, then all pairs starting at Mi.
+       Recursing on the remaining list ensures that no pair is duplicated. *)
+    let rec insert_quotient_terms remaining_monomes phase =
+      match remaining_monomes with
+      | [] -> phase
+      | first_monome :: other_monomes ->
+          let single_term =
+            Monome.simplify
+              (Monome.Prod (Monome.Scal three_quarters, first_monome))
+          in
+          let phase = Poly.insert single_term phase in
+          let phase =
+            insert_pair_terms first_monome other_monomes phase
+          in
+          insert_quotient_terms other_monomes phase
+    in
+    Poly.simplify
+      (insert_quotient_terms quotient_monomes
+         (Poly.insert (Monome.Scal div8) phase_context))
+
+  (* Rejects invalid path-variable metadata, then tries every declared path
+     variable as y0. For path_var = [0], an empty ket cannot declare a path
+     variable; with width 1, index 0 belongs to the input namespace. *)
+  let omega ?(debug = false) (ps : Path_sum.t) :
+      (Path_sum.t option, reduction_error) result =
+    if debug then printf "Rule_omega.omega, ps =\n%s\n%!" (PSS.pretty ps);
+    let width = Array.length ps.ket in
+    if
+      Int.equal width 0
+      && not (List.equal Int.equal ps.path_var [])
+    then
+      (* Case: a zero-width ket cannot declare a path variable. *)
+      Error
+        (MalformedPathSum
+           "Rules.Omega.omega: zero-width ket cannot declare path variables")
+    else if
+      List.exists (fun path_variable -> path_variable < width) ps.path_var
+    then
+      (* Case: a declared path variable overlaps an input-variable index. *)
+      Error
+        (MalformedPathSum
+           "Rules.Omega.omega: path variable index below ket width")
+    else
+      let normalized_phase = Poly.simplify ps.phase in
+      (* Tries path variables in declaration order and returns after the first
+         complete Omega match. For [y0; y1], a failed y0 match continues with
+         y1 instead of stopping the rule. *)
+      let rec find_candidate = function
+        | y0 :: remaining_path_variables ->
+            if Ket.member y0 ps.ket then (
+              (* Case: y0 occurs in the ket and cannot be eliminated. *)
+              find_candidate remaining_path_variables
+            )
+            else (
+              match
+                extract_quotient y0 width ps.path_var normalized_phase
+              with
+              | None ->
+                  (* Case: this y0 does not have the required Omega phase. *)
+                  find_candidate remaining_path_variables
+              | Some (quotient_monomes, phase_context) ->
+                  (* Case: Q and R were extracted from the complete phase. *)
+                  let output : Path_sum.t =
+                    {
+                      ps with
+                      phase = reduced_phase quotient_monomes phase_context;
+                      path_var = ListBis.remove y0 ps.path_var;
+                    }
+                  in
+                  if debug then
+                    printf "Rule_omega.omega, matched y%d\n%s\n%!"
+                      (y0 - width) (PSS.pretty output);
+                  Ok (Some output)
+            )
+        | [] ->
+            (* Case: no path variable satisfies the Omega pattern. *)
+            Ok None
+      in
+      find_candidate ps.path_var
+end
+
 module HH = struct
   let empty = Poly.empty
   let find = Poly.find
   let del = Poly.del
   let ( ++ ) = Poly.( ++ )
-  let zero : Poly.t = Poly.zero
   let member = Monome.member
   let remove = Monome.remove
-  let occurrence_couple = Poly.occurrence
   let simplify p = Poly.simplify p
   let qsimplify p = Qubit.simplify p
 
-  let extract_R_monome (m : Monome.t) y0 : Monome.t option =
-    if Monome.member y0 m then None else Some m
-
-  let extract_R ?(debug = false) (p : Poly.t) y0 : Poly.t option =
-    if debug then printf "Rule_common.extract_R, p = %s\n" (PS.exact p);
-    let rec aux (p : Poly.t) (acc : Poly.t) : Poly.t option =
-      if Poly.equal p Poly.empty then
-        if Poly.equal acc Poly.empty then None
-        else (
-          if debug then
-            printf "Rule_common.extract_R, acc = %s\n" (PS.exact acc);
-          Some acc)
-      else
-        let m, p_remain = (Poly.find p, Poly.del p) in
-        match extract_R_monome m y0 with
-        | Some m1 -> aux p_remain (m1 ++ acc)
-        | None -> aux p_remain acc
-    in
-    aux p Poly.empty
-
-  (* Checks whether a monome contains both y0 and yi, and returns 1 if so, otherwise 0 *)
-  let y0_yi_occurrence_monome (y0 : int) (yi : int) (m : Monome.t) : int =
-    match m with
-    | Prod (_, m1)
-      when let y0_member_m1 = lazy (member y0 m1) in
-           let yi_member_m1 = lazy (member yi m1) in
-           if Lazy.force y0_member_m1 then Lazy.force yi_member_m1 else false ->
-        1
-    | _ -> 0
-
-  (* Calculate the number of monomials in a polynomial that contain both y0 and yi *)
-  let y0_yi_occurrence (y0 : int) (yi : int) (p : Poly.t) : int =
-    occurrence_couple
-      (fun (y0, yi) m -> y0_yi_occurrence_monome y0 yi m)
-      (y0, yi) p
-
-  let condition_to_extract_yi s v1 v2 n p y0 =
-    let s_equal_div2 = Q.equal s div2 in
-    let v1_equal_y0 = Int.equal v1 y0 in
-    let n1_leq_v2 = n <= v2 in
-    let occurrence_y0_yi_eq_1 = lazy (Int.equal (y0_yi_occurrence v1 v2 p) 1) in
-    if s_equal_div2 && v1_equal_y0 && n1_leq_v2 then
-      Lazy.force occurrence_y0_yi_eq_1
-    else false
-
-  let extract_yi y0 ?(debug = false) p_input n :
+  (* Validate y0 and select yi in one phase traversal. For example, with
+     [1/2*y0*y1 + 1/2*y0*y2], the traversal counts both pairs and keeps y1,
+     the first valid candidate in the canonical phase order. *)
+  let analyze_y0 y0 ?(debug = false) (ps : Path_sum.t) :
       (int option, reduction_error) result =
-    if n <= 0 then
-      Error
-        (MalformedPathSum
-           (sprintf "Rule_hh.hh_aux.extract_yi, n must be > 0, n = %d" n))
+    if Path_sum.Ket.member y0 ps.ket then Ok None
     else
-      let extract_yi_monome y0 (m : Monome.t) : int option =
-        match m with
-        | Prod (Scal s, Prod (Qubit (Var v1), Qubit (Var v2)))
-          when condition_to_extract_yi s v1 v2 n p_input y0 ->
-            if debug then
-              printf "1. Rule_hh.extract_yi\np =%s\nv1 = %d, v2 = %d\n%!"
-                (Monome.String.exact m) v1 v2;
-            Some v2
-        | Prod (Scal s, Prod (Qubit (Var v1), Qubit (Var v2)))
-          when condition_to_extract_yi s v2 v1 n p_input y0 ->
-            if debug then
-              printf "2. Rule_hh.extract_yi\np =%s\nv2 = %d, v1 = %d\n%!"
-                (Monome.String.exact m) v2 v1;
-            Some v1
-        | _ ->
-            if debug then
-              printf "6. Rule_hh.extract_yi\np =%s\n%!" (Monome.String.exact m);
-            None
+      let width = Array.length ps.ket in
+      let rec monome_variables (monome : Monome.t) variables =
+        match monome with
+        | Scal _ -> variables
+        | Qubit qubit -> List.rev_append (Qubit.extract_var qubit) variables
+        | Prod (m1, m2) ->
+            monome_variables m2 (monome_variables m1 variables)
       in
-      let extract_yi_rec y0 (p : Poly.t) : int option =
-        let rec aux p =
-          if Poly.equal p empty then None
-          else
-            match extract_yi_monome y0 (find p) with
-            | Some yi -> Some yi
-            | None -> aux (del p)
+      let add_occurrence occurrences variable =
+        let count =
+          match IntMap.find_opt variable occurrences with
+          | Some count -> count
+          | None -> 0
         in
-        aux p
+        IntMap.add variable (count + 1) occurrences
       in
-      Ok (extract_yi_rec y0 p_input)
+      let candidate (monome : Monome.t) =
+        match monome with
+        | Prod (Scal coefficient, Prod (Qubit (Var v1), Qubit (Var v2)))
+          when Q.equal coefficient div2 && Int.equal v1 y0 && width <= v2 ->
+            Some (v2, monome, true)
+        | Prod (Scal coefficient, Prod (Qubit (Var v1), Qubit (Var v2)))
+          when Q.equal coefficient div2 && Int.equal v2 y0 && width <= v1 ->
+            Some (v1, monome, false)
+        | _ -> None
+      in
+      let rec aux phase candidates occurrences =
+        if Poly.equal phase empty then
+          if width <= 0 then
+            Error
+              (MalformedPathSum
+                 (sprintf "Rule_hh.analyze_y0, n must be > 0, n = %d"
+                    width))
+          else
+            let selected =
+              List.find_opt
+                (fun (yi, _, _) ->
+                  match IntMap.find_opt yi occurrences with
+                  | Some count -> Int.equal count 1
+                  | None -> false)
+                (List.rev candidates)
+            in
+            (match selected with
+            | Some (yi, monome, y0_first) ->
+                if debug then
+                  if y0_first then
+                    printf
+                      "1. Rule_hh.extract_yi\np =%s\nv1 = %d, v2 = %d\n%!"
+                      (Monome.String.exact monome) y0 yi
+                  else
+                    printf
+                      "2. Rule_hh.extract_yi\np =%s\nv2 = %d, v1 = %d\n%!"
+                      (Monome.String.exact monome) y0 yi;
+                Ok (Some yi)
+            | None -> Ok None)
+        else
+          let monome, remaining_phase = (find phase, del phase) in
+          match monome with
+          | Prod (Scal coefficient, m1)
+            when coefficient <> div2 && member y0 m1 ->
+              Ok None
+          | _ ->
+              let occurrences =
+                match monome with
+                | Prod (_, m1) when member y0 m1 ->
+                    monome_variables m1 []
+                    |> List.filter (fun variable -> width <= variable)
+                    |> List.sort_uniq Int.compare
+                    |> List.fold_left add_occurrence occurrences
+                | _ -> occurrences
+              in
+              let candidates =
+                match candidate monome with
+                | Some candidate -> candidate :: candidates
+                | None -> candidates
+              in
+              aux remaining_phase candidates occurrences
+      in
+      aux ps.phase [] IntMap.empty
 
-  let extract_Q_monome ?(debug = false) (m : Monome.t) y0 yi : Monome.t option =
-    if debug then printf "Rule_hh.extract_Q, y0 = %d, yi = %d\n%!" y0 yi;
-    if debug then
-      printf "Rule_hh.extract_Q_monome, m = %s\n%!" (Monome.String.exact m);
-    match m with
-    | Prod (Scal s, m1) when if s = div2 then not (member yi m1) else false -> (
-        if debug then
-          printf "Rule_hh.extract_Q_monome, m1 = %s\n%!"
-            (Monome.String.exact m1);
-        match remove y0 m1 with
-        | Some m1_without_y0 ->
-            if debug then
-              printf "Rule_hh.extract_Q_monome.Some, m1_without_y0 = %s\n%!"
-                (Monome.String.exact m1_without_y0);
-            Some m1_without_y0
-        | None ->
-            if debug then
-              printf "Rule_hh.extract_Q_monome.None, m1 = %s\n%!"
-                (Monome.String.exact m1);
-            None)
-    | _ -> None
-
-  let extract_Q ?(debug = false) (p : Poly.t) n y0 yi :
-      (Poly.t option, reduction_error) result =
-    if n <= 0 then
+  (* For example:
+       phase = 1/2*y0*yi + 1/2*y0*x0 + 1/4*yi + 1/8*x1
+     becomes Q = x0, R_with_yi = 1/4*yi, R_without_yi = 1/8*x1. *)
+  let partition_hh_phase ?(debug = false) (phase : Poly.t) width y0 yi :
+      (Poly.t * Poly.t * Poly.t, reduction_error) result =
+    if width <= 0 then
       Error
         (MalformedPathSum
-           (sprintf "Rule_hh.hh_aux.extract_Q, n must be > 0, n = %d" n))
-    else (
-      if debug then printf "Rule_hh.extract_Q, p = %s\n%!" (PS.exact p);
-      if debug then
-        printf "Rule_hh.extract_Q, n = %d, y0 = %d, yi = %d\n%!" n y0 yi;
-      let rec aux (p : Poly.t) (acc : Poly.t) : Poly.t option =
-        if Poly.equal p empty then (
-          if debug then printf "Rule_hh.extract_Q, acc = %s\n%!" (PS.exact acc);
-          Some acc)
+           (sprintf "Rule_hh.partition_hh_phase, width must be > 0, width = %d"
+              width))
+    else
+      let rec aux phase q r_with_yi r_without_yi =
+        if Poly.is_empty phase then (q, r_with_yi, r_without_yi)
         else
-          let m, p_remain = (find p, del p) in
-          match extract_Q_monome ~debug m y0 yi with
-          | Some m1 ->
-              if debug then
-                printf "Rule_hh.extract_Q, m1 = %s\n%!" (Monome.String.exact m1);
-              aux p_remain (m1 ++ acc)
-          | None -> aux p_remain acc
+          let monome, remaining_phase = (find phase, del phase) in
+          if member y0 monome then
+            let q =
+              match monome with
+              | Prod (Scal coefficient, m1)
+                when Q.equal coefficient div2 && not (member yi m1) -> (
+                  match remove y0 m1 with
+                  | Some m1_without_y0 -> m1_without_y0 ++ q
+                  | None -> q)
+              | _ -> q
+            in
+            aux remaining_phase q r_with_yi r_without_yi
+          else if member yi monome then
+            aux remaining_phase q (monome ++ r_with_yi) r_without_yi
+          else aux remaining_phase q r_with_yi (monome ++ r_without_yi)
       in
-      Ok (aux p empty))
-
-  let y0_member_unauthorized y0 (p : Poly.t) =
-    let y0_member_unauthorized_monome y0 (m : Monome.t) : bool =
-      match m with
-      | Prod (Scal s, m1) when s <> div2 -> member y0 m1
-      | _ -> false
-    in
-    Poly.exists (y0_member_unauthorized_monome y0) p
-
-  (* y0 must not be in the ket and its only scalar must be 1/2 *)
-  let y0_accepted y0 (ps : Path_sum.t) : bool =
-    let condition_ket = not (Path_sum.Ket.member y0 ps.ket) in
-    let condition_poly = lazy (not (y0_member_unauthorized y0 ps.phase)) in
-    if condition_ket then Lazy.force condition_poly else false
+      let q, r_with_yi, r_without_yi = aux phase empty empty empty in
+      if debug then
+        printf "Rule_hh.partition_hh_phase, Q = %s\n%!" (PS.pretty q width);
+      if debug then
+        printf "Rule_hh.partition_hh_phase, R_with_yi = %s\n%!"
+          (PS.pretty r_with_yi width);
+      if debug then
+        printf "Rule_hh.partition_hh_phase, R_without_yi = %s\n%!"
+          (PS.pretty r_without_yi width);
+      Ok (q, r_with_yi, r_without_yi)
 
   let path_variables_with_possible_yi (phase : Poly.t) width =
     let rec aux phase candidates =
@@ -231,7 +440,7 @@ module HH = struct
           match monome with
           | Prod (Scal coefficient, Prod (Qubit (Var v1), Qubit (Var v2)))
             when Q.equal coefficient div2 ->
-              (* This is only a prefilter for [hh_aux]: every path variable can
+              (* This is only a prefilter for [analyze_y0]: every path variable can
                  be tried as y0, but a successful match also needs a path
                  variable yi. For example, [1/2*y0*y1] provides a possible yi
                  for both variables, whereas [1/2*x0*y0] provides none for y0. *)
@@ -253,52 +462,37 @@ module HH = struct
         not (Int.equal path_variable y0 || Int.equal path_variable yi))
       path_variables
 
-  let hh_aux y0 ?(debug = false) (ps : Path_sum.t) :
+  let hh_aux y0 yi ?(debug = false) (ps : Path_sum.t) :
       (Path_sum.t option, reduction_error) result =
     if debug then
       printf "Rule_hh.hh_aux, y0 = y%d\n%!" (y0 - Array.length ps.ket);
     if debug then printf "Rule_hh.hh_aux, ps =\n%!%s\n%!" (PSS.pretty ps);
     let n = Array.length ps.ket in
-    match extract_yi ~debug y0 ps.phase n with
+    if debug then
+      printf "Rule_hh.hh_aux, yi = y%d\n%!" (yi - Array.length ps.ket);
+    match partition_hh_phase ~debug ps.phase n y0 yi with
     | Error reduction_error -> Error reduction_error
-    | Ok (Some yi) -> (
+    | Ok (q, r_with_yi, r_without_yi) ->
+        if debug then printf "Rule_hh.hh_aux, q = %s\n%!" (PS.pretty q n);
         if debug then
-          printf "Rule_hh.hh_aux, yi = y%d\n%!" (yi - Array.length ps.ket);
-        match extract_Q ~debug ps.phase n y0 yi with
-        | Error reduction_error -> Error reduction_error
-        | Ok (Some q) -> (
-            if debug then printf "Rule_hh.hh_aux, q = %s\n%!" (PS.pretty q n);
-            if debug then
-              printf "Rule_hh.hh_aux, ps.phase = %s\n%!" (PS.pretty ps.phase n);
-            match extract_R ~debug ps.phase y0 with
-            | Some r ->
-                if debug then
-                  printf "Rule_hh.hh_aux, r = %s\n%!" (PS.pretty r n);
-                (* \( 1/2 y_0 (y_i + Q) -> (Q = q1 ++ q2) -> Q = q1 + q2 \) *)
-                let ps_output_simplified : Path_sum.t =
-                  {
-                    phase =
-                      simplify (Poly.substitute_rules_hh r yi q ~debug);
-                    ket =
-                      Path_sum.Ket.substitute ps.ket yi
-                        (qsimplify (Poly.to_qubit q));
-                    path_var =
-                      remove_matched_path_variables ps.path_var y0 yi;
-                  }
-                in
-                Ok (Some ps_output_simplified)
-            | None ->
-                let ps_output : Path_sum.t =
-                  {
-                    phase = zero;
-                    ket = Path_sum.Ket.substitute ps.ket yi (Poly.to_qubit q);
-                    path_var =
-                      remove_matched_path_variables ps.path_var y0 yi;
-                  }
-                in
-                Ok (Some ps_output))
-        | Ok None -> Ok None)
-    | Ok None -> Ok None
+          printf "Rule_hh.hh_aux, ps.phase = %s\n%!" (PS.pretty ps.phase n);
+        let substituted_r_with_yi =
+          if Poly.is_empty r_with_yi then empty
+          else Poly.substitute_rules_hh r_with_yi yi q ~debug
+        in
+        let ps_output : Path_sum.t =
+          {
+            (* Simplifying after the merge also combines terms that become
+               equal across both parts. For example, substituting yi <- x0 in
+               [1/4*yi] and merging [1/4*x0] produces [1/2*x0]. *)
+            phase = simplify (Poly.merge substituted_r_with_yi r_without_yi);
+            ket =
+              Path_sum.Ket.substitute ps.ket yi
+                (qsimplify (Poly.to_qubit q));
+            path_var = remove_matched_path_variables ps.path_var y0 yi;
+          }
+        in
+        Ok (Some ps_output)
 
   let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
@@ -309,47 +503,52 @@ module HH = struct
         | y0 :: y0_remain ->
             if debug then
               printf "Rule_hh.hh.accepted, y0 candidate = %d\n\n%!" (y0 - width);
-            if List.mem y0 candidates && y0_accepted y0 acc then (
-              if debug then
-                printf "Rule_hh.hh.accepted, y0 = %d\n\n%!" (y0 - width);
-              match hh_aux y0 acc ~debug with
+            if List.mem y0 candidates then
+              match analyze_y0 y0 acc ~debug with
               | Error reduction_error -> Error reduction_error
-              | Ok (Some acc_reduced) ->
-                  (if debug then
-                     printf "Rule_hh.hh.accepted.match hh_aux, y0 = %d\n%!"
-                       (y0 - width);
-                   if debug then
-                     printf
-                       "Rule_hh.hh.accepted.match hh_aux, acc_reduced =\n\
-                       %s\n\n\
-                        %!"
-                       (PSS.pretty acc_reduced);
-                   (* [hh_aux] already simplifies its phase and ket. For
-                      example, [1/2*y0*y1 + 1/2*y2*y3] becomes the already
-                      simplified [1/2*y2*y3], so do not simplify it again. *)
-                   aux acc_reduced
-                     (path_variables_with_possible_yi acc_reduced.phase width)
-                     y0_remain)
-              | Ok None -> aux acc candidates y0_remain)
+              | Ok (Some yi) ->
+                  if debug then
+                    printf "Rule_hh.hh.accepted, y0 = %d\n\n%!" (y0 - width);
+                  (match hh_aux y0 yi acc ~debug with
+                  | Error reduction_error -> Error reduction_error
+                  | Ok (Some acc_reduced) ->
+                      (if debug then
+                         printf "Rule_hh.hh.accepted.match hh_aux, y0 = %d\n%!"
+                           (y0 - width);
+                       if debug then
+                         printf
+                           "Rule_hh.hh.accepted.match hh_aux, acc_reduced =\n\
+                           %s\n\n\
+                            %!"
+                           (PSS.pretty acc_reduced);
+                       (* [hh_aux] already simplifies its phase and ket. For
+                          example, [1/2*y0*y1 + 1/2*y2*y3] becomes the already
+                          simplified [1/2*y2*y3], so do not simplify it again. *)
+                       aux acc_reduced
+                         (path_variables_with_possible_yi acc_reduced.phase width)
+                         y0_remain)
+                  | Ok None -> aux acc candidates y0_remain)
+              | Ok None -> aux acc candidates y0_remain
             else aux acc candidates y0_remain
         | _ -> Ok acc
       in
-      (* Keep malformed zero-width inputs on the existing error path through
-         [hh_aux]; candidate filtering is only valid for positive widths. *)
+      (* Keep malformed zero-width inputs on the error path through
+         [analyze_y0]; candidate filtering is only valid for positive widths. *)
       let candidates =
         if width <= 0 then ps.path_var
         else path_variables_with_possible_yi ps.phase width
       in
       aux ps candidates ps.path_var
-    else if
-      (* The user proposes y0 *)
-      y0_accepted y0_to_remove ps
-    then
-      match hh_aux y0_to_remove ps with
+    else
+      (* The user proposes y0. *)
+      match analyze_y0 y0_to_remove ps with
       | Error reduction_error -> Error reduction_error
-      | Ok (Some ps_output) -> Ok ps_output
+      | Ok (Some yi) -> (
+          match hh_aux y0_to_remove yi ps with
+          | Error reduction_error -> Error reduction_error
+          | Ok (Some ps_output) -> Ok ps_output
+          | Ok None -> Ok ps)
       | Ok None -> Ok ps
-    else Ok ps
 
 end
 
@@ -650,14 +849,23 @@ module Case = struct
   let find_match (ps : Path_sum.t) internal_variables yi_candidates =
     first_match (match_yi ps internal_variables) yi_candidates
 
-  (* Extracts the part of the phase independent of [variable]. A complete
-     match guarantees this extraction; [Poly.zero] is the defensive fallback.
-     Example: removing [yi] from the minimal motif leaves
-     [yj/4 + 3*x*yj/4]. *)
+  (* Extracts every phase term independent of [variable]. If no such term
+     exists, the result is [Poly.empty]. Example: removing [yi] from the
+     minimal motif leaves [yj/4 + 3*x*yj/4]. *)
   let phase_without_variable phase variable =
-    match HH.extract_R phase variable with
-    | Some remaining_phase -> remaining_phase
-    | None -> Poly.zero
+    (* Scan the phase once and discard exactly the terms containing the
+       eliminated variable. *)
+    let rec collect remaining_phase independent_phase =
+      if Poly.is_empty remaining_phase then independent_phase
+      else
+        let monome = Poly.find remaining_phase in
+        let remaining_phase = Poly.del remaining_phase in
+        if Monome.member variable monome then
+          collect remaining_phase independent_phase
+        else
+          collect remaining_phase (Poly.insert monome independent_phase)
+    in
+    collect phase Poly.empty
 
   (* Computes one selected branch: remove its eliminated variable, specialize
      [x], then apply the substitution forced by the half-phase equation.
@@ -992,8 +1200,6 @@ module Variable_replacement = struct
            "Rules.Variable_replacement.variable_replacement: path variable index below ket width")
     else if List.equal Int.equal ps.path_var [] then Ok None
     else
-      let new_y = ListBis.max_int ps.path_var + 1 in
-
       let rec iterate_over_qubits indice =
         if Int.equal indice width then Ok None
         else
@@ -1003,10 +1209,13 @@ module Variable_replacement = struct
                 match condition_to_substitute ~debug qubit_i indice ps with
                 | Error reduction_error -> Error reduction_error
                 | Ok (Some v) ->
+                    (* [condition_to_substitute] proves that [v] occurs only in
+                       this qubit. The change of variable [v' = qubit_i] can
+                       therefore keep the name [v]. For example,
+                       |x0 + y0, y1> becomes |y0, y1>. *)
                     Ok
                       (Some
-                         ( substitute_qubit_in_ket ps.ket (Var new_y) qubit_i,
-                           v ))
+                         (substitute_qubit_in_ket ps.ket (Var v) qubit_i, v))
                 | Ok None -> iterate_over_qubits (indice + 1))
             | _ -> iterate_over_qubits (indice + 1)
           in
@@ -1015,14 +1224,12 @@ module Variable_replacement = struct
 
       match iterate_over_qubits 0 with
       | Error reduction_error -> Error reduction_error
-      | Ok (Some (k, v)) ->
+      | Ok (Some (k, _)) ->
           let output : Path_sum.t =
             {
               phase = ps.phase;
               ket = k;
-              path_var =
-                List.sort_uniq Int.compare
-                  (new_y :: ListBis.remove v ps.path_var);
+              path_var = ps.path_var;
             }
           in
           Ok (Some (Rename.rename output))

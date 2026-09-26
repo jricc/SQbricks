@@ -110,6 +110,13 @@ If a more generic design is possible, mention it only as an alternative, but do 
   two similar data structures must be handled differently.
 - As soon as code or tests are even slightly non-trivial, add a short comment
   explaining the intention, invariant, or reason for the case.
+- Before each function, add a concise comment explaining why it exists and
+  give a small concrete example. Apply this rule to local and internal helper
+  functions as well.
+- In branch-heavy domain logic, comment each non-obvious branch with the
+  semantic case it handles.
+- Keep branch comments short: name the case and, when useful, its result or the
+  next case tried. Prefer precise names over long walkthroughs.
 
 ## OCaml-specific rules
 
@@ -353,6 +360,8 @@ Use the full quality process for non-trivial changes.
 - Tests should document the intended behavior.
 - If a test depends on randomness, fix the seed or justify why not.
 - If tests cannot be run, explain exactly why.
+- The Docker container does not provide `/usr/bin/time`. Use Bash `SECONDS`
+  for simple elapsed-time measurements or the existing benchmark timers.
 
 ## Documentation rules
 
@@ -378,6 +387,9 @@ When reviewing code:
 
 Always summarize:
 
+- Always provide the exact reviewable diff after every file modification,
+  before asking the user to run tests or continue; a summary does not replace
+  this diff.
 - What changed.
 - Which files changed.
 - Which tests were added or modified.
@@ -468,6 +480,11 @@ For omega and case rules:
 4. Validate on small examples.
 5. Integrate step by step.
 6. Compare before/after results.
+
+Develop a new reduction rule one semantic case at a time: add the smallest
+failing test, implement only that case, validate it, and only then add the next
+more general test. Do not anticipate later matcher cases in an earlier
+implementation.
 
 Each rule must have:
 

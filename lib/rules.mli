@@ -30,6 +30,7 @@
       states in the symbolic execution tool, using techniques from the paper
       including:
     - [Elim]
+    - [Omega]
     - [HH]
     - [Case]
     - [Variable_replacement]
@@ -55,6 +56,39 @@ module Elim : sig
       Example:
       - [elim {phase = 0; ket = |x0,1>; [y0]}] returns
         [{phase = 0; ket = |x0,1>; []}] *)
+end
+
+module Omega : sig
+  (** This module implements Amy's omega reduction rule for an arbitrary
+      Boolean polynomial [Q] in algebraic normal form (ANF). ANF writes [Q] as
+      an xor of Boolean monomials; for example, [Q = x0 xor (x1 y1)]. If [y0]
+      is absent from the ket and [Q] and [R] are independent of [y0], the rule
+      transforms
+
+      {[
+        1/4 y0 + 1/2 y0 Q + R
+          -> 1/8 - 1/4 Q_hat + R
+      ]}
+
+      At the input, each ANF monomial [Mi] of [Q] must be represented by a
+      separate [1/2 y0 Mi] phase term. At coefficient [1/2], the lift
+      corrections are integer phases and disappear modulo one. [Q_hat] is the
+      arithmetic lift of [Q], constructed for the reduced phase. An xor nested
+      inside one monomial is rejected conservatively. *)
+
+  val omega :
+    ?debug:bool ->
+    Path_sum.t ->
+    (Path_sum.t option, reduction_error) result
+  (** [omega ?debug ps] applies at most one omega reduction. It returns
+      [Ok (Some ps')] when a path variable is eliminated, [Ok None] when the
+      rule does not match, and [Error (MalformedPathSum message)] when a
+      zero-width ket declares a path variable or when a path-variable index is
+      below the ket width. The phase is normalized on a local copy before
+      matching.
+
+      For example, a phase [1/4 y0] with [y0] absent from the ket becomes the
+      constant phase [1/8], and [y0] is removed from the path variables. *)
 end
 
 module HH : sig
