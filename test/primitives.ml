@@ -357,15 +357,11 @@ let test_case_preserves_phase_context () =
   check string "phase context after Case" (PSS.exact expected)
     (PSS.exact (apply_valid_case input))
 
-(* Input: width two, yi=y0, yj=y1 and Q=Q'=x1.
-   Expected: both internal variables disappear and the residual phase is
-   3*x1/4, with ket [|x0,x1|].
-   Detail: each branch substitutes its remaining internal variable with x1. *)
 let test_case_applies_nonzero_substitutions () =
-  (* With x = x0, Q = Q' = x1, yi = y0 and yj = y1:
+  (* Input: width two, x = x0, Q = Q' = x1, yi = y0 and yj = y1:
      P = 1/4 yi*x + 1/2 yi*(yj + x1) + 1/4 yj*(1-x) + 1/2 yj*x1.
-     Both branches substitute an internal variable with x1 and reduce to
-     3/4*x1. *)
+     Expected: both branches substitute an internal variable with x1 and reduce to
+     3/4*x1, with ket [|x0,x1|]. *)
   let phase =
     Prod (Scal div4, Prod (Qubit (v 2), Qubit x0))
     +++ (Prod (Scal div2, Prod (Qubit (v 2), Qubit (v 3)))
@@ -416,9 +412,9 @@ let test_case_handles_renamed_unordered_path_variables () =
   check string "renamed Case identity" (PSS.exact expected)
     (PSS.exact (apply_valid_case input))
 
-(* Input: the condition s=y0 is itself internal, while yi=y1 and yj=y2 form
-   the minimal motif with the independent context 1/8-s/4.
-   Expected: yi and yj disappear; s and its context remain unchanged. *)
+(* Input: the Case condition x is the internal path variable y0; yi=y1 and
+   yj=y2 form the minimal motif. The independent context is 1/8-x/4.
+   Expected: yi and yj disappear; the condition x=y0 and its context remain. *)
 let test_case_preserves_internal_condition () =
   let context =
     Scal div8 +++ (Prod (Scal (3 /// 4), Qubit (v 1)) +++ Poly.empty)

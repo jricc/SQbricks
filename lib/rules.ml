@@ -577,22 +577,27 @@ module Case = struct
         | Some _ as matched -> matched
         | None -> first_match matcher candidates)
 
-  (* Completes a candidate orientation after [yi] and [x] are fixed: it solves
-     the zero branch for [yj], checks the complementary [yj] factor, then
-     solves the one branch for [yi]. On the minimal motif with [yi=1], [x=0]
-     and [yj=2], it returns the record whose two substitutions are zero. *)
+  (* Validates a complete Case orientation after [yi] and [x] are fixed. *)
   let match_yj ps yi condition_variable first_equation yj =
     if not (condition_variable_is_valid ps condition_variable yi yj) then None
     else
+      (* The caller has already set [x <- 0], so [first_equation] is
+         [yj xor Q[x <- 0]]. Solving it gives [yj_substitution = Q[x <- 0]]. *)
       match solve_for yj first_equation with
       | None -> None
       | Some yj_substitution -> (
+          (* Check the complementary Case orientation. Factoring [yj] must give
+             [(1-x)/4 + (yi xor Q')/2]. *)
           match factor_out yj ps.phase with
           | None -> None
           | Some yj_factor -> (
+              (* Remove [(1-x)/4], represented as [1/4 + 3*x/4], and decode
+                 the remaining half-phase as [yi xor Q']. *)
               match second_boolean_factor condition_variable yj_factor with
               | None -> None
               | Some second_equation ->
+                  (* At [x <- 1], solve [yi xor Q'[x <- 1] = 0], giving
+                     [yi_substitution = Q'[x <- 1]]. *)
                   let second_equation =
                     Qubit.simplify
                       (Qubit.substitute condition_variable second_equation
@@ -601,6 +606,8 @@ module Case = struct
                   match solve_for yi second_equation with
                   | None -> None
                   | Some yi_substitution ->
+                      (* Store only the matching recipe. [apply_match] later
+                         extracts [R] and [R'] from the complete phase. *)
                       Some
                         {
                           condition_variable;
@@ -682,19 +689,22 @@ module Case = struct
       (Poly.merge zero_branch
          (Poly.merge condition_times_one minus_condition_times_zero))
 
-  (* Applies a validated match, leaves the ket unchanged, and removes [yi] and
-     [yj] from the declared path variables. Applied to the minimal motif, the
-     zero-substitution match maps phase [P] and [yi;yj] to phase zero and an
-     empty path-variable list. *)
+  (* Applies the substitutions recorded by a validated Case match. *)
   let apply_match ?(debug = false) (ps : Path_sum.t) matched_case =
+    (* Removing [yi] extracts [R]; then select [x <- 0] and apply
+       [yj <- Q[x <- 0]] to obtain [P0]. *)
     let zero_branch =
       branch_phase ~debug ps.phase matched_case.condition_variable Qubit.Zero
         matched_case.yi matched_case.yj matched_case.yj_substitution
     in
+    (* Removing [yj] extracts [R']; then select [x <- 1] and apply
+       [yi <- Q'[x <- 1]] to obtain [P1]. *)
     let one_branch =
       branch_phase ~debug ps.phase matched_case.condition_variable Qubit.One
         matched_case.yj matched_case.yi matched_case.yi_substitution
     in
+    (* Recombine [(1-x)P0 + xP1], preserve the ket, and remove the two
+       eliminated variables from the declared path variables. *)
     let output : Path_sum.t =
       {
         phase =

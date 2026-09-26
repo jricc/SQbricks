@@ -31,12 +31,17 @@ val reduction_algorithm :
   ?debug:bool -> Path_sum.t -> (Path_sum.t, Rules.reduction_error) result
 (** [reduction_algorithm ?debug ps] applies the complete reduction
     sequence and returns an explicit error when a reduction rule receives a
-    malformed path sum. The reduction process follows these steps: 1.
-    Simplification: Algebraic simplification of expressions 2. HH rule:
-    Elimination of certain path variables 3. Variable replacement:
-    Simplification of XOR expressions 4. Factorization: Reduction of phase terms
-    5. Constant conversion: Standardization of ket expressions 6. Normalization:
-    Path variable indexing
+    malformed path sum. The reduction process follows this order:
+    1. Simplification: algebraic simplification of the phase and ket.
+    2. HH: elimination of all currently matching path variables.
+    3. Case: application of at most one Case match. A successful match
+       restarts the sequence so Simplification and HH can process its output.
+    4. Variable replacement: simplification of XOR expressions. A successful
+       replacement also restarts the sequence.
+    5. Factorization: repeated reduction while the state becomes smaller.
+    6. Constant conversion: replacement of non-path ket expressions by path
+       variables.
+    7. Iteration to a fixed point, followed by path-variable renaming.
 
     Example transformation: Initial state:
     - Phase: 1/2*y2 + 1/2*y2 + 1/2*y2*y3 + 1/2*y3*y1 + 1/2*y4*y5 + 1/2*y4*x2
@@ -53,23 +58,26 @@ val reduction_algorithm :
     - Phase: 1/2*y2*y3 + 1/2*y3*y1
     - Ket: |x1, y2 + y1, x2, y8+y10, 1+y0>
 
-    3. Variable replacement:
+    3. Case rule:
+    - No Case motif applies, so the state is unchanged.
+
+    4. Variable replacement:
     - Replaces y8+y10 with new variable y11 Intermediate:
     - Phase: 1/2*y2*y3 + 1/2*y3*y1
     - Ket: |x1, y2 + y1, x2, y11, 1+y0>
 
-    4. Factorization:
+    5. Factorization:
     - Replaces y2 + y1 with new variable y12
     - Substitutes y12 in phase: 1/2*y12*y3 Intermediate:
     - Phase: 1/2*y12*y3
     - Ket: |x1, y12, x2, y11, 1+y0>
 
-    5. Constant conversion:
+    6. Constant conversion:
     - Converts 1+y0 to new variable y13 Intermediate:
     - Phase: 1/2*y12*y3
     - Ket: |x1, y12, x2, y11, y13>
 
-    6. Normalization: Final state:
+    7. Normalization: Final state:
     - Phase: 1/2*y0*y3
     - Ket: |x1, y0, x2, y1, y2>
 

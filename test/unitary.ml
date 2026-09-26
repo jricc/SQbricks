@@ -97,10 +97,11 @@ let test_case_clifford_t_identity_exposes_case_motif () =
                Scal div4;
                Prod (Scal (7 /// 8), x);
                Prod (Scal div2, Prod (x, z));
+               Prod (Scal (5 /// 8), z);
+               Prod (Scal (7 /// 8), d);
                Prod (Scal div4, Prod (x, a));
                Prod (Scal div4, Prod (x, b));
                Prod (Scal (3 /// 4), Prod (x, c));
-               Prod (Scal (5 /// 8), z);
                Prod (Scal div2, Prod (z, a));
                Prod (Scal (3 /// 4), a);
                Prod (Scal div2, Prod (a, b));
@@ -108,7 +109,6 @@ let test_case_clifford_t_identity_exposes_case_motif () =
                Prod (Scal div2, Prod (b, c));
                Prod (Scal (3 /// 4), c);
                Prod (Scal div2, Prod (c, d));
-               Prod (Scal (7 /// 8), d);
              ]
              Poly.empty);
       ket = [| Qubit.Var 0; Qubit.SumMod2 (Qubit.Var 0, Qubit.Var 13) |];
@@ -123,12 +123,12 @@ let test_case_clifford_t_identity_exposes_case_motif () =
         Poly.simplify
           (List.fold_right Poly.insert
              [
+               Prod (Scal div2, Prod (c, d));
+               Prod (Scal div2, Prod (x, c));
+               Prod (Scal div2, Prod (z, c));
                Prod (Scal div8, x);
                Prod (Scal (3 /// 4), Prod (x, z));
-               Prod (Scal div2, Prod (x, c));
                Prod (Scal div8, z);
-               Prod (Scal div2, Prod (z, c));
-               Prod (Scal div2, Prod (c, d));
                Prod (Scal (7 /// 8), d);
              ]
              Poly.empty);
