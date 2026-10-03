@@ -1,5 +1,5 @@
 (executables
- (names qiskit mbqc unitary primitives verif)
+ (names qiskit mbqc unitary primitives verif simulation)
  (modes exe)
  (libraries alcotest sQbricks)
  ;  (flags :standard -w -a)
@@ -29,3 +29,8 @@
  (alias verif)
  (action
   (run ./verif.exe)))
+
+(rule
+ (alias simulation)
+ (action
+  (run ./simulation.exe)))

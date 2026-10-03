@@ -23,7 +23,7 @@
         benchmark-regression-large-check regression-large \
         regression-large-baseline regression-large-check \
         owm tele unit-vs-hybrid qiskit-hybrid owm-vs-qiskit owm-vs-tele veriqc \
-        tests tests_prim tests_qiskit tests_mbqc tests_unit tests_regression_light \
+        tests tests_prim tests_qiskit tests_mbqc tests_unit tests_sim tests_regression_light \
         build container start fig6 fig7 examples \
 				doc clean_doc
 
@@ -61,7 +61,7 @@ clean_doc:
 
 # Tests
 
-tests: tests_prim tests_qiskit tests_mbqc tests_unit tests_verif tests_regression_light
+tests: tests_prim tests_qiskit tests_mbqc tests_unit tests_sim tests_verif tests_regression_light
 
 tests_regression_light:
 	bash test/benchmarks-light-validation.sh
@@ -77,6 +77,12 @@ tests_unit:
 	@mkdir -p $(shell pwd)/_build
 	@mkdir -p $(LOG_FOLDER)
 	dune build @unitary --build-dir $(shell pwd)/_build/unitary > $(LOG_FOLDER)/unitary_$(DATE_FILE).log 2>&1
+
+tests_sim:
+	@rm -rf $(shell pwd)/_build/simulation
+	@mkdir -p $(shell pwd)/_build
+	@mkdir -p $(LOG_FOLDER)
+	dune build @simulation --build-dir $(shell pwd)/_build/simulation > $(LOG_FOLDER)/simulation_$(DATE_FILE).log 2>&1
 
 tests_prim:
 	@rm -rf $(shell pwd)/_build/primitives
