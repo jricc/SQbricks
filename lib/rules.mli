@@ -167,7 +167,9 @@ module Case : sig
         (1-x) * R[yj <- Q] + x * R'[yi <- Q']
       ]}
 
-      The ket is unchanged because neither eliminated variable occurs in it. *)
+      The ket is unchanged because neither eliminated variable occurs in it.
+      The function returns [Error (MalformedPathSum message)] when a declared
+      path-variable index is below the ket width. *)
 end
 
 module Rename : sig

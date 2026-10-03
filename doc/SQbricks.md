@@ -262,14 +262,31 @@ réduction. Une règle qui ne s'applique pas à un path-sum valide est distingu�
 d'un path-sum mal formé ; ce dernier remonte jusqu'à `Equiv` sous la forme
 `ErrorMalformedPathSum`.
 
-La séquence stabilise d'abord la simplification, la règle HH, le changement de
-variable et la factorisation. Elle essaie ensuite la règle Omega en dernier. Si
-Omega élimine une variable de chemin, la séquence complète reprend ; sinon le
-path-sum final est renommé dans une numérotation contiguë.
+La séquence stabilise d'abord la simplification, la règle HH, la règle Case, le
+changement de variable et la factorisation. Un match Case retire deux variables
+de chemin et relance la séquence complète. Elle essaie ensuite la règle Omega
+en dernier. Si Omega élimine une variable de chemin, la séquence complète
+reprend ; sinon le path-sum final est renommé dans une numérotation contiguë.
 
 La réduction HH évite désormais plusieurs parcours redondants de la phase tout
 en conservant l'ordre des candidats, les conditions d'application et la
 transformation mathématique.
+
+La règle Case d'Amy élimine deux variables de chemin internes `yi` et `yj`,
+donc absentes du ket, lorsque la phase possède les deux orientations
+complémentaires suivantes :
+
+```text
+1/4 yi x + 1/2 yi (yj xor Q) + R
+  = 1/4 yj (1-x) + 1/2 yj (yi xor Q') + R'
+```
+
+La nouvelle phase est `(1-x) R[yj <- Q] + x R'[yi <- Q']`. Le ket est
+conservé et `yi`, `yj` sont retirées de la liste des variables de chemin. Le
+matcher vérifie les deux orientations avant toute transformation. Il signale
+également comme mal formé un indice de variable de chemin inférieur à la
+largeur du ket. Ce matcher est conservatif : une absence de match n'implique
+pas l'absence de toute simplification sémantique.
 
 La règle Omega d'Amy élimine une variable de chemin `y0` absente du ket lorsque
 la phase a la forme suivante :

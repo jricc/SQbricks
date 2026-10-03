@@ -416,6 +416,41 @@ let apply_valid_case input =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+(* Builds the minimal Case motif with width two, yi=x0 and yj=y0. The declared
+   path variable 0 is invalid because it overlaps the input-variable range
+   [0, 2). HH leaves this motif unchanged, so Case must not erase the invalid
+   declaration before it is reported. *)
+let malformed_case_with_input_path_variable : Path_sum.t =
+  {
+    phase =
+      Prod (Scal div4, Prod (Qubit x0, Qubit x1))
+      +++ (Prod (Scal div2, Prod (Qubit x0, Qubit (v 2)))
+           +++ (Prod (Scal div4, Qubit (v 2))
+                +++ (Prod (Scal (3 /// 4), Prod (Qubit x1, Qubit (v 2)))
+                     +++ Poly.empty)));
+    ket = [| zero; x1 |];
+    path_var = [ 0; 2 ];
+  }
+
+(* Input: an otherwise valid minimal Case motif whose yi=0 is declared below
+   the ket width 2. Expected: the direct Case call reports malformed metadata
+   instead of eliminating yi and hiding the invalid declaration. *)
+let test_case_reports_path_variable_below_ket_width () =
+  match Rules.Case.case malformed_case_with_input_path_variable with
+  | Error (Rules.MalformedPathSum _) -> ()
+  | Ok _ ->
+      Alcotest.fail "Case should report the invalid path-variable index"
+
+(* Input: the same malformed motif passed to the complete reducer. Expected:
+   the malformed path sum is reported even though its phase matches Case. *)
+let test_reduction_reports_malformed_path_sum_before_case () =
+  match
+    Reduction_algorithm.reduction_algorithm
+      malformed_case_with_input_path_variable
+  with
+  | Error (Rules.MalformedPathSum _) -> ()
+  | Ok _ -> Alcotest.fail "Case should not hide malformed path metadata"
+
 (* Input: the minimal phase, ket [|x0|], path variables [y0;y1].
    Expected: phase zero, the same ket, and no path variables.
    Detail: x0=0 forces y1=0; x0=1 forces y0=0. *)
@@ -575,6 +610,32 @@ let test_case_rejects_eighth_phase_on_candidate () =
   check string "non-Boolean half-phase factor" (PSS.exact input)
     (PSS.exact (apply_valid_case input))
 
+(* Input: a deliberately noncanonical half-phase term contains yi twice, with
+   one occurrence hidden below a nested product. Removing the outer occurrence
+   leaves yi in the quotient. Expected: the defensive factorization rejects
+   the candidate instead of producing a substitution that still contains yi. *)
+let test_case_rejects_quotient_containing_factored_variable () =
+  let yi = v 1 in
+  let hidden_yi =
+    Qubit.Prod (yi, Qubit.Prod (Qubit.Prod (yi, v 3), Qubit.One))
+  in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div2, Qubit hidden_yi) +++ minimal_case_phase;
+      ket = [| x0 |];
+      path_var = [ 1; 2; 3 ];
+    }
+  in
+  let output =
+    match Rules.Case.case ~phase_is_simplified:true input with
+    | Ok output -> output
+    | Error (Rules.MalformedPathSum message) ->
+        Alcotest.fail ("unexpected malformed path sum: " ^ message)
+  in
+  check string "factor quotient containing yi" (PSS.exact input)
+    (PSS.exact output)
+
 (* Input: both quarter-branch terms of the minimal motif, but no yi*yj/2.
    Expected: unchanged input because neither sum constrains the other internal
    variable, so the complete Case pattern is absent. *)
@@ -597,6 +658,12 @@ let case_rule =
     ( "reduction algorithm applies case",
       `Quick,
       test_reduction_algorithm_applies_case );
+    ( "case reports a path variable below the ket width",
+      `Quick,
+      test_case_reports_path_variable_below_ket_width );
+    ( "reduction reports malformed metadata before case",
+      `Quick,
+      test_reduction_reports_malformed_path_sum_before_case );
     ( "case preserves an independent phase context",
       `Quick,
       test_case_preserves_phase_context );
@@ -621,6 +688,9 @@ let case_rule =
     ( "case rejects an eighth-phase candidate",
       `Quick,
       test_case_rejects_eighth_phase_on_candidate );
+    ( "case rejects a quotient containing its factored variable",
+      `Quick,
+      test_case_rejects_quotient_containing_factored_variable );
     ( "case requires coupling between its candidates",
       `Quick,
       test_case_requires_coupling_between_candidates );

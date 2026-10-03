@@ -248,13 +248,30 @@ execution; the original `Program.t` is not rewritten.
 rule that does not apply to a valid path sum is distinguished from a malformed
 path sum; the latter reaches `Equiv` as `ErrorMalformedPathSum`.
 
-The sequence first stabilizes simplification, the HH rule, variable change,
-and factorization. It then tries the Omega rule last. If Omega removes a path
-variable, the complete sequence starts again; otherwise the final path sum is
-renamed to use contiguous indices.
+The sequence first stabilizes simplification, the HH rule, the Case rule,
+variable change, and factorization. A Case match removes two path variables
+and restarts the complete sequence. It then tries the Omega rule last. If
+Omega removes a path variable, the complete sequence starts again; otherwise
+the final path sum is renamed to use contiguous indices.
 
 HH reduction now avoids several redundant phase traversals while preserving
 the candidate order, matching conditions, and mathematical transformation.
+
+Amy's Case rule removes two internal path variables `yi` and `yj`, therefore
+absent from the ket, when the phase has the following two complementary
+orientations:
+
+```text
+1/4 yi x + 1/2 yi (yj xor Q) + R
+  = 1/4 yj (1-x) + 1/2 yj (yi xor Q') + R'
+```
+
+The new phase is `(1-x) R[yj <- Q] + x R'[yi <- Q']`. The ket is preserved,
+and `yi` and `yj` are removed from the path-variable list. The matcher checks
+both orientations before transforming the path sum. It also reports a
+path-variable index below the ket width as malformed. This matcher is
+conservative: a non-match does not imply that no semantic simplification
+exists.
 
 Amy's Omega rule removes a path variable `y0` that is absent from the ket when
 the phase has the following form:

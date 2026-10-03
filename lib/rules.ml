@@ -595,6 +595,9 @@ module Case = struct
         let remaining_phase = Poly.del remaining_phase in
         if Monome.member variable monome then
           match Monome.remove_result variable monome with
+          | Ok (Some quotient) when Monome.member variable quotient ->
+              (* Case: removal was incomplete inside a nested product. *)
+              None
           | Ok (Some quotient) -> aux remaining_phase Poly.(quotient ++ factor)
           | Ok None | Error Monome.CannotRemoveQubitSum -> None
         else aux remaining_phase factor
@@ -934,33 +937,40 @@ module Case = struct
   let case ?(debug = false) ?(phase_is_simplified = false) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
     if debug then printf "Rule_case.case, input =\n%s\n%!" (PSS.pretty ps);
-    let internal_variables = internal_path_variables ps in
-    (* Case eliminates two distinct internal variables. Avoid normalizing and
-       scanning the phase when that necessary condition cannot hold. *)
-    match internal_variables with
-    | _ :: _ :: _ ->
-        let normalized =
-          if phase_is_simplified then ps
-          else { ps with phase = Poly.simplify ~debug ps.phase }
-        in
-        (* In the yi orientation, exactly one odd-quarter term remains after
-           factoring yi; every other term must form a Boolean half-phase. *)
-        let quarter_occurrences = odd_quarter_occurrences normalized.phase in
-        let candidate_variables =
-          List.filter
-            (fun variable ->
-              match IntMap.find_opt variable quarter_occurrences with
-              | Some 1 -> true
-              | Some _ | None -> false)
-            internal_variables
-        in
-        let matched_case =
-          find_match normalized internal_variables candidate_variables
-        in
-        (match matched_case with
-        | None -> Ok ps
-        | Some matched_case -> Ok (apply_match ~debug normalized matched_case))
-    | _ -> Ok ps
+    let width = Array.length ps.ket in
+    if List.exists (fun path_variable -> path_variable < width) ps.path_var then
+      Error
+        (MalformedPathSum
+           "Rules.Case.case: path variable index below ket width")
+    else
+      let internal_variables = internal_path_variables ps in
+      (* Case eliminates two distinct internal variables. Avoid normalizing and
+         scanning the phase when that necessary condition cannot hold. *)
+      match internal_variables with
+      | _ :: _ :: _ ->
+          let normalized =
+            if phase_is_simplified then ps
+            else { ps with phase = Poly.simplify ~debug ps.phase }
+          in
+          (* In the yi orientation, exactly one odd-quarter term remains after
+             factoring yi; every other term must form a Boolean half-phase. *)
+          let quarter_occurrences = odd_quarter_occurrences normalized.phase in
+          let candidate_variables =
+            List.filter
+              (fun variable ->
+                match IntMap.find_opt variable quarter_occurrences with
+                | Some 1 -> true
+                | Some _ | None -> false)
+              internal_variables
+          in
+          let matched_case =
+            find_match normalized internal_variables candidate_variables
+          in
+          (match matched_case with
+          | None -> Ok ps
+          | Some matched_case ->
+              Ok (apply_match ~debug normalized matched_case))
+      | _ -> Ok ps
 end
 
 module Rename = struct

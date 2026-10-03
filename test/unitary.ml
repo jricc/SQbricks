@@ -66,11 +66,13 @@ let test_sqv_result ?(debug = true) ?(algo = Equiv.Sequence)
 
 (* Input circuit used by Case integration: two copies of the Clifford+T block
    [X(control); Tinv(target); CH; X(control); T(target); CX].
-   Expected semantics: exact two-qubit identity. The explicit decomposition is
-   retained so the generated path sum can expose the Case motif. *)
-let case_clifford_t_identity =
+   Expected semantics: identity on the inferred register. For example, (0,2)
+   acts on three wires and leaves wire 1 unchanged. The explicit decomposition
+   is retained so the generated path sum can expose the Case motif. *)
+let case_clifford_t_identity control target =
   let block =
-    x 0 -- tinv 1 -- chdecomp 0 1 -- x 0 -- tt 1 -- cx 0 1
+    x control -- tinv target -- chdecomp control target -- x control
+    -- tt target -- cx control target
   in
   block -- block
 
@@ -136,7 +138,7 @@ let test_case_clifford_t_identity_exposes_case_motif () =
       path_var = [ 10; 13 ];
     }
   in
-  let executed = Program.execution case_clifford_t_identity in
+  let executed = Program.execution (case_clifford_t_identity 0 1) in
   let simplified = Rules.Simplification.simplify executed in
   let after_hh =
     match Rules.HH.hh simplified with
@@ -215,13 +217,37 @@ let case_integration =
     ( "Clifford+T identity via Sequence",
       `Quick,
       test_prog_equiv ~debug:false ~algo:Equiv.Sequence
-        case_clifford_t_identity id );
+        (case_clifford_t_identity 0 1) id );
     (* Input: the same circuit and identity, Parallel.
        Expected: [true] through the Parallel equivalence pipeline. *)
     ( "Clifford+T identity via Parallel",
       `Quick,
       test_prog_equiv ~debug:false ~algo:Equiv.Parallel
-        case_clifford_t_identity id );
+        (case_clifford_t_identity 0 1) id );
+    (* Input: the identity block with control 1 and target 0, Sequence.
+       Expected: [true]; Case is independent of control-target index order. *)
+    ( "reversed Clifford+T identity via Sequence",
+      `Quick,
+      test_prog_equiv ~debug:false ~algo:Equiv.Sequence
+        (case_clifford_t_identity 1 0) id );
+    (* Input: the identity block with control 1 and target 0, Parallel.
+       Expected: [true] through the Parallel equivalence pipeline. *)
+    ( "reversed Clifford+T identity via Parallel",
+      `Quick,
+      test_prog_equiv ~debug:false ~algo:Equiv.Parallel
+        (case_clifford_t_identity 1 0) id );
+    (* Input: the identity block on wires (0,2), leaving wire 1 untouched,
+       Sequence. Expected: [true] with the noncontiguous wire indices. *)
+    ( "spaced Clifford+T identity via Sequence",
+      `Quick,
+      test_prog_equiv ~debug:false ~algo:Equiv.Sequence
+        (case_clifford_t_identity 0 2) id );
+    (* Input: the same spaced identity block, Parallel.
+       Expected: [true] through the Parallel equivalence pipeline. *)
+    ( "spaced Clifford+T identity via Parallel",
+      `Quick,
+      test_prog_equiv ~debug:false ~algo:Equiv.Parallel
+        (case_clifford_t_identity 0 2) id );
     (* Input: Feynman CH then corrected CH on wires (0,1), Sequence.
        Expected result: [SubCircuitEquivalent], checked as a typed result. *)
     ( "Sequence: Feynman CH = corrected CH",
