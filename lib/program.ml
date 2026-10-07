@@ -276,6 +276,7 @@ type execution_error =
   | InputStateTooSmall of int * int
   | HybridProgram of t
   | NonDyadicRotationAngle of t
+  | OnlineHHReductionError of Rules.reduction_error
 
 let execution_error_message = function
   | EmptyTargetList p ->
@@ -294,6 +295,8 @@ let execution_error_message = function
   | NonDyadicRotationAngle p ->
       sprintf "Program.execution.GP/U1, non-dyadic angle, p = %s"
         (String.pretty p)
+  | OnlineHHReductionError (Rules.MalformedPathSum message) ->
+      sprintf "Program.execution online HH reduction, %s" message
 
 (* Temporary profiler for observing path-sum growth during circuit execution.
    Samples are buffered so that enabling the trace does not add file I/O after
@@ -533,7 +536,232 @@ module Online_hh_profile = struct
             flush channel)
 end
 
-let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
+(* Experimental online policy. It is disabled unless explicitly requested and
+   only revisits variables that occurred in the target before the H gate. *)
+module Online_hh_policy = struct
+  let enabled () = Sys.getenv_opt "SQBRICKS_HH_ONLINE_1_25" = Some "1"
+
+  type state = {
+    buffer : Buffer.t;
+    filename : string;
+    execution_id : int;
+    mutable h_index : int;
+    mutable analyses : int;
+    mutable applications : int;
+    mutable deferred : int;
+    mutable wall_s : float;
+  }
+
+  let next_execution_id = ref 0
+
+  let start enabled =
+    match Sys.getenv_opt "SQBRICKS_PROFILE_HH_ONLINE_POLICY_FILE" with
+    | None -> None
+    | Some filename when enabled ->
+        incr next_execution_id;
+        let state =
+          {
+            buffer = Buffer.create 4096;
+            filename;
+            execution_id = !next_execution_id;
+            h_index = 0;
+            analyses = 0;
+            applications = 0;
+            deferred = 0;
+            wall_s = 0.;
+          }
+        in
+        bprintf state.buffer "HH_ONLINE_POLICY_BEGIN pid=%d execution=%d\n"
+          (Unix.getpid ()) state.execution_id;
+        Some state
+    | Some _ -> None
+
+  let record_decision state decision
+      (estimate : Rules.HH.substitution_growth_estimate) phase_terms =
+    match state with
+    | None -> ()
+    | Some state ->
+        bprintf state.buffer
+          "HH_ONLINE_POLICY_DECISION pid=%d execution=%d h_index=%d \
+           decision=%s y0=%d yi=%d phase_terms=%d estimated_phase_terms=%d \
+           q_terms=%d saturated=%d\n"
+          (Unix.getpid ()) state.execution_id state.h_index decision estimate.y0
+          estimate.yi phase_terms estimate.estimated_phase_terms
+          estimate.q_terms
+          (if estimate.estimate_saturated then 1 else 0)
+
+  let record_ket_defer state
+      (estimate : Rules.HH.substitution_growth_estimate) phase_terms
+      ket_nodes_before ket_nodes_after =
+    match state with
+    | None -> ()
+    | Some state ->
+        bprintf state.buffer
+          "HH_ONLINE_POLICY_DECISION pid=%d execution=%d h_index=%d \
+           decision=defer-ket y0=%d yi=%d phase_terms=%d \
+           estimated_phase_terms=%d q_terms=%d saturated=%d \
+           ket_nodes_before=%d ket_nodes_after=%d\n"
+          (Unix.getpid ()) state.execution_id state.h_index estimate.y0
+          estimate.yi phase_terms estimate.estimated_phase_terms
+          estimate.q_terms
+          (if estimate.estimate_saturated then 1 else 0)
+          ket_nodes_before ket_nodes_after
+
+  let record_sample state candidate_count analyses applications deferred
+      (initial_path_sum : Path_sum.t) (final_path_sum : Path_sum.t) wall_s status =
+    match state with
+    | None -> ()
+    | Some state ->
+        let _, initial_ket_nodes =
+          Path_sum_growth_profile.ket_metrics initial_path_sum.ket
+        in
+        let _, final_ket_nodes =
+          Path_sum_growth_profile.ket_metrics final_path_sum.ket
+        in
+        state.analyses <- state.analyses + analyses;
+        state.applications <- state.applications + applications;
+        state.deferred <- state.deferred + (if deferred then 1 else 0);
+        state.wall_s <- state.wall_s +. wall_s;
+        bprintf state.buffer
+          "HH_ONLINE_POLICY_SAMPLE pid=%d execution=%d h_index=%d \
+           candidates=%d analyses=%d applications=%d deferred=%d \
+           path_vars_before=%d path_vars_after=%d phase_terms_before=%d \
+           phase_terms_after=%d ket_nodes_before=%d ket_nodes_after=%d \
+           wall_s=%.6f status=%s\n"
+          (Unix.getpid ()) state.execution_id state.h_index candidate_count
+          analyses applications (if deferred then 1 else 0)
+          (List.length initial_path_sum.path_var)
+          (List.length final_path_sum.path_var)
+          (Poly.size initial_path_sum.phase) (Poly.size final_path_sum.phase)
+          initial_ket_nodes final_ket_nodes wall_s status
+
+  let growth_is_bounded current_size candidate_size =
+    let quarter = current_size / 4 in
+    let maximum_size =
+      if max_int - current_size < quarter then max_int
+      else current_size + quarter
+    in
+    candidate_size <= maximum_size
+
+  let estimate_is_bounded
+      (estimate : Rules.HH.substitution_growth_estimate) current_phase_terms =
+    (not estimate.estimate_saturated)
+    && growth_is_bounded current_phase_terms estimate.estimated_phase_terms
+
+  let apply enabled state ~before targets (path_sum : Path_sum.t) =
+    if not enabled then Ok path_sum
+    else
+      let wall_start =
+        match state with None -> None | Some _ -> Some (Unix.gettimeofday ())
+      in
+      (match state with
+      | None -> ()
+      | Some state -> state.h_index <- state.h_index + 1);
+      let candidate_y0s =
+        Online_hh_profile.target_path_variables before targets
+      in
+      let analyses = ref 0 in
+      let applications = ref 0 in
+      let deferred = ref false in
+      let rec reduce candidate_y0s path_sum =
+        let without y0 candidates =
+          List.filter
+            (fun candidate -> not (Int.equal candidate y0))
+            candidates
+        in
+        let rec first_safe_match candidates =
+          incr analyses;
+          match
+            Rules.HH.first_candidate_growth_estimate candidates path_sum
+          with
+          | Error reduction_error -> Error reduction_error
+          | Ok None -> Ok None
+          | Ok (Some estimate) ->
+              let current_phase_terms = Poly.size path_sum.phase in
+              if not (estimate_is_bounded estimate current_phase_terms) then (
+                deferred := true;
+                record_decision state "defer" estimate current_phase_terms;
+                first_safe_match (without estimate.y0 candidates)
+              ) else
+                match Rules.HH.hh ~y0_to_remove:estimate.y0 path_sum with
+                | Error reduction_error -> Error reduction_error
+                | Ok reduced_path_sum ->
+                    let _, ket_nodes_before =
+                      Path_sum_growth_profile.ket_metrics path_sum.ket
+                    in
+                    let _, ket_nodes_after =
+                      Path_sum_growth_profile.ket_metrics reduced_path_sum.ket
+                    in
+                    if
+                      not
+                        (growth_is_bounded ket_nodes_before ket_nodes_after)
+                    then (
+                      deferred := true;
+                      record_ket_defer state estimate current_phase_terms
+                        ket_nodes_before ket_nodes_after;
+                      first_safe_match (without estimate.y0 candidates)
+                    ) else Ok (Some (estimate, reduced_path_sum))
+        in
+        match first_safe_match candidate_y0s with
+        | Error reduction_error -> Error reduction_error
+        | Ok None -> Ok path_sum
+        | Ok (Some (estimate, reduced_path_sum)) ->
+            record_decision state "apply" estimate (Poly.size path_sum.phase);
+            incr applications;
+            (* Restart from the beginning: a substitution can make an earlier
+               local candidate valid or change its estimate. *)
+            let remaining_candidates =
+              List.filter
+                (fun candidate ->
+                  not
+                    (Int.equal candidate estimate.y0
+                    || Int.equal candidate estimate.yi))
+                candidate_y0s
+            in
+            reduce remaining_candidates reduced_path_sum
+      in
+      let result = reduce candidate_y0s path_sum in
+      let wall_s =
+        match wall_start with
+        | None -> 0.
+        | Some wall_start -> Unix.gettimeofday () -. wall_start
+      in
+      let final_path_sum, status =
+        match result with
+        | Ok final_path_sum -> (final_path_sum, "ok")
+        | Error _ -> (path_sum, "error")
+      in
+      record_sample state (List.length candidate_y0s) !analyses !applications
+        !deferred path_sum final_path_sum wall_s status;
+      result
+
+  let finish state succeeded =
+    match state with
+    | None -> ()
+    | Some state ->
+        bprintf state.buffer
+          "HH_ONLINE_POLICY_END pid=%d execution=%d h=%d analyses=%d \
+           applications=%d deferred=%d wall_s=%.6f status=%s\n"
+          (Unix.getpid ()) state.execution_id state.h_index state.analyses
+          state.applications state.deferred state.wall_s
+          (if succeeded then "ok" else "error");
+        let channel =
+          open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ] 0o644
+            state.filename
+        in
+        let file_descriptor = Unix.descr_of_out_channel channel in
+        Unix.lockf file_descriptor Unix.F_LOCK 0;
+        Fun.protect
+          ~finally:(fun () ->
+            Unix.lockf file_descriptor Unix.F_ULOCK 0;
+            close_out_noerr channel)
+          (fun () ->
+            output_string channel (Buffer.contents state.buffer);
+            flush channel)
+end
+
+let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0)
+    ?(online_hh = Online_hh_policy.enabled ()) p =
   let _, wq = widths p in
   let input_width = Array.length input_state.ket in
   let width = Int.max wq input_width in
@@ -601,9 +829,13 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   let execution_aux (p : t) (ps : Path_sum.t) =
     let growth_profile = Path_sum_growth_profile.start ps in
     let online_hh_profile = Online_hh_profile.start () in
-    let record_profiles gate controls targets before after =
+    let online_hh_policy_profile = Online_hh_policy.start online_hh in
+    let record_growth gate controls targets path_sum =
       Path_sum_growth_profile.record growth_profile gate controls targets
-        after;
+        path_sum
+    in
+    let record_profiles gate controls targets before after =
+      record_growth gate controls targets after;
       Online_hh_profile.record online_hh_profile gate controls targets ~before
         ~after
     in
@@ -643,9 +875,18 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
           Error (InvalidGateApplication (width, p))
       | Measure _ | It _ | InitQ _ | Not _ -> Error (HybridProgram p)
       | Apply (H, co, ta) ->
-          let output = apply_forall apply_hadamard ps co ta in
-          record_profiles H co ta ps output;
-          Ok output
+          let output_before_online_hh = apply_forall apply_hadamard ps co ta in
+          Online_hh_profile.record online_hh_profile H co ta ~before:ps
+            ~after:output_before_online_hh;
+          (match
+             Online_hh_policy.apply online_hh online_hh_policy_profile
+               ~before:ps ta output_before_online_hh
+           with
+          | Error reduction_error ->
+              Error (OnlineHHReductionError reduction_error)
+          | Ok output ->
+              record_growth H co ta output;
+              Ok output)
       | Apply (X, co, ta) ->
           let output = apply_forall apply_not ps co ta in
           record_profiles X co ta ps output;
@@ -680,6 +921,7 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
     let result = aux p ps in
     Path_sum_growth_profile.finish growth_profile (Result.is_ok result);
     Online_hh_profile.finish online_hh_profile (Result.is_ok result);
+    Online_hh_policy.finish online_hh_policy_profile (Result.is_ok result);
     result
   in
 

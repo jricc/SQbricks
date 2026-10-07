@@ -27,11 +27,30 @@
 
 module PSS = Path_sum.String
 
+exception FactorizationBudgetExceeded
+(** An explicitly supplied experimental factorization CPU budget was exhausted.
+    No partially reduced state is returned. *)
+
 val reduction_algorithm :
-  ?debug:bool -> Path_sum.t -> (Path_sum.t, Rules.reduction_error) result
-(** [reduction_algorithm ?debug ps] applies the complete reduction
+  ?debug:bool ->
+  ?bounded_hh:bool ->
+  ?factorization_budget_s:float ->
+  Path_sum.t ->
+  (Path_sum.t, Rules.reduction_error) result
+(** [reduction_algorithm ?debug ?bounded_hh ?factorization_budget_s ps] applies the complete reduction
     sequence and returns an explicit error when a reduction rule receives a
-    malformed path sum. The reduction process follows these steps: 1.
+    malformed path sum. [bounded_hh] overrides the experimental HH growth guard
+    selected by [SQBRICKS_HH_ONLINE_1_25].
+
+    [factorization_budget_s] optionally limits cumulative factorization CPU time
+    in this call, across all iterations. It must be finite and non-negative;
+    otherwise [Invalid_argument] is raised. The budget is checked before and
+    after each factorization call. Exhaustion raises
+    [FactorizationBudgetExceeded]; a single call can exceed the budget before
+    returning. Without this argument, no budget applies.
+
+    The reduction process follows these
+    steps: 1.
     Simplification: Algebraic simplification of expressions 2. HH rule:
     Elimination of certain path variables 3. Variable replacement:
     Simplification of XOR expressions 4. Factorization: Reduction of phase terms

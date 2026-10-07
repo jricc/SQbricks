@@ -76,6 +76,13 @@ val seq :
     one of the result values indicating equivalence or reason for
     non-equivalence.
 
+    The experimental [SQBRICKS_HH_ONLINE_1_25=1] policy retries inconclusive
+    checks using the historical schedule. Its optional
+    [SQBRICKS_HH_ONLINE_FACTORIZATION_BUDGET_S] limits factorization CPU time per
+    reduction in the first pass; exhaustion also triggers the historical retry.
+    An unset or empty budget disables the limit; zero triggers an immediate
+    retry when factorization is reached.
+
     Example: [seq (h 0) (h 0)] results [SubCircuitEquivalent] *)
 
 val parallel :
@@ -93,6 +100,9 @@ val parallel :
 (** Checks equivalence of two quantum circuits using parallel algorithm. Returns
     one of the result values indicating equivalence or reason for
     non-equivalence.
+
+    The experimental online HH policy and its factorization budget follow the
+    same retry behavior as {!seq}.
 
     Example: [parallel (h 0) (h 0)] results [SubCircuitEquivalent] *)
 

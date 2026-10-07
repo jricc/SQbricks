@@ -76,6 +76,22 @@ module HH = struct
   let simplify p = Poly.simplify p
   let qsimplify p = Qubit.simplify p
 
+  let rec qubit_nodes = function
+    | Qubit.Zero | Qubit.One | Qubit.Var _ -> 1
+    | Qubit.Prod (left, right) | Qubit.SumMod2 (left, right) ->
+        1 + qubit_nodes left + qubit_nodes right
+
+  let ket_nodes ket =
+    Array.fold_left (fun count qubit -> count + qubit_nodes qubit) 0 ket
+
+  let growth_is_bounded current_size candidate_size =
+    let quarter = current_size / 4 in
+    let maximum_size =
+      if max_int - current_size < quarter then max_int
+      else current_size + quarter
+    in
+    candidate_size <= maximum_size
+
   let rec monome_variables (monome : Monome.t) variables =
     match monome with
     | Scal _ -> variables
@@ -474,21 +490,11 @@ module HH = struct
       | Some channel ->
           (* |x0*(y0 xor y1)> has five nodes. Count below products too;
              this is an expression size, not a measurement of heap memory. *)
-          let rec qubit_nodes = function
-            | Qubit.Zero | Qubit.One | Qubit.Var _ -> 1
-            | Qubit.Prod (left, right) | Qubit.SumMod2 (left, right) ->
-                1 + qubit_nodes left + qubit_nodes right
-          in
-          let ket_nodes =
-            Array.fold_left
-              (fun count qubit -> count + qubit_nodes qubit)
-              0 state.ket
-          in
           fprintf channel
             "HH_STATE pid=%d y0=%d yi=%d stage=%s path_vars=%d \
              phase_terms=%d ket_nodes=%d\n%!"
             (Unix.getpid ()) y0 yi stage (List.length state.path_var)
-            (Poly.size state.phase) ket_nodes
+            (Poly.size state.phase) (ket_nodes state.ket)
     in
     Fun.protect
       ~finally:(fun () ->
@@ -556,6 +562,47 @@ module HH = struct
             in
             profile_state "after" ps_output;
             Ok (Some ps_output))
+
+  (* Skip unsafe matches for the current state, while preserving candidate
+     order. After a safe substitution, restart so earlier candidates are
+     rechecked against the new expressions. *)
+  let rec bounded_hh ?(debug = false) (ps : Path_sum.t) =
+    let width = Array.length ps.ket in
+    let possible_y0s =
+      if width <= 0 then ps.path_var
+      else path_variables_with_possible_yi ps.phase width
+    in
+    let candidate_y0s =
+      List.filter
+        (fun path_variable -> List.mem path_variable possible_y0s)
+        ps.path_var
+    in
+    let without y0 candidates =
+      List.filter (fun candidate -> not (Int.equal candidate y0)) candidates
+    in
+    let rec first_safe_match candidates =
+      match first_candidate_growth_estimate candidates ps with
+      | Error reduction_error -> Error reduction_error
+      | Ok None -> Ok None
+      | Ok (Some estimate)
+        when estimate.estimate_saturated
+             || not
+                  (growth_is_bounded (Poly.size ps.phase)
+                     estimate.estimated_phase_terms) ->
+          first_safe_match (without estimate.y0 candidates)
+      | Ok (Some estimate) -> (
+          match hh_aux estimate.y0 estimate.yi ~debug ps with
+          | Error reduction_error -> Error reduction_error
+          | Ok None -> first_safe_match (without estimate.y0 candidates)
+          | Ok (Some reduced) ->
+              if growth_is_bounded (ket_nodes ps.ket) (ket_nodes reduced.ket)
+              then Ok (Some reduced)
+              else first_safe_match (without estimate.y0 candidates))
+    in
+    match first_safe_match candidate_y0s with
+    | Error reduction_error -> Error reduction_error
+    | Ok None -> Ok ps
+    | Ok (Some reduced) -> bounded_hh ~debug reduced
 
   (* Temporary comparison with the same candidate traversal and yi choice:
      smallest-Q scores partitions (x0 before x0 xor x1); the first-valid
@@ -835,10 +882,14 @@ module HH = struct
               chosen_score first_valid_score score_gain;
             result)
 
-  let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
+  let hh ?(debug = false) ?(y0_to_remove = -1)
+      ?(bounded = Sys.getenv_opt "SQBRICKS_HH_ONLINE_1_25" = Some "1")
+      (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
     let width = Array.length ps.ket in
     if Int.equal y0_to_remove (-1) then
+      if bounded then bounded_hh ~debug ps
+      else
       (* The fixed schedule gives the other reductions a turn after one
          successful automatic HH match. Explicit y0 requests are already local. *)
       let one_match_per_call =

@@ -76,8 +76,23 @@ let result_to_string = function
 
 type equivalence = SubCircuit | FullCircuit | GlobalPhase
 
-let reduction_for_equiv ?(debug = false) state =
-  match Reduction_algorithm.reduction_algorithm ~debug state with
+let reduction_for_equiv ?(debug = false) ~online_hh state =
+  let factorization_budget_s =
+    if not online_hh then None
+    else
+      match Sys.getenv_opt "SQBRICKS_HH_ONLINE_FACTORIZATION_BUDGET_S" with
+      | None | Some "" -> None
+      | Some value -> (
+          match Stdlib.float_of_string_opt value with
+          | Some budget when 0. <= budget && budget <= max_float -> Some budget
+          | _ ->
+              invalid_arg
+                "SQBRICKS_HH_ONLINE_FACTORIZATION_BUDGET_S must be finite and non-negative")
+  in
+  match
+    Reduction_algorithm.reduction_algorithm ~debug ~bounded_hh:online_hh
+      ?factorization_budget_s state
+  with
   | Ok reduced_state -> Ok reduced_state
   | Error (Rules.MalformedPathSum _) -> Error ErrorMalformedPathSum
 
@@ -112,8 +127,8 @@ let inverse_for_equiv program =
   | Ok inverse -> Ok inverse
   | Error (Program.NonReversibleProgram _) -> Error ErrorCircuitNotUnitary
 
-let execution_for_equiv ?debug ?input_state program =
-  match Program.execution_result ?debug ?input_state program with
+let execution_for_equiv ?debug ?input_state ~online_hh program =
+  match Program.execution_result ?debug ?input_state ~online_hh program with
   | Ok state -> Ok state
   | Error (Program.EmptyTargetList _)
   | Error (Program.InvalidGateApplication _)
@@ -121,6 +136,8 @@ let execution_for_equiv ?debug ?input_state program =
   | Error (Program.NonDyadicRotationAngle _) ->
       Error ErrorInvalidProgram
   | Error (Program.HybridProgram _) -> Error ErrorCircuitNotUnitary
+  | Error (Program.OnlineHHReductionError (Rules.MalformedPathSum _)) ->
+      Error ErrorMalformedPathSum
 
 let program_has_valid_gate_applications width program =
   let gate_indices_are_valid controls targets =
@@ -383,7 +400,8 @@ let phase_equality_to_string = function
   | GlobalPhaseEquality -> "GlobalPhaseEquality"
   | ConditionalEquality -> "ConditionalEquality"
 
-let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
+let seq_once ~online_hh ?(debug = false) ?(inputs1 = []) ?(inputs2 = [])
+    ?(outputs1 = [])
     ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
     unitary1 unitary2 =
   if equivalence = FullCircuit then ErrorFullCircuitNotImplemented
@@ -446,13 +464,16 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                     (ProgS.pretty unitary1_swap);
 
                 (* Check Separability just after 1st circuit *)
-                match execution_for_equiv ~debug ~input_state unitary1_swap with
+                match
+                  execution_for_equiv ~debug ~input_state ~online_hh
+                    unitary1_swap
+                with
                 | Error result -> result
                 | Ok state1 -> (
                     if debug then
                       printf "Equiv.seq, state1 =\n%s\n\n%!" (PSS.pretty state1);
 
-                    match reduction_for_equiv ~debug state1 with
+                    match reduction_for_equiv ~debug ~online_hh state1 with
                     | Error result -> result
                     | Ok state1_reduced ->
                     if debug then
@@ -494,10 +515,10 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                   (* `[|unit1--unit2^(-1)|] : |x>|0>_init1 -> |output_state>` *)
                                   match
                                     if length_inputs1 = 0 then
-                                      execution_for_equiv ~debug
+                                      execution_for_equiv ~debug ~online_hh
                                         ~input_state:state1 unitary2_inv
                                     else
-                                      execution_for_equiv ~debug
+                                      execution_for_equiv ~debug ~online_hh
                                         ~input_state:state1 unitary2_swap
                                   with
                                   | Error result -> result
@@ -508,7 +529,8 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                           (PSS.pretty output_state);
 
                                       match
-                                        reduction_for_equiv ~debug output_state
+                                        reduction_for_equiv ~debug ~online_hh
+                                          output_state
                                       with
                                       | Error result -> result
                                       | Ok output_state_reduced ->
@@ -608,9 +630,9 @@ let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                                       ErrorFullCircuitNotImplemented))))
                         else Entanglement1)
 
-let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
-    ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
-    unitary1 unitary2 =
+let parallel_once ~online_hh ?(debug = false) ?(inputs1 = []) ?(inputs2 = [])
+    ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = []) ?(meas2 = [])
+    ?(equivalence = SubCircuit) unitary1 unitary2 =
   (* Temporary profile in the HH log: e.g. normalize_1 is measured separately
      from separation_1. Reduction calls already have their own timers. *)
   let profile_file = Sys.getenv_opt "SQBRICKS_PROFILE_HH_COST_FILE" in
@@ -679,22 +701,26 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
 
                 match
                   profile_step "execution_1" (fun () ->
-                      execution_for_equiv ~debug ~input_state:input_state1
-                        unitary1)
+                      execution_for_equiv ~debug ~online_hh
+                        ~input_state:input_state1 unitary1)
                 with
                 | Error result -> result
                 | Ok output_state1 -> (
                     match
                       profile_step "execution_2" (fun () ->
-                          execution_for_equiv ~debug ~input_state:input_state2
-                            unitary2)
+                          execution_for_equiv ~debug ~online_hh
+                            ~input_state:input_state2 unitary2)
                     with
                     | Error result -> result
                     | Ok output_state2 -> (
-                        match reduction_for_equiv ~debug output_state1 with
+                        match
+                          reduction_for_equiv ~debug ~online_hh output_state1
+                        with
                         | Error result -> result
                         | Ok output_state_reduced1 -> (
-                            match reduction_for_equiv ~debug output_state2 with
+                            match
+                              reduction_for_equiv ~debug ~online_hh output_state2
+                            with
                             | Error result -> result
                             | Ok output_state_reduced2 ->
                 match
@@ -776,6 +802,68 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                                 | Ok true -> GlobalPhaseEquivalent
                                 | Ok false -> GlobalPhaseInconclusive))
                         | FullCircuit -> ErrorFullCircuitNotImplemented)))))
+
+let is_inconclusive = function
+  | SubCircuitInconclusive
+  | GlobalPhaseInconclusive
+  | FullCircuitInconclusive
+  | FullCircuitInconclusiveAmp
+  | FullCircuitInconclusiveKet
+  | Entanglement1
+  | Entanglement2 ->
+      true
+  | _ -> false
+
+(* An inconclusive guarded pass may have deferred a reduction needed by the
+   proof. Retry that case with the historical schedule to preserve coverage. *)
+let record_online_hh_fallback ?(reason = "inconclusive") result =
+  match Sys.getenv_opt "SQBRICKS_PROFILE_HH_ONLINE_POLICY_FILE" with
+  | None -> ()
+  | Some filename ->
+      let channel =
+        open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ] 0o644
+          filename
+      in
+      let file_descriptor = Unix.descr_of_out_channel channel in
+      Unix.lockf file_descriptor Unix.F_LOCK 0;
+      Fun.protect
+        ~finally:(fun () ->
+          Unix.lockf file_descriptor Unix.F_ULOCK 0;
+          close_out_noerr channel)
+        (fun () ->
+          fprintf channel
+            "HH_ONLINE_POLICY_FALLBACK pid=%d result=%s reason=%s\n%!"
+            (Unix.getpid ()) result reason)
+
+let with_online_hh_fallback verification =
+  let online_hh = Sys.getenv_opt "SQBRICKS_HH_ONLINE_1_25" = Some "1" in
+  let attempt =
+    try Ok (verification online_hh) with
+    | Reduction_algorithm.FactorizationBudgetExceeded when online_hh -> Error ()
+  in
+  match attempt with
+  | Error () ->
+      record_online_hh_fallback ~reason:"factorization-budget"
+        "FactorizationBudgetExceeded";
+      verification false
+  | Ok result when online_hh && is_inconclusive result ->
+      record_online_hh_fallback (result_to_string result);
+      verification false
+  | Ok result -> result
+
+let seq ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
+    ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
+    unitary1 unitary2 =
+  with_online_hh_fallback (fun online_hh ->
+      seq_once ~online_hh ~debug ~inputs1 ~inputs2 ~outputs1 ~outputs2 ~meas1
+        ~meas2 ~equivalence unitary1 unitary2)
+
+let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
+    ?(outputs2 = []) ?(meas1 = []) ?(meas2 = []) ?(equivalence = SubCircuit)
+    unitary1 unitary2 =
+  with_online_hh_fallback (fun online_hh ->
+      parallel_once ~online_hh ~debug ~inputs1 ~inputs2 ~outputs1 ~outputs2
+        ~meas1 ~meas2 ~equivalence unitary1 unitary2)
 
 (* Defines the type 'algo' representing the algorithm type to use. *)
 type algo = Parallel | Sequence

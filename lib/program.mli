@@ -89,12 +89,19 @@ type execution_error =
   | NonDyadicRotationAngle of t
       (** A [GP] or [U1] angle has a denominator that is not a power of two.
           Negative angles remain valid when their denominator is dyadic. *)
+  | OnlineHHReductionError of Rules.reduction_error
+      (** The experimental online HH policy encountered a malformed path sum. *)
 
 val execution_result :
-  ?debug:bool -> ?input_state:Path_sum.t -> t -> (Path_sum.t, execution_error) result
-(** [execution_result ?debug ?input_state prog] runs [prog] on the optional
-    [input_state] path-sum or an initialized path sum, or reports why execution
-    cannot proceed.
+  ?debug:bool ->
+  ?input_state:Path_sum.t ->
+  ?online_hh:bool ->
+  t ->
+  (Path_sum.t, execution_error) result
+(** [execution_result ?debug ?input_state ?online_hh prog] runs [prog] on the
+    optional [input_state] path-sum or an initialized path sum, or reports why
+    execution cannot proceed. [online_hh] overrides the experimental online HH
+    policy selected by [SQBRICKS_HH_ONLINE_1_25].
 
     [H], [X], and [U1] applications require a non-empty target list.
     [Apply (GP _, controls, targets)] ignores [targets]: [GP] is semantically

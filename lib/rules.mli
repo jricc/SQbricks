@@ -90,12 +90,14 @@ module HH : sig
   val hh :
     ?debug:bool ->
     ?y0_to_remove:int ->
+    ?bounded:bool ->
     Path_sum.t ->
     (Path_sum.t, reduction_error) result
-  (** [hh ?debug ?y0_to_remove ps] applies the [HH] reduction rule. It
+  (** [hh ?debug ?y0_to_remove ?bounded ps] applies the [HH] reduction rule. It
       returns [Ok ps'] when the rule succeeds or does not apply, and
       [Error (MalformedPathSum message)] when [ps] violates an invariant needed
-      by the rule.
+      by the rule. [bounded] overrides the experimental growth guard selected
+      by [SQBRICKS_HH_ONLINE_1_25] for automatic matching.
 
       This rule looks for a path variable y0 that appears in the form:
 

@@ -41,7 +41,16 @@ let _condition_to_continue ?(debug = false) (input : Path_sum.t)
       len_in len_out nb_of_sum_in nb_of_sum_out;
   (len_out < len_in && 0 < len_out) || nb_of_sum_out < nb_of_sum_in
 
-let reduction_algorithm ?(debug = false) input =
+exception FactorizationBudgetExceeded
+
+let reduction_algorithm ?(debug = false)
+    ?(bounded_hh = Sys.getenv_opt "SQBRICKS_HH_ONLINE_1_25" = Some "1")
+    ?factorization_budget_s input =
+  (match factorization_budget_s with
+  | Some budget when not (0. <= budget && budget <= max_float) ->
+      invalid_arg "factorization_budget_s must be finite and non-negative"
+  | _ -> ());
+  let factorization_cpu_s = ref 0. in
   let one_hh_match_per_call =
     Sys.getenv_opt "SQBRICKS_HH_ONE_MATCH_PER_CALL" = Some "1"
   in
@@ -64,6 +73,20 @@ let reduction_algorithm ?(debug = false) input =
         !reduction_profile_calls
   in
   let iteration = ref 0 in
+  (* The budget is shared by all factorization loops in this reduction.
+     Checking between calls cannot interrupt one expensive substitution. *)
+  let check_factorization_budget () =
+    match factorization_budget_s with
+    | Some budget when budget <= !factorization_cpu_s ->
+        (match profile_channel with
+        | None -> ()
+        | Some channel ->
+            fprintf channel
+              "REDUCTION_FACTORIZATION_BUDGET pid=%d call=%d cpu_s=%.6f budget_s=%.6f\n%!"
+              (Unix.getpid ()) call !factorization_cpu_s budget);
+        raise FactorizationBudgetExceeded
+    | _ -> ()
+  in
   let profile_state stage (state : Path_sum.t) =
     match profile_channel with
     | None -> ()
@@ -108,11 +131,23 @@ let reduction_algorithm ?(debug = false) input =
     let continue_without_variable_replacement state_hh =
       let state_fact =
         let rec factorize state_in =
+          check_factorization_budget ();
+          let cpu_start =
+            match factorization_budget_s with
+            | None -> 0.
+            | Some _ -> Sys.time ()
+          in
           let state_out =
             profile_step "factorization" (fun () ->
                 Rules.Variable_replacement.variable_replacement_factorisation
                   state_in ~debug)
           in
+          (match factorization_budget_s with
+          | None -> ()
+          | Some _ ->
+              factorization_cpu_s :=
+                !factorization_cpu_s +. (Sys.time () -. cpu_start));
+          check_factorization_budget ();
           profile_state "factorization_candidate" state_out;
           if debug then
             printf "Reduction_algorithm.aux, state_out =\n%s\n\n"
@@ -175,7 +210,9 @@ let reduction_algorithm ?(debug = false) input =
     in
     let apply_hh state =
       profile_state "before_hh" state;
-      match profile_step "hh" (fun () -> Rules.HH.hh ~debug state) with
+      match
+        profile_step "hh" (fun () -> Rules.HH.hh ~debug ~bounded:bounded_hh state)
+      with
       | Error reduction_error -> Error reduction_error
       | Ok state_hh -> continue_after_hh state state_hh
     in
@@ -214,27 +251,33 @@ let reduction_algorithm ?(debug = false) input =
         | None -> (0., 0.)
         | Some _ -> (Unix.gettimeofday (), Sys.time ())
       in
+      let finish_profile status =
+        match profile_channel with
+        | None -> ()
+        | Some channel ->
+            let cpu_s = Sys.time () -. cpu_start in
+            let wall_s = Unix.gettimeofday () -. wall_start in
+            fprintf channel
+              "REDUCTION_END pid=%d call=%d iterations=%d status=%s \
+               wall_s=%.6f cpu_s=%.6f\n%!"
+              (Unix.getpid ()) call !iteration status wall_s cpu_s
+      in
       profile_state "input" input;
       if debug then
         printf "Reduction_algorithm, input =\n%s\n\n" (PSS.pretty input);
-      let result =
-        match aux input with
-        | Ok output ->
-            let output =
-              profile_step "rename" (fun () -> Rename.rename output)
-            in
-            profile_state "output" output;
-            Ok output
-        | Error reduction_error -> Error reduction_error
-      in
-      (match profile_channel with
-      | None -> ()
-      | Some channel ->
-          let cpu_s = Sys.time () -. cpu_start in
-          let wall_s = Unix.gettimeofday () -. wall_start in
-          let status = match result with Ok _ -> "ok" | Error _ -> "error" in
-          fprintf channel
-            "REDUCTION_END pid=%d call=%d iterations=%d status=%s \
-             wall_s=%.6f cpu_s=%.6f\n%!"
-            (Unix.getpid ()) call !iteration status wall_s cpu_s);
-      result)
+      try
+        let result =
+          match aux input with
+          | Ok output ->
+              let output =
+                profile_step "rename" (fun () -> Rename.rename output)
+              in
+              profile_state "output" output;
+              Ok output
+          | Error reduction_error -> Error reduction_error
+        in
+        finish_profile (match result with Ok _ -> "ok" | Error _ -> "error");
+        result
+      with FactorizationBudgetExceeded ->
+        finish_profile "factorization-budget";
+        raise FactorizationBudgetExceeded)
