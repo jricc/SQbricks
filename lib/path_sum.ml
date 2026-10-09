@@ -415,6 +415,88 @@ let equality_error_of_poly = function
   | Poly.IncompatibleWidths -> IncompatiblePhaseWidths
   | Poly.IncompletePathVariableMap -> IncompletePhasePathVariableMap
 
+let observed_phase_result ?(debug = false) ~outputs ~discards (ps : t) :
+    (Poly.t option, equality_error) result =
+  let width = Array.length ps.ket in
+  if
+    not (ListBis.valid_indices width outputs)
+    || not (ListBis.valid_indices width discards)
+    || List.exists (fun output -> List.mem output discards) outputs
+  then Error InvalidOutputIndex
+  else
+    let phase = if Poly.is_empty ps.phase then Poly.zero else ps.phase in
+    let discard_variables =
+      List.sort_uniq Int.compare (Ket.extract_var ps.ket discards)
+    in
+    if List.is_empty discard_variables then Ok (Some phase)
+    else
+      let observed_variables = Ket.extract_var ps.ket outputs in
+      let rec monome_variables (monome : Poly.Monome.t) =
+        match monome with
+        | Scal _ -> []
+        | Qubit qubit -> Qubit.extract_var qubit
+        | Prod (left, right) ->
+            List.rev_append (monome_variables left) (monome_variables right)
+      in
+      let rec phase_terms remaining terms =
+        if Poly.is_empty remaining then List.rev terms
+        else
+          let monome = Poly.find remaining in
+          let variables =
+            List.sort_uniq Int.compare (monome_variables monome)
+          in
+          phase_terms (Poly.del remaining) ((monome, variables) :: terms)
+      in
+      let terms = phase_terms phase [] in
+      (* For z*y/2 + y*g/2, discard g also reaches y and observed z.
+         Closing the whole component is necessary even when y is absent
+         from both kets. Each pass adds variables or reaches a fixed point. *)
+      let rec expand_discard variables =
+        let expanded =
+          List.fold_left
+            (fun connected (_, term_variables) ->
+              if
+                List.exists
+                  (fun variable -> List.mem variable connected)
+                  term_variables
+              then List.sort_uniq Int.compare (term_variables @ connected)
+              else connected)
+            variables terms
+        in
+        if List.equal Int.equal variables expanded then variables
+        else expand_discard expanded
+      in
+      let discard_variables = expand_discard discard_variables in
+      let separated =
+        not
+          (List.exists
+             (fun variable ->
+               variable < width || List.mem variable observed_variables)
+             discard_variables)
+      in
+      if debug then
+        printf
+          "Path_sum.observed_phase_result, discard_variables = %s, separated = %b\n%!"
+          (ListBis.string_int discard_variables) separated;
+      if not separated then Ok None
+      else
+        let observed_phase =
+          List.fold_left
+            (fun observed_phase (monome, variables) ->
+              if
+                List.exists
+                  (fun variable -> List.mem variable discard_variables)
+                  variables
+              then observed_phase
+              else Poly.insert monome observed_phase)
+            Poly.empty terms
+        in
+        (* Constants and components unconnected to the discard stay observed.
+           In particular, an internal T phase is not a global phase. *)
+        Ok
+          (Some
+             (if Poly.is_empty observed_phase then Poly.zero else observed_phase))
+
 let equal_result ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
     ?(global_phase = false) ps1 ps2 =
   let wq1, wq2 = (Array.length ps1.ket, Array.length ps2.ket) in
@@ -455,48 +537,34 @@ let equal_result ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
         if debug then printf "Path_sum.equal, kets_equals = %b\n" kets_equal;
 
         if kets_equal then (
-          let var_outputs1 =
-            List.sort_uniq Int.compare (Ket.extract_var ps1.ket outputs1)
-          in
-          let var_outputs2 =
-            List.sort_uniq Int.compare (Ket.extract_var ps2.ket outputs2)
-          in
-
           if debug then printf "Path_sum.equal, p1 = %s\n%!" (PS.pretty p1 wq1);
           if debug then printf "Path_sum.equal, p2 = %s\n%!" (PS.pretty p2 wq2);
 
-          let extract_poly p var_outputs wq =
-            if Poly.is_constant_superior_zero p then p
-            else
-              let m = Poly.find p in
-              let p =
-                Poly.extract p
-                  (List.sort_uniq Int.compare
-                     (var_outputs @ ListBis.range 0 wq))
-              in
-              match m with
-              | Poly.Monome.Scal x when not (Q.equal x Q.zero) -> Poly.insert m p
-              | _ -> p
-          in
-
-          let poly_output1 = extract_poly p1 var_outputs1 wq1 in
-          let poly_output2 = extract_poly p2 var_outputs2 wq2 in
-
-          (* Sub-Circuit-Partial-Equivalence *)
           match
-            Poly.equal_result ~global_phase ~debug ~wq1 ~wq2 ~map_path_var1
-              ~map_path_var2 poly_output1 poly_output2
+            ( observed_phase_result ~debug ~outputs:outputs1
+                ~discards:(ListBis.missing_in_range outputs1 wq1) ps1,
+              observed_phase_result ~debug ~outputs:outputs2
+                ~discards:(ListBis.missing_in_range outputs2 wq2) ps2 )
           with
-          | Error Poly.IncompletePathVariableMap ->
-              (* Ket equality builds a consistent partial bijection. A
-                 one-sided phase lookup therefore means that the phases differ,
-                 not that either path sum is malformed. *)
-              Ok false
-          | Error error -> Error (equality_error_of_poly error)
-          | Ok polys_equal ->
-              if debug then
-                printf "Path_sum.equal, polys_equal = %b\n" polys_equal;
-              Ok polys_equal)
+          | Error error, _ | _, Error error -> Error error
+          | Ok observed_phase1, Ok observed_phase2 ->
+              (* A direct caller may compare selected kets without separability.
+                 Keep the full phase whenever a discard factor is unproven. *)
+              let poly_output1 = Option.value ~default:p1 observed_phase1 in
+              let poly_output2 = Option.value ~default:p2 observed_phase2 in
+              (match
+                 Poly.equal_result ~global_phase ~debug ~wq1 ~wq2 ~map_path_var1
+                   ~map_path_var2 poly_output1 poly_output2
+               with
+              | Error Poly.IncompletePathVariableMap ->
+                  (* Ket equality builds a consistent partial bijection. A
+                     one-sided phase lookup means that the phases differ. *)
+                  Ok false
+              | Error error -> Error (equality_error_of_poly error)
+              | Ok polys_equal ->
+                  if debug then
+                    printf "Path_sum.equal, polys_equal = %b\n" polys_equal;
+                  Ok polys_equal))
         else Ok false
 
 let equal ?(debug = false) ?(outputs1 = []) ?(outputs2 = [])
