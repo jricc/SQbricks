@@ -275,6 +275,24 @@ type equality_error =
       one variable from a phase pair but does not provide its corresponding
       entry on the other side. *)
 
+val observed_phase_result :
+  ?debug:bool ->
+  outputs:int list ->
+  discards:int list ->
+  t ->
+  (Poly.t option, equality_error) result
+(** [observed_phase_result ~outputs ~discards ps] checks a sufficient syntactic
+    separation condition for a well-formed path sum. Starting from variables in
+    the discarded ket, it follows every phase term connected to them. If this
+    component reaches an input variable or an observed ket variable, it returns
+    [Ok None]; this does not prove semantic entanglement.
+
+    [Ok (Some phase)] retains all terms outside that independent discard
+    component, including constants and internal components of uncertain role.
+    With no discarded ket variables, it retains the complete phase.
+    [outputs] and [discards] are explicit qubit-index lists; they must be valid
+    and disjoint, otherwise [Error InvalidOutputIndex] is returned. *)
+
 val equal_result :
   ?debug:bool ->
   ?outputs1:int list ->
@@ -288,7 +306,13 @@ val equal_result :
     comparison is well formed, and [Error DifferentOutputLengths] when the
     output selections have different lengths, or [Error InvalidOutputIndex]
     when an output selection is out of bounds. Phase comparison metadata errors
-    are reported explicitly instead of being collapsed to [Ok false]. *)
+    are reported explicitly instead of being collapsed to [Ok false].
+
+    It removes only independent discard phase components established by
+    {!observed_phase_result}. Otherwise it compares the full phases. With all
+    outputs selected, internal phase terms are retained. [global_phase] ignores
+    only constant phase terms. This comparison does not itself certify output
+    separability. *)
 
 val equal :
   ?debug:bool ->

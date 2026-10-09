@@ -212,47 +212,13 @@ let separability_states ?(debug = false) (state : Path_sum.t) outputs wq =
     Error ErrorInvalidQubitIndex
   else
     let garbages = ListBis.missing_in_range outputs wq in
-    let var_output =
-      List.sort_uniq Int.compare (Ket.extract_var state.ket outputs)
-    in
-    let var_garbage =
-      List.sort_uniq Int.compare (Ket.extract_var state.ket garbages)
-    in
-
-    (* If an external variable is in garbage, outputs and garbages are not separable. *)
-    let var_garbage_contents_external_variables =
-      List.exists (fun i -> i < width) var_garbage
-    in
-    if debug then
-      printf
-        "Equiv.separability, var_garbage_contents_external_variables = %b\n\n%!"
-        var_garbage_contents_external_variables;
-    if var_garbage_contents_external_variables then Ok false
-    else (
-      if debug then
-        printf "Equiv.separability, garbages = %s\n\n%!"
-          (ListBis.string_int garbages);
-      if debug then
-        printf "Equiv.separability, outputs = %s\n\n%!"
-          (ListBis.string_int outputs);
-      if debug then
-        printf "Equiv.separability, var_output = %s\n\n%!"
-          (ListBis.string_int var_output);
-      if debug then
-        printf "Equiv.separability, var_garbage = %s\n\n%!"
-          (ListBis.string_int var_garbage);
-      let rec aux = function
-        | hd :: tl ->
-            if ListBis.member hd var_garbage Int.equal then false else aux tl
-        | [] -> true
-      in
-      if not (aux var_output) then Ok false
-      else
-        let poly_sep =
-          Poly.separable_in_poly state.phase var_output var_garbage
-        in
-        if debug then printf "Equiv.separability, poly_sep = %b\n\n%!" poly_sep;
-        Ok poly_sep)
+    (* Use the same full phase-component partition as partial comparison;
+       an internal path variable can connect the two registers indirectly. *)
+    match
+      Path_sum.observed_phase_result ~debug ~outputs ~discards:garbages state
+    with
+    | Ok observed_phase -> Ok (Option.is_some observed_phase)
+    | Error _ -> Error ErrorInvalidQubitIndex
 
 let parameters_preparation ?(debug = false) inputs1 inputs2 outputs1 outputs2
     unitary1 unitary2 =
