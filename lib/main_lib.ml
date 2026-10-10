@@ -96,6 +96,7 @@ let nb_gates_csv = ref false
 
 (* let nb_gates = ref false *)
 let qasm_to_ps = ref false
+let simulate = ref false
 let qasm_to_feynman = ref false
 let qasm_to_pyzx = ref false
 let qasm_to_autoq = ref false
@@ -129,6 +130,10 @@ let speclist =
       Arg.Set sqv_specs,
       "<p.qasm> <precondition.txt> <postcondition.txt>\n"
       ^ "Example: -sqv_specs circuit.qasm pre.txt post.txt" );
+    ( "-simulate",
+      Arg.Set simulate,
+      "<circuit.qasm> <bits>\n"
+      ^ "Example: -simulate circuit.qasm 010 (first bit is qubit 0)" );
     ( "-qasm_to_ps",
       Arg.Set qasm_to_ps,
       "<input.qasm>\n" ^ "Example: -qasm_to_ps circuit.qasm" );
@@ -447,6 +452,51 @@ let run () =
     let by_meas = Program.format by_meas in
 
     To_openqasm.print_to_file_oq_free_folder output_file_by_meas by_meas)
+  else if !simulate then (
+    match List.rev !input_files with
+    | [ circuit_file; basis_bits ] ->
+        if not (String.for_all (function '0' | '1' -> true | _ -> false) basis_bits)
+        then (
+          eprintf "Simulation input must contain only 0 and 1.\n%!";
+          exit 1);
+        (* Characters follow register order: 010 means q0=0, q1=1, q2=0.
+           The string length includes unused wires. *)
+        let input =
+          Array.init (String.length basis_bits)
+            (fun qubit_index -> basis_bits.[qubit_index] = '1')
+        in
+        (try
+           let circuit = parse_prog circuit_file in
+           match Simulation.execute ~input circuit with
+           | Ok state -> printf "%s\n%!" (PSS.pretty state)
+           | Error error ->
+               let message =
+                 match error with
+                 | Simulation.ExecutionError (Program.InputStateTooSmall (required, given)) ->
+                     sprintf "Input has %d qubits; circuit requires at least %d." given required
+                 | Simulation.ExecutionError (Program.HybridProgram _) ->
+                     "Only unitary circuits are supported."
+                 | Simulation.ExecutionError (Program.EmptyTargetList _) ->
+                     "A gate has no target."
+                 | Simulation.ExecutionError (Program.InvalidGateApplication _) ->
+                     "A gate has invalid or overlapping qubit indices."
+                 | Simulation.ExecutionError (Program.NonDyadicRotationAngle _) ->
+                     "A rotation angle is not dyadic."
+                 | Simulation.ReductionError (Rules.MalformedPathSum message) ->
+                     "Malformed path sum: " ^ message
+               in
+               eprintf "Simulation error: %s\n%!" message;
+               exit 1
+         with
+         | Sys_error message | Failure message ->
+             eprintf "Simulation error: %s\n%!" message;
+             exit 1
+         | Parser_OpenQASM.Error ->
+             eprintf "Simulation error: invalid QASM syntax.\n%!";
+             exit 1)
+    | _ ->
+        eprintf "Usage: -simulate <circuit.qasm> <bits>\n%!";
+        exit 1)
   else if !qasm_to_ps then (
     let p = parse_prog (List.nth !input_files 0) in
     match Reduction_algorithm.reduction_algorithm (Program.execution p) with

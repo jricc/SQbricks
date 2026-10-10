@@ -307,6 +307,26 @@ When this can be done unambiguously, variable change reuses an existing path
 variable and avoids an unnecessary global renaming. This optimization changes
 neither the substitution condition nor the path-sum semantics.
 
+## Simulation prototype
+
+The experimental `-simulate` command executes a unitary QASM circuit on a
+concrete basis input and prints its reduced path sum:
+
+```bash
+dune exec -- ./bin/main.exe -simulate benchmarks/verif/x/circ.qasm 0
+```
+
+For this X circuit, the expected output is `|1>` with no path variables.
+Input `010` means `q0=0`, `q1=1`, `q2=0`: the first character corresponds
+to qubit 0. Its length defines the register, including unused wires.
+Only `0` and `1` are accepted. File, syntax, input, execution and reduction
+errors are reported on stderr with exit status 1. The engine accepts unitary
+circuits and dyadic angles supported by the existing executor; measurements
+and other hybrid constructs are rejected.
+
+This prototype does not enumerate remaining paths or compute measurement
+probabilities yet.
+
 ## Inspection prototype
 
 `scripts/inspect-sqbricks.sh` orchestrates existing commands to inspect a

@@ -324,6 +324,27 @@ une variable de chemin existante et évite un renommage global inutile. Cette
 optimisation ne change ni la condition de substitution ni la sémantique du
 path-sum.
 
+## Prototype de simulation
+
+La commande expérimentale `-simulate` exécute un circuit unitaire QASM sur
+une entrée de base concrète et affiche son path-sum réduit :
+
+```bash
+dune exec -- ./bin/main.exe -simulate benchmarks/verif/x/circ.qasm 0
+```
+
+Pour ce circuit X, la sortie attendue est `|1>`, sans variable de chemin.
+L'entrée `010` signifie `q0=0`, `q1=1`, `q2=0` : le premier caractère
+correspond au qubit 0. Sa longueur définit le registre, fils inutilisés
+compris. Seuls `0` et `1` sont acceptés. Les erreurs de lecture, de syntaxe,
+d'entrée, d'exécution ou de réduction sont signalées sur stderr avec un code
+de sortie 1. Le moteur accepte les circuits unitaires et les angles dyadiques
+pris en charge par l'exécuteur existant ; les mesures et autres constructions
+hybrides sont rejetées.
+
+Ce prototype n'énumère pas les chemins restants et ne calcule pas encore de
+probabilités de mesure.
+
 ## Prototype d'inspection
 
 `scripts/inspect-sqbricks.sh` orchestre les commandes existantes pour inspecter

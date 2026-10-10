@@ -38,7 +38,9 @@
     - One-way measurement: [-qasm_owm]
     - Teleportation: [-qasm_tele]
 
-    Path Sum Generation: [-qasm_to_ps] *)
+    Path Sum Generation: [-qasm_to_ps]
+
+    Experimental concrete-input execution: [-simulate] *)
 
 (** {1 Main Command Line Interface}
 
@@ -229,6 +231,23 @@
         benchmarks/minimal-examples/h.qasm benchmarks/minimal-examples/h-tele.qasm false
 
       Return: "[0],[2]"
+    ]} *)
+
+(** {2 Experimental Simulation} *)
+
+(** [-simulate <circuit.qasm> <bits>] executes a unitary QASM circuit on a
+    concrete computational-basis input and prints its reduced path sum.
+
+    Characters follow qubit index order: [010] means q0=0, q1=1, q2=0.
+    The string length defines the input register, including unused wires.
+    Only [0] and [1] are accepted. An empty string denotes an empty register.
+    Input, parsing, execution and reduction errors are reported on stderr
+    with exit status 1. Remaining paths are not enumerated; no measurement
+    probabilities are computed.
+
+    Example: X on |0> produces |1> without path variables.
+    {[
+      dune exec -- ./bin/main.exe -simulate benchmarks/verif/x/circ.qasm 0
     ]} *)
 
 (** {2 Path Sum Generation} *)
