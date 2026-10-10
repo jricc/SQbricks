@@ -9,8 +9,8 @@ type: software
 authors:
   - family-names: Ricciardi
     given-names: Jerome
-version: 0.1.1
-date-released: 2026-08-30
+version: 0.2.0
+date-released: 2026-10-10
 license: LGPL-2.1-only
 repository-code: https://github.com/jricc/SQbricks
 url: https://github.com/jricc/SQbricks

@@ -2,6 +2,42 @@
 
 This file records the user-visible changes in SQbricks releases.
 
+## [0.2.0] - 2026-10-10
+
+### Added
+
+- Integrate Amy's Omega and Case rules into path-sum reduction. Case runs
+  after HH; Omega runs after the other reductions stabilize. A successful
+  application restarts the reduction pipeline.
+- Add direct and circuit-level tests for the new rules, including exact phase
+  preservation, independent contexts, and unsupported matching forms.
+- Add a Case capability example to the light regression benchmark.
+
+### Fixed
+
+- Correct the controlled-Hadamard decomposition used by circuit transformations.
+- Reject malformed path-variable metadata before Case matching and handle
+  unsuccessful factorization conservatively.
+- Extend Case integration coverage to reversed and spaced wire indices.
+
+### Performance
+
+- Reduce redundant work in Case matching and in qubit-to-polynomial conversion.
+  Performance remains workload- and machine-dependent; no global speedup is
+  claimed.
+
+### Validation and known limitations
+
+- The recorded validation of the combined HH, Case, and Omega pipeline includes
+  1,595 passing tests and a passing light check with 50 functional rows and
+  14 tracked performance rows.
+- The selected large campaign completed all ten families. Nine passed; `tele`
+  reported two Sequence out-of-memory results under the 6 GiB limit:
+  `grover_5_feynman` and `gf2^64mult_4285_20669`. Both were reproduced without
+  Case and remain resource limitations of the reference environment.
+- Rule matchers remain conservative; an inconclusive result does not establish
+  non-equivalence. SQbricks remains a research prototype.
+
 ## [0.1.1] - 2026-08-30
 
 SQbricks 0.1.1 keeps the public interfaces and reduction semantics of 0.1.0
