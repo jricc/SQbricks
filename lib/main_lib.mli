@@ -40,7 +40,7 @@
 
     Path Sum Generation: [-qasm_to_ps]
 
-    Experimental concrete-input execution: [-simulate] *)
+    Experimental concrete-input execution: [-simulate] [-simulate_expand] *)
 
 (** {1 Main Command Line Interface}
 
@@ -248,6 +248,23 @@
     Example: X on |0> produces |1> without path variables.
     {[
       dune exec -- ./bin/main.exe -simulate benchmarks/verif/x/circ.qasm 0
+    ]} *)
+
+(** [-simulate_expand <circuit.qasm> <bits>] executes a unitary QASM circuit
+    on a concrete computational-basis input, then unfolds the remaining path
+    variables. Each unfolded path is printed as a concrete basis state with
+    its rational phase (in units of 2π). The amplitude of each path is
+    [e^(2πi·phase) / 2^(m/2)], where [m] is the number of path variables.
+    Paths leading to the same basis state must be grouped before computing
+    probabilities.
+
+    Input format and error behavior are identical to [-simulate]. Expansion
+    errors (non-scalar phase or non-concrete ket after substitution) are
+    reported on stderr with exit status 1.
+
+    Example: H on |0> unfolds to two paths, |0> and |1>, both with phase 0.
+    {[
+      dune exec -- ./bin/main.exe -simulate_expand benchmarks/verif/h/circ.qasm 0
     ]} *)
 
 (** {2 Path Sum Generation} *)

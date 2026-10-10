@@ -43,3 +43,35 @@ val execute : input:bool array -> Program.t -> (Path_sum.t, error) result
 
     Example: [execute ~input:[| false |] (Program.Macros.x 0)] returns a
     phase-zero path sum with ket [| Qubit.One |] and no path variables. *)
+
+(** {1 Path Expansion} *)
+
+type expanded_path = {
+  basis_state : bool array;
+      (** Concrete output: [basis_state.(i)] is [false] for |0> and [true] for
+          |1>. *)
+  phase : Q.t;
+      (** Rational phase in units of 2π. The path contributes
+          [e^(2πi·phase) / 2^(m/2)] to the amplitude of [basis_state], where
+          [m] is the number of path variables in the expanded path sum. *)
+}
+(** One unfolded path: a concrete basis state and its rational phase. *)
+
+type expand_error =
+  | PhaseNotScalar
+      (** After substitution, the phase still contains path variables or
+          non-scalar terms. *)
+  | KetNotConcrete
+      (** After substitution, a ket qubit does not simplify to |0> or |1>. *)
+(** Errors propagated by {!expand}. *)
+
+val expand : Path_sum.t -> (expanded_path list, expand_error) result
+(** [expand ps] enumerates all assignments of the path variables in [ps] and
+    returns one entry per path with its concrete basis state and rational phase.
+
+    The amplitude of each path is [e^(2πi·phase) / 2^(m/2)] where [m] is the
+    number of path variables ([List.length ps.path_var]). Paths leading to the
+    same basis state must be grouped before computing probabilities.
+
+    Example: expanding the reduced path sum of H on |0> gives two paths, |0>
+    and |1>, both with phase 0. *)

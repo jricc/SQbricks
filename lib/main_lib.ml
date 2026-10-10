@@ -97,6 +97,7 @@ let nb_gates_csv = ref false
 (* let nb_gates = ref false *)
 let qasm_to_ps = ref false
 let simulate = ref false
+let simulate_expand = ref false
 let qasm_to_feynman = ref false
 let qasm_to_pyzx = ref false
 let qasm_to_autoq = ref false
@@ -134,6 +135,10 @@ let speclist =
       Arg.Set simulate,
       "<circuit.qasm> <bits>\n"
       ^ "Example: -simulate circuit.qasm 010 (first bit is qubit 0)" );
+    ( "-simulate_expand",
+      Arg.Set simulate_expand,
+      "<circuit.qasm> <bits>\n"
+      ^ "Example: -simulate_expand circuit.qasm 0 (unfolds path variables)" );
     ( "-qasm_to_ps",
       Arg.Set qasm_to_ps,
       "<input.qasm>\n" ^ "Example: -qasm_to_ps circuit.qasm" );
@@ -165,6 +170,31 @@ let speclist =
       Arg.Set metrics,
       "<circuit.qasm>\n" ^ "Example: -metrics circuit.qasm" );
   ]
+
+(* Prints the unfolded paths of a reduced path sum: one line per path with
+   its concrete basis state and rational phase. The amplitude of each path is
+   e^(2πi·phase) / 2^(m/2), where m is the number of path variables. *)
+let print_expanded_paths (state : Path_sum.t) : unit =
+  match Simulation.expand state with
+  | Error Simulation.PhaseNotScalar ->
+      eprintf "Expansion error: phase is not a scalar after substitution.\n%!";
+      exit 1
+  | Error Simulation.KetNotConcrete ->
+      eprintf "Expansion error: ket is not concrete after substitution.\n%!";
+      exit 1
+  | Ok paths ->
+      let m = List.length state.path_var in
+      printf "path variables: %d (normalization 2^(-%d/2))\n" m m;
+      List.iter
+        (fun path ->
+          let open Simulation in
+          let bits =
+            Array.fold_right
+              (fun b acc -> (if b then "1" else "0") ^ acc)
+              path.basis_state ""
+          in
+          printf "|%s>: phase %s\n" bits (Q.to_string path.phase))
+        paths
 
 let run () =
   Arg.parse speclist anon_fun usage_msg;
@@ -452,7 +482,7 @@ let run () =
     let by_meas = Program.format by_meas in
 
     To_openqasm.print_to_file_oq_free_folder output_file_by_meas by_meas)
-  else if !simulate then (
+  else if !simulate || !simulate_expand then (
     match List.rev !input_files with
     | [ circuit_file; basis_bits ] ->
         if not (String.for_all (function '0' | '1' -> true | _ -> false) basis_bits)
@@ -468,7 +498,9 @@ let run () =
         (try
            let circuit = parse_prog circuit_file in
            match Simulation.execute ~input circuit with
-           | Ok state -> printf "%s\n%!" (PSS.pretty state)
+           | Ok state ->
+               if !simulate_expand then print_expanded_paths state
+               else printf "%s\n%!" (PSS.pretty state)
            | Error error ->
                let message =
                  match error with
@@ -496,6 +528,7 @@ let run () =
              exit 1)
     | _ ->
         eprintf "Usage: -simulate <circuit.qasm> <bits>\n%!";
+        eprintf "       -simulate_expand <circuit.qasm> <bits>\n%!";
         exit 1)
   else if !qasm_to_ps then (
     let p = parse_prog (List.nth !input_files 0) in

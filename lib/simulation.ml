@@ -56,3 +56,92 @@ let execute ~(input : bool array) (circuit : Program.t) :
         with
         | Error reduction_error -> Error (ReductionError reduction_error)
         | Ok reduced_state -> Ok reduced_state)
+
+(** {1 Path Expansion} *)
+
+type expanded_path = { basis_state : bool array; phase : Q.t }
+
+type expand_error = PhaseNotScalar | KetNotConcrete
+
+(* Enumerates all 2^m assignments of the path variables.
+   For [y0; y1], the order is: y0=0,y1=0; y0=1,y1=0; y0=0,y1=1; y0=1,y1=1. *)
+let enumerate_assignments (path_vars : int list) : (int * bool) list list =
+  let rec aux vars =
+    match vars with
+    | [] -> [ [] ]
+    | var :: rest ->
+        let rest_assignments = aux rest in
+        List.concat_map
+          (fun assignment ->
+            [ (var, false) :: assignment; (var, true) :: assignment ])
+          rest_assignments
+  in
+  aux path_vars
+
+(* Sums the scalar monomes of a variable-free phase polynomial.
+   Returns [None] if any monome is not a pure scalar, which means a path
+   variable was not fully substituted. *)
+let phase_to_rational (p : Poly.t) : Q.t option =
+  let rec aux p acc =
+    if Poly.is_empty p then Some acc
+    else
+      let m = Poly.find p in
+      let p' = Poly.del p in
+      match m with
+      | Poly.Monome.Scal q -> aux p' (Q.add acc q)
+      | _ -> None
+  in
+  aux p Q.zero
+
+(* Converts a ket of concrete qubits to a basis state array.
+   Returns [None] if any qubit does not simplify to |0> or |1>. *)
+let ket_to_basis_state (ket : Qubit.t array) : bool array option =
+  let n = Array.length ket in
+  let result = Array.make n false in
+  let rec aux i =
+    if i >= n then Some result
+    else
+      match Qubit.simplify ket.(i) with
+      | Qubit.Zero ->
+          result.(i) <- false;
+          aux (i + 1)
+      | Qubit.One ->
+          result.(i) <- true;
+          aux (i + 1)
+      | _ -> None
+  in
+  aux 0
+
+(** Unfolds a reduced path sum by enumerating its path variables.
+    For example, H on |0> expands to two paths: |0> and |1>, both phase 0. *)
+let expand (ps : Path_sum.t) : (expanded_path list, expand_error) result =
+  (* Substitutes one assignment and extracts the concrete path, if possible. *)
+  let expand_one (assignment : (int * bool) list) :
+      (expanded_path, expand_error) result =
+    let substitutions =
+      List.map
+        (fun (var, value) -> (var, if value then Qubit.One else Qubit.Zero))
+        assignment
+    in
+    (* [Path_sum.substitute] rejects path variables; substitute the phase and
+       the ket separately instead. *)
+    let phase_subst =
+      List.fold_left
+        (fun phase (var, qubit) -> Poly.substitute var phase qubit)
+        ps.phase substitutions
+    in
+    let ket_subst = Path_sum.Ket.substitute_many ps.ket substitutions in
+    match phase_to_rational (Poly.simplify phase_subst) with
+    | None -> Error PhaseNotScalar
+    | Some phase -> (
+        match ket_to_basis_state ket_subst with
+        | None -> Error KetNotConcrete
+        | Some basis_state -> Ok { basis_state; phase })
+  in
+  let results = List.map expand_one (enumerate_assignments ps.path_var) in
+  let rec collect acc = function
+    | [] -> Ok (List.rev acc)
+    | Ok path :: rest -> collect (path :: acc) rest
+    | Error e :: _ -> Error e
+  in
+  collect [] results

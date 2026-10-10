@@ -18,6 +18,8 @@
 - Do not run tests or build commands. The user runs tests manually.
 - Do not run Git staging or commit commands. The user runs Git commands manually;
   provide only the suggested commit message when useful.
+- Keep suggested commit messages concise: one line, [type(scope): verb]
+  format (e.g. [feat(simulation): add path expansion]).
 - Read-only inspection commands are allowed when needed.
 
 ## Answer style
