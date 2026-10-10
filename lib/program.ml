@@ -556,7 +556,7 @@ module Online_hh_policy = struct
 
   let start enabled =
     match Sys.getenv_opt "SQBRICKS_PROFILE_HH_ONLINE_POLICY_FILE" with
-    | None -> None
+    | None | Some "" -> None
     | Some filename when enabled ->
         incr next_execution_id;
         let state =

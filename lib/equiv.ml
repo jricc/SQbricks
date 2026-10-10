@@ -77,6 +77,12 @@ let result_to_string = function
 type equivalence = SubCircuit | FullCircuit | GlobalPhase
 
 let reduction_for_equiv ?(debug = false) ~online_hh state =
+  (* Experimental opt-in: keep execution guarded, but allow ordinary final HH.
+     The factorization budget and historical retry still apply. *)
+  let bounded_hh =
+    online_hh
+    && Sys.getenv_opt "SQBRICKS_HH_ONLINE_FINAL_HH_UNBOUNDED" <> Some "1"
+  in
   let factorization_budget_s =
     if not online_hh then None
     else
@@ -90,7 +96,7 @@ let reduction_for_equiv ?(debug = false) ~online_hh state =
                 "SQBRICKS_HH_ONLINE_FACTORIZATION_BUDGET_S must be finite and non-negative")
   in
   match
-    Reduction_algorithm.reduction_algorithm ~debug ~bounded_hh:online_hh
+    Reduction_algorithm.reduction_algorithm ~debug ~bounded_hh
       ?factorization_budget_s state
   with
   | Ok reduced_state -> Ok reduced_state
@@ -782,10 +788,16 @@ let is_inconclusive = function
 
 (* An inconclusive guarded pass may have deferred a reduction needed by the
    proof. Retry that case with the historical schedule to preserve coverage. *)
-let record_online_hh_fallback ?(reason = "inconclusive") result =
+let record_online_hh_fallback ?(reason = "inconclusive") ?attempt_start result =
   match Sys.getenv_opt "SQBRICKS_PROFILE_HH_ONLINE_POLICY_FILE" with
-  | None -> ()
+  | None | Some "" -> ()
   | Some filename ->
+      let attempt_times =
+        Option.map
+          (fun (wall_start, cpu_start) ->
+            (Unix.gettimeofday () -. wall_start, Sys.time () -. cpu_start))
+          attempt_start
+      in
       let channel =
         open_out_gen [ Open_wronly; Open_creat; Open_append; Open_text ] 0o644
           filename
@@ -798,22 +810,36 @@ let record_online_hh_fallback ?(reason = "inconclusive") result =
           close_out_noerr channel)
         (fun () ->
           fprintf channel
-            "HH_ONLINE_POLICY_FALLBACK pid=%d result=%s reason=%s\n%!"
-            (Unix.getpid ()) result reason)
+            "HH_ONLINE_POLICY_FALLBACK pid=%d result=%s reason=%s"
+            (Unix.getpid ()) result reason;
+          (match attempt_times with
+          | None -> ()
+          | Some (wall_s, cpu_s) ->
+              fprintf channel " attempt_wall_s=%.6f attempt_cpu_s=%.6f"
+                wall_s cpu_s);
+          fprintf channel "\n%!")
 
 let with_online_hh_fallback verification =
   let online_hh = Sys.getenv_opt "SQBRICKS_HH_ONLINE_1_25" = Some "1" in
+  (* Measure the abandoned verification, not only its HH applications. *)
+  let attempt_start =
+    if not online_hh then None
+    else
+      match Sys.getenv_opt "SQBRICKS_PROFILE_HH_ONLINE_POLICY_FILE" with
+      | None | Some "" -> None
+      | Some _ -> Some (Unix.gettimeofday (), Sys.time ())
+  in
   let attempt =
     try Ok (verification online_hh) with
     | Reduction_algorithm.FactorizationBudgetExceeded when online_hh -> Error ()
   in
   match attempt with
   | Error () ->
-      record_online_hh_fallback ~reason:"factorization-budget"
+      record_online_hh_fallback ~reason:"factorization-budget" ?attempt_start
         "FactorizationBudgetExceeded";
       verification false
   | Ok result when online_hh && is_inconclusive result ->
-      record_online_hh_fallback (result_to_string result);
+      record_online_hh_fallback ?attempt_start (result_to_string result);
       verification false
   | Ok result -> result
 
