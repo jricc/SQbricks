@@ -171,9 +171,30 @@ let speclist =
       "<circuit.qasm>\n" ^ "Example: -metrics circuit.qasm" );
   ]
 
-(* Prints the unfolded paths of a reduced path sum: one line per path with
-   its concrete basis state and rational phase. The amplitude of each path is
-   e^(2πi·phase) / 2^(m/2), where m is the number of path variables. *)
+(* Formats e^(2πi·phase) / 2^(m/2) as a string prefix for Dirac notation.
+   Common dyadic phases are rendered as signs: 0 → "", 1/2 → "-", 1/4 → "i",
+   3/4 → "-i". The normalization 2^(-m/2) is rendered as 1/√2, 1/2, 1/(2√2), etc. *)
+let format_amplitude_prefix (m : int) (phase : Q.t) : string =
+  let half = m / 2 in
+  let rem = m mod 2 in
+  let norm_denom =
+    if rem = 0 then sprintf "%d" (1 lsl half)
+    else if half = 0 then "√2"
+    else sprintf "(%d√2)" (1 lsl half)
+  in
+  if Q.equal phase Q.zero then
+    if m = 0 then "" else sprintf "1/%s · " norm_denom
+  else if Q.equal phase (Q.of_ints 1 2) then
+    if m = 0 then "-" else sprintf "-1/%s · " norm_denom
+  else if Q.equal phase (Q.of_ints 1 4) then
+    if m = 0 then "i" else sprintf "i/%s · " norm_denom
+  else if Q.equal phase (Q.of_ints 3 4) then
+    if m = 0 then "-i" else sprintf "-i/%s · " norm_denom
+  else if m = 0 then sprintf "e^(2πi·%s)" (Q.to_string phase)
+  else sprintf "e^(2πi·%s)/%s · " (Q.to_string phase) norm_denom
+
+(* Prints the unfolded paths of a reduced path sum in Dirac notation:
+   one line per path, e.g. [1/√2 · |0⟩] or [-1/√2 · |1⟩]. *)
 let print_expanded_paths (state : Path_sum.t) : unit =
   match Simulation.expand state with
   | Error Simulation.PhaseNotScalar ->
@@ -184,7 +205,6 @@ let print_expanded_paths (state : Path_sum.t) : unit =
       exit 1
   | Ok paths ->
       let m = List.length state.path_var in
-      printf "path variables: %d (normalization 2^(-%d/2))\n" m m;
       List.iter
         (fun path ->
           let open Simulation in
@@ -193,7 +213,8 @@ let print_expanded_paths (state : Path_sum.t) : unit =
               (fun b acc -> (if b then "1" else "0") ^ acc)
               path.basis_state ""
           in
-          printf "|%s>: phase %s\n" bits (Q.to_string path.phase))
+          let prefix = format_amplitude_prefix m path.phase in
+          printf "%s|%s⟩\n" prefix bits)
         paths
 
 let run () =

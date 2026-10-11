@@ -120,6 +120,130 @@ let test_expand_h_on_one () =
           Alcotest.check Alcotest.bool "path to |1> with phase 1/2" true
             (has_expanded_path paths [| true |] (Q.of_ints 1 2)))
 
+(* --- Multi-qubit expansion tests --- *)
+
+(* X on qubit 0 of a 2-qubit register: |00> -> |10>. *)
+let test_expand_x_q0_two_qubits () =
+  match
+    Simulation.execute ~input:[| false; false |] (Program.Macros.x 0)
+  with
+  | Error _ -> Alcotest.fail "X on q0 must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for X on q0"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "one path" 1 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |10> with phase 0" true
+            (has_expanded_path paths [| true; false |] Q.zero))
+
+(* X on qubit 1 of a 2-qubit register: |00> -> |01>. *)
+let test_expand_x_q1_two_qubits () =
+  match
+    Simulation.execute ~input:[| false; false |] (Program.Macros.x 1)
+  with
+  | Error _ -> Alcotest.fail "X on q1 must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for X on q1"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "one path" 1 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |01> with phase 0" true
+            (has_expanded_path paths [| false; true |] Q.zero))
+
+(* H on qubit 0 of a 2-qubit register: |00> -> (|00> + |10>)/sqrt(2). *)
+let test_expand_h_q0_two_qubits () =
+  match
+    Simulation.execute ~input:[| false; false |] (Program.Macros.h 0)
+  with
+  | Error _ -> Alcotest.fail "H on q0 must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for H on q0"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "two paths" 2 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |00> with phase 0" true
+            (has_expanded_path paths [| false; false |] Q.zero);
+          Alcotest.check Alcotest.bool "path to |10> with phase 0" true
+            (has_expanded_path paths [| true; false |] Q.zero))
+
+(* H on qubit 1 of a 2-qubit register: |00> -> (|00> + |01>)/sqrt(2). *)
+let test_expand_h_q1_two_qubits () =
+  match
+    Simulation.execute ~input:[| false; false |] (Program.Macros.h 1)
+  with
+  | Error _ -> Alcotest.fail "H on q1 must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for H on q1"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "two paths" 2 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |00> with phase 0" true
+            (has_expanded_path paths [| false; false |] Q.zero);
+          Alcotest.check Alcotest.bool "path to |01> with phase 0" true
+            (has_expanded_path paths [| false; true |] Q.zero))
+
+(* Bell state: H on q0, CX q0 q1. |00> -> (|00> + |11>)/sqrt(2). *)
+let test_expand_bell () =
+  let circuit = Program.Macros.(h 0 -- cx 0 1) in
+  match Simulation.execute ~input:[| false; false |] circuit with
+  | Error _ -> Alcotest.fail "Bell circuit must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for Bell state"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "two paths" 2 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |00> with phase 0" true
+            (has_expanded_path paths [| false; false |] Q.zero);
+          Alcotest.check Alcotest.bool "path to |11> with phase 0" true
+            (has_expanded_path paths [| true; true |] Q.zero))
+
+(* Bell state, reversed: H on q1, CX q1 q0. |00> -> (|00> + |11>)/sqrt(2). *)
+let test_expand_bell_reversed () =
+  let circuit = Program.Macros.(h 1 -- cx 1 0) in
+  match Simulation.execute ~input:[| false; false |] circuit with
+  | Error _ -> Alcotest.fail "Bell reversed must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for reversed Bell"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "two paths" 2 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |00> with phase 0" true
+            (has_expanded_path paths [| false; false |] Q.zero);
+          Alcotest.check Alcotest.bool "path to |11> with phase 0" true
+            (has_expanded_path paths [| true; true |] Q.zero))
+
+(* GHZ state (3 qubits): H on q0, CX q0 q1, CX q0 q2.
+   |000> -> (|000> + |111>)/sqrt(2). *)
+let test_expand_ghz () =
+  let circuit = Program.Macros.(h 0 -- cx 0 1 -- cx 0 2) in
+  match Simulation.execute ~input:[| false; false; false |] circuit with
+  | Error _ -> Alcotest.fail "GHZ circuit must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for GHZ state"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "two paths" 2 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |000> with phase 0" true
+            (has_expanded_path paths [| false; false; false |] Q.zero);
+          Alcotest.check Alcotest.bool "path to |111> with phase 0" true
+            (has_expanded_path paths [| true; true; true |] Q.zero))
+
+(* GHZ state, H on middle qubit: H on q1, CX q1 q0, CX q1 q2.
+   |000> -> (|000> + |111>)/sqrt(2). *)
+let test_expand_ghz_middle () =
+  let circuit = Program.Macros.(h 1 -- cx 1 0 -- cx 1 2) in
+  match Simulation.execute ~input:[| false; false; false |] circuit with
+  | Error _ -> Alcotest.fail "GHZ middle must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed for GHZ middle"
+      | Ok paths ->
+          Alcotest.check Alcotest.int "two paths" 2 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |000> with phase 0" true
+            (has_expanded_path paths [| false; false; false |] Q.zero);
+          Alcotest.check Alcotest.bool "path to |111> with phase 0" true
+            (has_expanded_path paths [| true; true; true |] Q.zero))
+
 (* Keeps the experimental simulation checks in a separate executable. *)
 let () =
   Alcotest.run "SQbricks simulation"
@@ -134,5 +258,21 @@ let () =
           Alcotest.test_case "expand X on |0>" `Quick test_expand_x_on_zero;
           Alcotest.test_case "expand H on |0>" `Quick test_expand_h_on_zero;
           Alcotest.test_case "expand H on |1>" `Quick test_expand_h_on_one;
+        ] );
+      ( "Multi-qubit expansion",
+        [
+          Alcotest.test_case "expand X on q0 (2 qubits)" `Quick
+            test_expand_x_q0_two_qubits;
+          Alcotest.test_case "expand X on q1 (2 qubits)" `Quick
+            test_expand_x_q1_two_qubits;
+          Alcotest.test_case "expand H on q0 (2 qubits)" `Quick
+            test_expand_h_q0_two_qubits;
+          Alcotest.test_case "expand H on q1 (2 qubits)" `Quick
+            test_expand_h_q1_two_qubits;
+          Alcotest.test_case "expand Bell state" `Quick test_expand_bell;
+          Alcotest.test_case "expand Bell reversed" `Quick
+            test_expand_bell_reversed;
+          Alcotest.test_case "expand GHZ state" `Quick test_expand_ghz;
+          Alcotest.test_case "expand GHZ middle" `Quick test_expand_ghz_middle;
         ] );
     ]

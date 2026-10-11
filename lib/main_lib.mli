@@ -252,9 +252,10 @@
 
 (** [-simulate_expand <circuit.qasm> <bits>] executes a unitary QASM circuit
     on a concrete computational-basis input, then unfolds the remaining path
-    variables. Each unfolded path is printed as a concrete basis state with
-    its rational phase (in units of 2π). The amplitude of each path is
-    [e^(2πi·phase) / 2^(m/2)], where [m] is the number of path variables.
+    variables. Each unfolded path is printed in Dirac notation with its
+    amplitude: the normalization [2^(-m/2)] (rendered as [1/√2], [1/2],
+    [1/(2√2)], etc.) times the phase factor [e^(2πi·phase)] (common dyadic
+    phases are rendered as signs: [1/2] → [-], [1/4] → [i], [3/4] → [-i]).
     Paths leading to the same basis state must be grouped before computing
     probabilities.
 
@@ -262,9 +263,14 @@
     errors (non-scalar phase or non-concrete ket after substitution) are
     reported on stderr with exit status 1.
 
-    Example: H on |0> unfolds to two paths, |0> and |1>, both with phase 0.
+    Example: H on |0> unfolds to two paths.
     {[
       dune exec -- ./bin/main.exe -simulate_expand benchmarks/verif/h/circ.qasm 0
+    ]}
+    Output:
+    {[
+      1/√2 · |0⟩
+      1/√2 · |1⟩
     ]} *)
 
 (** {2 Path Sum Generation} *)
