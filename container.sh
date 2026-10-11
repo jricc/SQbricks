@@ -54,8 +54,18 @@ else
   IMAGE=$DEFAULT_IMAGE
 fi
 
+# Run as the host user so the bind-mounted /sqbricks is writable. With a
+# rootless daemon the host user is container root; with a rootful daemon
+# it is the host UID/GID.
+if docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -q rootless; then
+  DOCKER_USER=(--user 0:0)
+else
+  DOCKER_USER=(--user "$(id -u):$(id -g)")
+fi
+
 docker run --rm -ti \
   -e DISPLAY="$DISPLAY" \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v "$(pwd):/sqbricks" \
+  "${DOCKER_USER[@]}" \
   "$IMAGE"
