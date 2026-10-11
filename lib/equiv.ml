@@ -76,12 +76,27 @@ let result_to_string = function
 
 type equivalence = SubCircuit | FullCircuit | GlobalPhase
 
-let reduction_for_equiv ?(debug = false) ~online_hh state =
+let reduction_for_equiv ?(debug = false) ~online_hh (state : Path_sum.t) =
   (* Experimental opt-in: keep execution guarded, but allow ordinary final HH.
-     The factorization budget and historical retry still apply. *)
+     The factorization budget and historical retry still apply.
+
+     [SQBRICKS_HH_ONLINE_FINAL_HH_UNBOUNDED] accepts:
+     - [1]: always use ordinary final HH (no growth guard);
+     - a non-negative integer [n]: use ordinary final HH only when the path-sum
+       has at most [n] path variables; larger path-sums keep the guarded
+       schedule. *)
   let bounded_hh =
-    online_hh
-    && Sys.getenv_opt "SQBRICKS_HH_ONLINE_FINAL_HH_UNBOUNDED" <> Some "1"
+    if not online_hh then false
+    else
+      match Sys.getenv_opt "SQBRICKS_HH_ONLINE_FINAL_HH_UNBOUNDED" with
+      | None | Some "" -> true
+      | Some "1" -> false
+      | Some value -> (
+          match int_of_string_opt value with
+          | Some limit when 0 <= limit -> List.length state.path_var > limit
+          | _ ->
+              invalid_arg
+                "SQBRICKS_HH_ONLINE_FINAL_HH_UNBOUNDED must be 1 or a non-negative integer")
   in
   let factorization_budget_s =
     if not online_hh then None

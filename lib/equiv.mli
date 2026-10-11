@@ -83,10 +83,14 @@ val seq :
     An unset or empty budget disables the limit; zero triggers an immediate
     retry when factorization is reached.
 
-    [SQBRICKS_HH_ONLINE_FINAL_HH_UNBOUNDED=1] experimentally uses ordinary HH
+    [SQBRICKS_HH_ONLINE_FINAL_HH_UNBOUNDED] experimentally uses ordinary HH
     in the first pass's final reductions, while keeping HH growth guards during
     program execution. It has no effect when online HH is disabled. The
     factorization budget and historical retry remain active.
+
+    The variable accepts [1] (always unbounded final HH) or a non-negative
+    integer [n]: unbounded final HH applies only when the path-sum has at most
+    [n] path variables; larger path-sums keep the guarded schedule.
 
     Example: [seq (h 0) (h 0)] results [SubCircuitEquivalent] *)
 
