@@ -2,6 +2,16 @@
 
 This file records the user-visible changes in SQbricks releases.
 
+## [Unreleased]
+
+### Fixed
+
+- Run the development container as the host user so the bind-mounted worktree
+  is writable (`container.sh`). With a rootless Docker daemon the container
+  user is root, which is the host user there; with a rootful daemon it is the
+  host UID/GID. This fixes `make tests` failing with `Permission denied` on
+  `/sqbricks/_build` when the host UID differs from the image user `opam`.
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

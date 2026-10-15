@@ -147,6 +147,13 @@ pulled image instead of the local image:
 make container-pull
 ```
 
+The container runs as the host user, so the bind-mounted worktree stays
+writable and files created inside (such as `_build/`) belong to you on the
+host. With a rootless Docker daemon the container user is root, which is the
+host user there; with a rootful daemon it is your host UID/GID. In rootless
+mode, opam prints a harmless `Running as root is not recommended` warning at
+startup.
+
 ## Usage
 
 ### Compilation (inside the container)
