@@ -15,12 +15,16 @@
 - If external access is needed, explain why first.
 - Do not modify files unless I explicitly ask for a modification.
 - Do not use apply_patch unless I explicitly approve the exact change.
-- Do not run tests or build commands. The user runs tests manually.
+- Do not run tests, build, or compilation commands. The user runs tests,
+  builds, and compilation manually. Read-only parse checks with
+  `ocaml -dparsetree` are allowed.
 - Do not run Git staging or commit commands. The user runs Git commands manually;
   provide only the suggested commit message when useful.
 - Keep suggested commit messages concise: one line, [type(scope): verb]
   format (e.g. [feat(simulation): add path expansion]).
 - Read-only inspection commands are allowed when needed.
+- Do not use `sed` to read or modify files; use the dedicated read and edit
+  tools instead.
 
 ## Answer style
 
