@@ -145,3 +145,48 @@ let expand (ps : Path_sum.t) : (expanded_path list, expand_error) result =
     | Error e :: _ -> Error e
   in
   collect [] results
+
+(** {1 Grouping by Basis State} *)
+
+type grouped_path = { basis_state : bool array; amplitude : Complex.t }
+
+(** Sums the amplitudes of the expanded paths leading to the same basis
+    state. Each path contributes e^(2πi·phase) / 2^(m/2), so paths with
+    opposite phases cancel (destructive interference) and equal phases
+    reinforce (constructive interference). For example, grouping the
+    expansion of the interference circuit gives amplitude 0 for |100> and
+    1/sqrt(2) for |000>. *)
+let group ~(path_var_count : int) (paths : expanded_path list) :
+    grouped_path list =
+  let normalization =
+    1. /. Float.pow 2.0 (Float.of_int path_var_count /. 2.0)
+  in
+  let path_amplitude (phase : Q.t) : Complex.t =
+    let angle = 2. *. Float.pi *. Q.to_float phase in
+    (* e^(2πi·phase) = exp(i·angle), scaled by the per-path normalization. *)
+    Complex.mul
+      (Complex.exp { Complex.re = 0.; Complex.im = angle })
+      { Complex.re = normalization; Complex.im = 0. }
+  in
+  (* Association list keyed by basis state. Structural equality on bool
+     arrays is the intended comparison for concrete basis states. *)
+  let add_path (acc : grouped_path list) (path : expanded_path) :
+      grouped_path list =
+    let contribution = path_amplitude path.phase in
+    let rec aux before = function
+      | [] ->
+          List.rev_append before
+            [ { basis_state = path.basis_state; amplitude = contribution } ]
+      | entry :: rest ->
+          if entry.basis_state = path.basis_state then
+            List.rev_append before
+              ( {
+                  entry with
+                  amplitude = Complex.add entry.amplitude contribution;
+                }
+              :: rest )
+          else aux (entry :: before) rest
+    in
+    aux [] acc
+  in
+  List.fold_left add_path [] paths

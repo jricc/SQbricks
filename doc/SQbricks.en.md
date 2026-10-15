@@ -324,8 +324,40 @@ errors are reported on stderr with exit status 1. The engine accepts unitary
 circuits and dyadic angles supported by the existing executor; measurements
 and other hybrid constructs are rejected.
 
-This prototype does not enumerate remaining paths or compute measurement
-probabilities yet.
+The `-simulate_expand` command then unfolds the remaining path variables:
+one line per path, in Dirac notation, with its amplitude prefix. Each path
+contributes `e^(2πi·phase) / 2^(m/2)` to the amplitude of its basis state,
+where `m` is the number of path variables of the reduced path sum. Common
+dyadic phases are rendered as signs: `0` prints nothing, `1/2` prints `-`,
+`1/4` prints `i`, `3/4` prints `-i`; the normalization `2^(-m/2)` is rendered
+as `1/√2`, `1/2`, `1/(2√2)`, etc.
+
+```bash
+dune exec -- ./bin/main.exe -simulate_expand circuit.qasm 010
+```
+
+The `-simulate_group` command then groups the paths by basis state and
+prints, for each state, its summed amplitude and its probability (squared
+modulus of the amplitude, `Complex.norm2`):
+
+```bash
+dune exec -- ./bin/main.exe -simulate_group circuit.qasm 010
+```
+
+At the library level, `lib/simulation.ml` exposes three functions:
+`Simulation.execute` runs the circuit and reduces its path sum;
+`Simulation.expand` enumerates the assignments of the path variables;
+`Simulation.group` groups the paths by basis state, summing their complex
+amplitudes. Paths with opposite phases cancel (destructive interference) and
+equal phases reinforce (constructive interference). The probability of a
+basis state is the squared modulus of its amplitude (`Complex.norm2`).
+
+Current limitations of the prototype:
+
+- `Simulation.expand` enumerates all `2^m` assignments without a size bound;
+- the printed probabilities cover all the register qubits; summing over
+  unobserved outputs is not implemented yet;
+- measurement simulation is not implemented yet.
 
 ## Inspection prototype
 

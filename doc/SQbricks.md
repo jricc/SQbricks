@@ -342,8 +342,41 @@ de sortie 1. Le moteur accepte les circuits unitaires et les angles dyadiques
 pris en charge par l'exécuteur existant ; les mesures et autres constructions
 hybrides sont rejetées.
 
-Ce prototype n'énumère pas les chemins restants et ne calcule pas encore de
-probabilités de mesure.
+La commande `-simulate_expand` déplie ensuite les variables de chemin
+restantes : une ligne par chemin, en notation de Dirac, avec son préfixe
+d'amplitude. Chaque chemin contribue `e^(2πi·phase) / 2^(m/2)` à l'amplitude
+de son état de base, où `m` est le nombre de variables de chemin du path-sum
+réduit. Les phases dyadiques usuelles sont affichées sous forme de signe :
+`0` n'affiche rien, `1/2` affiche `-`, `1/4` affiche `i`, `3/4` affiche `-i` ;
+la normalisation `2^(-m/2)` est affichée comme `1/√2`, `1/2`, `1/(2√2)`, etc.
+
+```bash
+dune exec -- ./bin/main.exe -simulate_expand circuit.qasm 010
+```
+
+La commande `-simulate_group` regroupe ensuite les chemins par état de base
+et affiche, pour chaque état, son amplitude sommée et sa probabilité (module
+au carré de l'amplitude, `Complex.norm2`) :
+
+```bash
+dune exec -- ./bin/main.exe -simulate_group circuit.qasm 010
+```
+
+Au niveau bibliothèque, `lib/simulation.ml` expose trois fonctions :
+`Simulation.execute` exécute le circuit et réduit son path-sum ;
+`Simulation.expand` énumère les affectations des variables de chemin ;
+`Simulation.group` regroupe les chemins par état de base en sommant leurs
+amplitudes complexes. Les chemins de phases opposées s'annulent
+(interférence destructive) et les phases égales se renforcent (interférence
+constructive). La probabilité d'un état de base est le module au carré de son
+amplitude (`Complex.norm2`).
+
+Limites actuelles du prototype :
+
+- `Simulation.expand` énumère les `2^m` affectations sans limite de taille ;
+- les probabilités affichées couvrent tous les qubits du registre ; la somme
+  sur les sorties non observées n'est pas encore implémentée ;
+- la simulation des mesures n'est pas encore implémentée.
 
 ## Prototype d'inspection
 

@@ -75,3 +75,28 @@ val expand : Path_sum.t -> (expanded_path list, expand_error) result
 
     Example: expanding the reduced path sum of H on |0> gives two paths, |0>
     and |1>, both with phase 0. *)
+
+(** {1 Grouping by Basis State} *)
+
+type grouped_path = {
+  basis_state : bool array;
+      (** Concrete output state shared by all the grouped paths. *)
+  amplitude : Complex.t;
+      (** Sum of the amplitudes of the paths leading to [basis_state]. Each
+          path contributes [e^(2πi·phase) / 2^(m/2)], so paths with opposite
+          phases cancel (destructive interference) and equal phases reinforce
+          (constructive interference). The probability of [basis_state] is
+          [Complex.norm2 amplitude], the squared modulus of the amplitude. *)
+}
+(** One basis state with the summed amplitude of the paths leading to it. *)
+
+val group : path_var_count:int -> expanded_path list -> grouped_path list
+(** [group ~path_var_count paths] sums the amplitudes of the expanded paths
+    leading to the same basis state, returning one entry per basis state.
+
+    [path_var_count] is the number of path variables of the expanded path
+    sum ([List.length ps.path_var]); it fixes the per-path normalization
+    [1 / 2^(path_var_count/2)].
+
+    Example: grouping the expansion of H on |0> gives two entries, |0> and
+    |1>, both with amplitude [1/sqrt(2)]. *)

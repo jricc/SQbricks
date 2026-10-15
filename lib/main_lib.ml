@@ -98,6 +98,7 @@ let nb_gates_csv = ref false
 let qasm_to_ps = ref false
 let simulate = ref false
 let simulate_expand = ref false
+let simulate_group = ref false
 let qasm_to_feynman = ref false
 let qasm_to_pyzx = ref false
 let qasm_to_autoq = ref false
@@ -139,6 +140,10 @@ let speclist =
       Arg.Set simulate_expand,
       "<circuit.qasm> <bits>\n"
       ^ "Example: -simulate_expand circuit.qasm 0 (unfolds path variables)" );
+    ( "-simulate_group",
+      Arg.Set simulate_group,
+      "<circuit.qasm> <bits>\n"
+      ^ "Example: -simulate_group circuit.qasm 0 (groups paths per basis state)" );
     ( "-qasm_to_ps",
       Arg.Set qasm_to_ps,
       "<input.qasm>\n" ^ "Example: -qasm_to_ps circuit.qasm" );
@@ -206,7 +211,7 @@ let print_expanded_paths (state : Path_sum.t) : unit =
   | Ok paths ->
       let m = List.length state.path_var in
       List.iter
-        (fun path ->
+        (fun (path : Simulation.expanded_path) ->
           let open Simulation in
           let bits =
             Array.fold_right
@@ -216,6 +221,31 @@ let print_expanded_paths (state : Path_sum.t) : unit =
           let prefix = format_amplitude_prefix m path.phase in
           printf "%s|%s⟩\n" prefix bits)
         paths
+
+(* Prints the grouped paths of a reduced path sum: one line per basis state
+   with its summed amplitude and its probability (squared modulus). *)
+let print_grouped_paths (state : Path_sum.t) : unit =
+  match Simulation.expand state with
+  | Error Simulation.PhaseNotScalar ->
+      eprintf "Expansion error: phase is not a scalar after substitution.\n%!";
+      exit 1
+  | Error Simulation.KetNotConcrete ->
+      eprintf "Expansion error: ket is not concrete after substitution.\n%!";
+      exit 1
+  | Ok paths ->
+      let m = List.length state.path_var in
+      let grouped = Simulation.group ~path_var_count:m paths in
+      List.iter
+        (fun (path : Simulation.grouped_path) ->
+          let bits =
+            Array.fold_right
+              (fun b acc -> (if b then "1" else "0") ^ acc)
+              path.basis_state ""
+          in
+          let probability = Complex.norm2 path.amplitude in
+          printf "|%s⟩ : amplitude (%f, %f), probability %f\n" bits
+            path.amplitude.Complex.re path.amplitude.Complex.im probability)
+        grouped
 
 let run () =
   Arg.parse speclist anon_fun usage_msg;
@@ -503,7 +533,7 @@ let run () =
     let by_meas = Program.format by_meas in
 
     To_openqasm.print_to_file_oq_free_folder output_file_by_meas by_meas)
-  else if !simulate || !simulate_expand then (
+  else if !simulate || !simulate_expand || !simulate_group then (
     match List.rev !input_files with
     | [ circuit_file; basis_bits ] ->
         if not (String.for_all (function '0' | '1' -> true | _ -> false) basis_bits)
@@ -521,6 +551,7 @@ let run () =
            match Simulation.execute ~input circuit with
            | Ok state ->
                if !simulate_expand then print_expanded_paths state
+               else if !simulate_group then print_grouped_paths state
                else printf "%s\n%!" (PSS.pretty state)
            | Error error ->
                let message =
@@ -550,6 +581,7 @@ let run () =
     | _ ->
         eprintf "Usage: -simulate <circuit.qasm> <bits>\n%!";
         eprintf "       -simulate_expand <circuit.qasm> <bits>\n%!";
+        eprintf "       -simulate_group <circuit.qasm> <bits>\n%!";
         exit 1)
   else if !qasm_to_ps then (
     let p = parse_prog (List.nth !input_files 0) in
