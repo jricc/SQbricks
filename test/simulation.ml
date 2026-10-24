@@ -499,6 +499,34 @@ let test_group_exact_empty () =
   | Ok _ -> Alcotest.fail "no paths must produce no grouped basis states"
   | Error _ -> Alcotest.fail "exact grouping must succeed for no paths"
 
+(* One phase-zero path with no path variables contributes amplitude 1. *)
+let test_group_exact_zero_phase () =
+  let path : Simulation.expanded_path =
+    { basis_state = [| false |]; phase = Q.zero }
+  in
+  match Simulation.group_exact ~path_var_count:0 [ path ] with
+  | Ok [ grouped_path ] ->
+      Alcotest.check (Alcotest.array Alcotest.bool) "basis state" [| false |]
+        grouped_path.basis_state;
+      Alcotest.check Alcotest.string "exact amplitude" "k=1; s=0; coeffs=[0:1]"
+        (Simulation.exact_to_string grouped_path.amplitude)
+  | Ok _ -> Alcotest.fail "one path must produce one grouped basis state"
+  | Error _ -> Alcotest.fail "exact grouping must succeed for a phase-zero path"
+
+(* One half-turn phase with no path variables contributes amplitude -1. *)
+let test_group_exact_half_phase () =
+  let path : Simulation.expanded_path =
+    { basis_state = [| false |]; phase = Q.make Z.one (Z.of_int 2) }
+  in
+  match Simulation.group_exact ~path_var_count:0 [ path ] with
+  | Ok [ grouped_path ] ->
+      Alcotest.check (Alcotest.array Alcotest.bool) "basis state" [| false |]
+        grouped_path.basis_state;
+      Alcotest.check Alcotest.string "exact amplitude" "k=1; s=0; coeffs=[0:-1]"
+        (Simulation.exact_to_string grouped_path.amplitude)
+  | Ok _ -> Alcotest.fail "one path must produce one grouped basis state"
+  | Error _ -> Alcotest.fail "exact grouping must succeed for a half-phase path"
+
 (* Keeps the experimental simulation checks in a separate executable. *)
 let () =
   Alcotest.run "SQbricks simulation"
@@ -550,5 +578,9 @@ let () =
         [
           Alcotest.test_case "group_exact on no paths" `Quick
             test_group_exact_empty;
+          Alcotest.test_case "group_exact on one zero-phase path" `Quick
+            test_group_exact_zero_phase;
+          Alcotest.test_case "group_exact on one half-phase path" `Quick
+            test_group_exact_half_phase;
         ] );
     ]

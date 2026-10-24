@@ -191,12 +191,35 @@ let group ~(path_var_count : int) (paths : expanded_path list) :
   in
   List.fold_left add_path [] paths
 
-(** No exact amplitude is constructed at this step.
-    For example, grouping [] needs no amplitude value. *)
-type exact_amplitude = |
+(** Sparse integer coefficients indexed by root exponents.
+    For example, exponent 0 with coefficient 1 represents 1. *)
+module ExponentMap = Map.Make (Z)
+
+(** Represents [2^(-scale) * sum_j coeffs[j] * root^j].
+    For example, 1 has root exponent 1, scale 0 and coefficient 0:1. *)
+type exact_amplitude = {
+  root_exponent : int;
+      (** Selects [root = exp(2*pi*i / 2^root_exponent)]. *)
+  scale : int;
+      (** Exponent of the common factor [2^(-scale)]. *)
+  coeffs : Z.t ExponentMap.t;
+      (** Nonzero integer coefficients, indexed by reduced root exponents. *)
+}
+
+(** Prints the exact coordinates without floating-point conversion.
+    For example, 1 gives [k=1; s=0; coeffs=[0:1]]. *)
+let exact_to_string (amplitude : exact_amplitude) : string =
+  let coefficients =
+    ExponentMap.bindings amplitude.coeffs
+    |> List.map (fun (exponent, coefficient) ->
+           Z.to_string exponent ^ ":" ^ Z.to_string coefficient)
+    |> String.concat "; "
+  in
+  Printf.sprintf "k=%d; s=%d; coeffs=[%s]" amplitude.root_exponent
+    amplitude.scale coefficients
 
 (** A basis state and its exact summed amplitude.
-    For example, grouping [] produces no entry of this type. *)
+    For example, one path leading to |0> produces a single entry. *)
 type exact_grouped_path = {
   basis_state : bool array;
       (** Concrete output state shared by the grouped paths. *)
@@ -208,13 +231,34 @@ type exact_grouped_path = {
     For example, grouping [] succeeds without an error value. *)
 type exact_error = |
 
-(** Handles exact grouping when no path contributes.
-    For example, [group_exact ~path_var_count:0 []] returns [Ok []].
-    Non-empty paths are not implemented yet and raise [Failure]. *)
-let group_exact ~path_var_count:(_ : int) (paths : expanded_path list) :
+(** Handles no paths or one path with phase 0 or 1/2 and no path variables.
+    For example, one path to |0> with phase 0 and path count 0 has amplitude 1.
+    Other cases are not implemented yet and raise [Failure]. *)
+let group_exact ~(path_var_count : int) (paths : expanded_path list) :
     (exact_grouped_path list, exact_error) result =
   match paths with
   | [] -> Ok []
+  | [ path ] when path_var_count = 0 && Q.equal path.phase Q.zero ->
+      (* With no path variables, normalization and phase both contribute 1. *)
+      let amplitude =
+        {
+          root_exponent = 1;
+          scale = 0;
+          coeffs = ExponentMap.singleton Z.zero Z.one;
+        }
+      in
+      Ok [ { basis_state = path.basis_state; amplitude } ]
+  | [ path ]
+    when path_var_count = 0 && Q.equal path.phase (Q.make Z.one (Z.of_int 2)) ->
+      (* At k=1, the half-turn phase is -1 times the zeroth root power. *)
+      let amplitude =
+        {
+          root_exponent = 1;
+          scale = 0;
+          coeffs = ExponentMap.singleton Z.zero Z.minus_one;
+        }
+      in
+      Ok [ { basis_state = path.basis_state; amplitude } ]
   | _ :: _ ->
-      (* Temporary boundary: non-empty grouping needs its own test first. *)
-      failwith "Simulation.group_exact: non-empty paths not implemented yet"
+      (* Temporary boundary: other cases need their own tests first. *)
+      failwith "Simulation.group_exact: case not implemented yet"

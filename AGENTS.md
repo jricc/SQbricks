@@ -14,7 +14,6 @@
 - Do not reuse data outside the current task.
 - If external access is needed, explain why first.
 - Do not modify files unless I explicitly ask for a modification.
-- Do not use apply_patch unless I explicitly approve the exact change.
 - Do not run tests, build, or compilation commands. The user runs tests,
   builds, and compilation manually. Read-only parse checks with
   `ocaml -dparsetree` are allowed.

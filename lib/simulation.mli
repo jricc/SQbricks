@@ -102,8 +102,13 @@ val group : path_var_count:int -> expanded_path list -> grouped_path list
     |1>, both with amplitude [1/sqrt(2)]. *)
 
 (** An exact amplitude, without conversion to floating-point numbers.
-    Example: the amplitude 1 will be represented exactly. *)
+    Example: the amplitude 1 is represented exactly. *)
 type exact_amplitude
+
+val exact_to_string : exact_amplitude -> string
+(** Returns the exact representation for debugging and tests.
+    Example: 1 is represented as [k=1; s=0; coeffs=[0:1]].
+    No floating-point conversion is performed. *)
 
 (** A basis state and the exact sum of its contributions.
     Example: two paths leading to |0> produce a single entry. *)
@@ -127,5 +132,8 @@ val group_exact :
 
     [path_var_count] is the number of path variables in the expanded
     path sum; it fixes the common normalization [2^(-path_var_count/2)].
+
+    Currently supports no paths, or one path with phase 0 or 1/2 and
+    [path_var_count = 0]. Other cases raise [Failure] until implemented.
 
     Example: [group_exact ~path_var_count:0 []] returns [Ok []]. *)
