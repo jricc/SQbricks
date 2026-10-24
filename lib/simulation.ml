@@ -190,3 +190,192 @@ let group ~(path_var_count : int) (paths : expanded_path list) :
     aux [] acc
   in
   List.fold_left add_path [] paths
+
+(** {1 Exact Grouping by Basis State} *)
+
+(* The record is concrete here; the interface keeps the type abstract so
+   that callers cannot build values violating the invariants documented in
+   simulation.mli (k >= 1, s >= 0, reduced exponents, no zero
+   coefficients). *)
+module ExponentMap = Map.Make (Z)
+
+(* An exact amplitude is A = 2^(-s) * sum_j c_j * zeta^j, with
+   zeta = e^(2*pi*i/2^k) a primitive 2^k-th root of unity.
+
+   Notations, matching the record fields:
+   - k = [root_exponent]: the cyclotomic field Q(zeta) holding all the
+     dyadic phases (k >= 1);
+   - s = [scale]: the common path factor 2^(-m/2) is factored out, with
+     m = the path-variable count and s = m/2 + (m mod 2) (s >= 0);
+   - c_j = [coeffs]: signed count of the paths whose phase reduces to
+     j/2^k modulo 2^(k-1) (zeta^(j + 2^(k-1)) = -zeta^j); only non-zero
+     counts are stored, so the empty map is the zero amplitude.
+
+   Examples: i = zeta_4 is (k=2, s=0, {1 -> 1}); 1/sqrt(2), from H on |0>
+   with m = 1, is 2^(-1) * (zeta_8 - zeta_8^3), i.e. (k=3, s=1,
+   {1 -> 1; 3 -> -1}). *)
+type exact_amplitude = {
+  root_exponent : int;
+  scale : int;
+  coeffs : Z.t ExponentMap.t;
+}
+
+type exact_grouped_path = {
+  basis_state : bool array;
+  amplitude : exact_amplitude;
+}
+
+type exact_error = PhaseNotDyadic | RootExponentTooLarge
+
+let group_exact ?(max_root_exponent = 32) ~(path_var_count : int)
+    (paths : expanded_path list) :
+    (exact_grouped_path list, exact_error) result =
+  (* A phase is dyadic when its denominator is a power of two. The check is
+     done before Common.Rational.find_k, which raises Failure otherwise. *)
+  let phase_exponent (phase : Q.t) : (int, exact_error) result =
+    let den = Q.den phase in
+    if
+      Z.gt den Z.zero
+      && Z.(equal (logand den (den - one)) zero)
+    then Ok (Common.Rational.find_k den)
+    else Error PhaseNotDyadic
+  in
+  let rec collect_exponents acc = function
+    | [] -> Ok (List.rev acc)
+    | path :: rest -> (
+        match phase_exponent path.phase with
+        | Error error -> Error error
+        | Ok k -> collect_exponents (k :: acc) rest)
+  in
+  match collect_exponents [] paths with
+  | Error error -> Error error
+  | Ok exponents ->
+      let m = path_var_count in
+      (* k = max(1, max k_phases, 3 when m is odd: the odd normalization
+         needs sqrt(2) = zeta_8 + zeta_8^(-1)). *)
+      let k =
+        let k_phases = List.fold_left max 1 exponents in
+        if m mod 2 = 1 then max k_phases 3 else k_phases
+      in
+      (* The user bound is a resource bound: it limits the size of the
+         integers manipulated (exponents and coefficients), not the number
+         of stored terms. It is checked before any allocation. *)
+      if k > max_root_exponent then Error RootExponentTooLarge
+      else
+        (* m = 2r gives s = r; m = 2r+1 gives s = r+1, absorbing 1/sqrt(2).
+           m / 2 + m mod 2 avoids the overflow of m + 1 at max_int. *)
+        let s = m / 2 + (m mod 2) in
+        (* Exponents are reduced modulo 2^(k-1): zeta^(j + 2^(k-1)) =
+           -zeta^j. The reduction is applied on insertion, so each map only
+           stores reduced exponents in [0, 2^(k-1)) with non-zero
+           coefficients. *)
+        let half = Z.pow (Z.of_int 2) (k - 1) in
+        let size = Z.pow (Z.of_int 2) k in
+        (* Adds [coeff] at exponent [j] (j in [0, 2^k)), reducing it modulo
+           2^(k-1); removes the entry when the coefficient cancels. *)
+        let add_term (coeffs : Z.t ExponentMap.t) (j : Z.t) (coeff : Z.t) :
+            Z.t ExponentMap.t =
+          let j, coeff =
+            if Z.geq j half then (Z.sub j half, Z.neg coeff) else (j, coeff)
+          in
+          ExponentMap.update j
+            (function
+              | None -> Some coeff
+              | Some old ->
+                  let sum = Z.add old coeff in
+                  if Z.equal sum Z.zero then None else Some sum)
+            coeffs
+        in
+        (* Association list keyed by basis state, in first-appearance order
+           as in [group]. Structural equality on bool arrays is the intended
+           comparison for concrete basis states. Each state owns a private
+           sparse map of reduced exponents to non-zero coefficients. *)
+        let add_path (acc : (bool array * Z.t ExponentMap.t) list)
+            (path : expanded_path) : (bool array * Z.t ExponentMap.t) list =
+          let k_phase = Common.Rational.find_k (Q.den path.phase) in
+          (* phase = num / 2^k_phase = (num * 2^(k - k_phase)) / 2^k *)
+          let p =
+            Z.mul (Q.num path.phase) (Z.shift_left Z.one (k - k_phase))
+          in
+          let j = Z.erem p size in
+          let add_to (coeffs : Z.t ExponentMap.t) : Z.t ExponentMap.t =
+            add_term coeffs j Z.one
+          in
+          let rec aux before = function
+            | [] ->
+                List.rev_append before
+                  [ (path.basis_state, add_to ExponentMap.empty) ]
+            | (state, coeffs) :: rest ->
+                if state = path.basis_state then
+                  List.rev_append before ((state, add_to coeffs) :: rest)
+                else aux ((state, coeffs) :: before) rest
+          in
+          aux [] acc
+        in
+        let by_state = List.fold_left add_path [] paths in
+        let grouped =
+          List.map
+            (fun (state, coeffs) ->
+              (* For odd m, the 1/sqrt(2) factor is absorbed by multiplying
+                 the sum by sqrt(2) = zeta_8 + zeta_8^(-1), with
+                 zeta_8 = zeta^(2^(k-3)) (k >= 3). In reduced form,
+                 zeta_8^(-1) = -zeta^(3*2^(k-3)). *)
+              let coeffs =
+                if m mod 2 = 1 then
+                  let shift = Z.pow (Z.of_int 2) (k - 3) in
+                  ExponentMap.fold
+                    (fun j c acc ->
+                      add_term
+                        (add_term acc (Z.add j shift) c)
+                        (Z.add j (Z.mul (Z.of_int 3) shift))
+                        (Z.neg c))
+                    coeffs ExponentMap.empty
+                else coeffs
+              in
+              {
+                basis_state = state;
+                amplitude = { root_exponent = k; scale = s; coeffs };
+              })
+            by_state
+        in
+        Ok grouped
+
+let exact_is_zero (amp : exact_amplitude) : bool =
+  (* The sparse map stores no zero coefficient: it is empty iff the
+     amplitude is zero. *)
+  ExponentMap.is_empty amp.coeffs
+
+let exact_equal (amp1 : exact_amplitude) (amp2 : exact_amplitude) : bool =
+  (* Align the root exponents: zeta_{2^ki}^j = zeta_{2^k}^(j * 2^(k-ki)),
+     so the map of the smaller field spreads by shifting its keys. The
+     spread keys stay below 2^(k-1), hence already reduced modulo
+     Phi_{2^k}. *)
+  let k = max amp1.root_exponent amp2.root_exponent in
+  let spread (amp : exact_amplitude) : Z.t ExponentMap.t =
+    let d = k - amp.root_exponent in
+    if d = 0 then amp.coeffs
+    else
+      ExponentMap.fold
+        (fun j c acc -> ExponentMap.add (Z.shift_left j d) c acc)
+        amp.coeffs ExponentMap.empty
+  in
+  (* Align the scales: 2^(-s1) C1 = 2^(-s2) C2 iff 2^(s-s1) C1 = 2^(s-s2)
+     C2 with s = max(s1, s2). *)
+  let s = max amp1.scale amp2.scale in
+  let rescale (amp : exact_amplitude) (coeffs : Z.t ExponentMap.t) :
+      Z.t ExponentMap.t =
+    let d = s - amp.scale in
+    if d = 0 then coeffs
+    else ExponentMap.map (fun c -> Z.shift_left c d) coeffs
+  in
+  let c1 = rescale amp1 (spread amp1) in
+  let c2 = rescale amp2 (spread amp2) in
+  (* Compare the sparse maps: same reduced keys, same coefficients. *)
+  ExponentMap.equal Z.equal c1 c2
+
+(* Temporary stub: exact_mul is only needed for the GlobalPhase comparison
+   (cross-multiplication), implemented after the FullCircuit level. *)
+let exact_mul (amp1 : exact_amplitude) (amp2 : exact_amplitude) :
+    exact_amplitude =
+  ignore (amp1, amp2);
+  failwith "Simulation.exact_mul: not implemented yet"

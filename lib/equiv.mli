@@ -32,6 +32,9 @@ type result =
   | NotEquivDiffOutputs  (** Circuits differ in outputs *)
   | NotEquivDiffInputs  (** Circuits differ in inputs *)
   | NotEquivDiffInputsOutputs  (** Circuits differ in both inputs and outputs *)
+  | NotEquivDiffStates of bool array * bool array
+      (** Circuits differ on a concrete input: the counterexample is the
+          input and the first differing basis state. *)
   | SubCircuitInconclusive  (** Subcircuit equivalence check was inconclusive *)
   | Entanglement1  (** First circuit shows entanglement *)
   | Entanglement2  (** Second circuit shows entanglement *)
@@ -97,7 +100,7 @@ val parallel :
     Example: [parallel (h 0) (h 0)] results [SubCircuitEquivalent] *)
 
 (** Type representing the algorithm to use for equivalence checking. *)
-type algo = Parallel | Sequence
+type algo = Parallel | Sequence | Simulation
 
 val sqv :
   ?debug:bool ->
@@ -134,3 +137,51 @@ val sqv_simple :
 (** Simplified version of sqv that returns a boolean indicating equivalence.
 
     Example: [sqv_simple (h 0) (h 0)] results [true] *)
+
+val simulation :
+  ?debug:bool ->
+  ?inputs1:int list ->
+  ?inputs2:int list ->
+  ?outputs1:int list ->
+  ?outputs2:int list ->
+  ?meas1:int list ->
+  ?meas2:int list ->
+  ?equivalence:equivalence ->
+  ?max_inputs:int ->
+  ?max_path_vars:int ->
+  ?max_root_exponent:int ->
+  Program.t ->
+  Program.t ->
+  result
+(** Checks equivalence of two unitary circuits by variable instantiation,
+    reusing the metadata validation of {!seq} and {!parallel}.
+
+    Not implemented yet: calling [simulation] raises [Failure]. The rest of
+    this comment describes the planned increment 1.
+
+    Planned increment 1 (concrete, level 2): each basis input is
+    instantiated in turn; path variables are unfolded and grouped exactly
+    ({!Simulation.group_exact}). The first differing input/state pair
+    proves non-equivalence and is returned as [NotEquivDiffStates];
+    exhausting all inputs proves equivalence at the requested level.
+
+    Supported configurations (planned increment 1): full inputs and outputs
+    on both circuits ([inputs = outputs = [0..wq-1]]), no initialized
+    ancillas, equal register widths. Comparing complete states then
+    respects the [FullCircuit] and [GlobalPhase] contracts exactly. Any
+    other configuration — partial inputs or outputs, ancillas, differing
+    widths — returns the inconclusive result of the requested level, after
+    metadata validation. [SubCircuit] is not decided by this increment and
+    returns [SubCircuitInconclusive].
+
+    [~max_inputs] bounds the number of concrete inputs enumerated (default
+    256, i.e. up to 8 qubits); [~max_path_vars] bounds the path-variable
+    count [m] (no [2^m] unfolding beyond it); [~max_root_exponent] bounds
+    the cyclotomic exponent [k], checked before any allocation. Exceeding a
+    bound returns the corresponding inconclusive result.
+
+    Unlike {!seq} and {!parallel}, [FullCircuit] is decided here: exact
+    amplitude equality comes for free from the simulation.
+
+    Planned example: [simulation ~equivalence:FullCircuit (x 0) (x 0)]
+    results [FullCircuitEquivalent] *)

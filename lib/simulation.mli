@@ -100,3 +100,82 @@ val group : path_var_count:int -> expanded_path list -> grouped_path list
 
     Example: grouping the expansion of H on |0> gives two entries, |0> and
     |1>, both with amplitude [1/sqrt(2)]. *)
+
+(** {1 Exact Grouping by Basis State} *)
+
+type exact_amplitude
+(** Exact amplitude [2^(-s) · Σ_{j < 2^(k-1)} c_j ζ^j] with
+    [ζ = e^(2πi / 2^k)], [c_j] signed integers, in reduced form modulo the
+    cyclotomic polynomial [Φ_{2^k}(x) = x^(2^(k-1)) + 1] (coefficient vector
+    of length [2^(k-1)]).
+
+    The type is abstract: values are built by {!group_exact}, which
+    guarantees the invariants [k ≥ 1], [s ≥ 0] and the reduced form, so
+    {!exact_is_zero}, {!exact_equal} and {!exact_mul} can rely on them.
+    The root exponent is [k = max(1, max k_phases, 3 if m is odd)], where
+    [k_phases] are the exponents of the path-phase denominators and [m] is
+    the path-variable count: the odd normalization [2^(-m/2) = 2^(-(r+1))·√2]
+    with [√2 = ζ_8 + ζ_8^(-1)] requires [k ≥ 3], and [k ≥ 1] represents [-1];
+    the phase denominators are never masked by the [k ≥ 1] floor. *)
+
+type exact_grouped_path = {
+  basis_state : bool array;
+      (** Concrete output state shared by all the grouped paths. *)
+  amplitude : exact_amplitude;
+      (** Exact sum of the amplitudes of the paths leading to
+          [basis_state]. *)
+}
+(** One basis state with the exact summed amplitude of the paths leading to
+    it. Unlike {!grouped_path}, no floating point is involved. *)
+
+type exact_error =
+  | PhaseNotDyadic
+      (** A path phase is not a dyadic rational. *)
+  | RootExponentTooLarge
+      (** The required root exponent exceeds [~max_root_exponent]. *)
+(** Errors propagated by {!group_exact}. *)
+
+val group_exact :
+  ?max_root_exponent:int ->
+  path_var_count:int ->
+  expanded_path list ->
+  (exact_grouped_path list, exact_error) result
+(** [group_exact ~path_var_count paths] sums the exact amplitudes of the
+    expanded paths leading to the same basis state, returning one entry per
+    basis state. It mirrors {!group} but keeps integer arithmetic: each path
+    contributes [e^(2πi·phase) / 2^(m/2)] with [m = path_var_count ≥ 0].
+
+    For even [m = 2r] the normalization is [2^(-r)]. For odd [m = 2r+1] it
+    is [2^(-(r+1)) · √2] with [√2 = ζ_8 + ζ_8^(-1)] distributed into the
+    coefficients, which requires [k ≥ 3]. The root exponent is
+    [k = max(1, max k_phases, 3 if m is odd)].
+
+    Each phase denominator is checked strictly positive and a power of two
+    before calling [Common.Rational.find_k], so a non-dyadic phase returns
+    [Error PhaseNotDyadic] instead of raising. [~max_root_exponent] bounds
+    [k] and is checked before any allocation; exceeding it returns
+    [Error RootExponentTooLarge]. The int range ([k < Sys.int_size - 1], so
+    that [1 lsl k] is well defined and positive) and [Sys.max_array_length]
+    are checked as well, before any allocation; violating either also
+    returns [Error RootExponentTooLarge].
+
+    Example: grouping exactly the expansion of H on |0> gives two entries,
+    |0> and |1>, both with amplitude [1/sqrt(2)] = [2^(-1) · (ζ_8 +
+    ζ_8^(-1))]. *)
+
+val exact_is_zero : exact_amplitude -> bool
+(** [exact_is_zero amp] is [true] iff all coefficients of the reduced form
+    are zero. *)
+
+val exact_equal : exact_amplitude -> exact_amplitude -> bool
+(** [exact_equal amp1 amp2] decides equality exactly: it aligns the root
+    exponents (spreading multiplicities, [ζ_{2^k1} = ζ_{2^k}^(2^(k-k1))]),
+    aligns the scales (multiplying by [2^|Δs|]), folds both sides modulo
+    [Φ_{2^k}] and compares the coefficient vectors. *)
+
+val exact_mul : exact_amplitude -> exact_amplitude -> exact_amplitude
+(** [exact_mul amp1 amp2] is the exact product: aligned root exponents,
+    added scales, convolution of the coefficient vectors folded modulo
+    [Φ_{2^k}]. Used for the division-free global-phase comparison.
+
+    Not implemented yet: calling it raises [Failure]. *)

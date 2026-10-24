@@ -352,12 +352,33 @@ amplitudes. Paths with opposite phases cancel (destructive interference) and
 equal phases reinforce (constructive interference). The probability of a
 basis state is the squared modulus of its amplitude (`Complex.norm2`).
 
+The exact core complements this prototype: `Simulation.group_exact` groups
+paths by basis state without floating point. Each amplitude is represented
+exactly as `2^(-s) · Σ c_j ζ^j` with `ζ = e^(2πi / 2^k)` and integer
+coefficients, in reduced form modulo the cyclotomic polynomial
+`Φ_{2^k}(x) = x^(2^(k-1)) + 1` (coefficient vector of length `2^(k-1)`).
+The root exponent is `k = max(1, max k_phases, 3 if m is odd)`: the odd
+normalization `2^(-m/2) = 2^(-(r+1)) · √2` is represented with
+`√2 = ζ_8 + ζ_8^(-1)`, which requires `k ≥ 3`. `Simulation.exact_is_zero`
+tests cancellation and `Simulation.exact_equal` decides exact equality by
+aligning the root exponents and the scales before comparing the coefficient
+vectors. No decision goes through floating point; `Simulation.group` remains
+a display helper. A non-dyadic phase returns `Error PhaseNotDyadic`; a root
+exponent beyond `~max_root_exponent` (or outside the int range or
+`Sys.max_array_length`) returns `Error RootExponentTooLarge`, checked before
+any allocation.
+
 Current limitations of the prototype:
 
 - `Simulation.expand` enumerates all `2^m` assignments without a size bound;
 - the printed probabilities cover all the register qubits; summing over
   unobserved outputs is not implemented yet;
-- measurement simulation is not implemented yet.
+- measurement simulation is not implemented yet;
+- `Simulation.exact_mul`, planned for division-free global-phase
+  comparison, is not implemented yet (calling it raises `Failure`);
+- `Equiv.simulation`, which will connect the exact core to equivalence
+  checking by variable instantiation, is a stub (calling it raises
+  `Failure`); the `Simulation` algorithm is not exposed on the command line.
 
 ## Inspection prototype
 

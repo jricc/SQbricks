@@ -96,12 +96,13 @@ let count_expanded_paths (paths : Simulation.expanded_path list)
     0 paths
 
 (* Finds the summed amplitude of a basis state in a grouped path list.
-   Returns [None] when no path leads to the state. *)
+   Returns [None] when no path leads to the state. The type annotation
+   disambiguates the [basis_state] and [amplitude] labels, shared with
+   [expanded_path] and [exact_grouped_path]. *)
 let amplitude_of (paths : Simulation.grouped_path list)
     (basis_state : bool array) : Complex.t option =
   List.find_map
-    (fun path ->
-      let open Simulation in
+    (fun (path : Simulation.grouped_path) ->
       if path.basis_state = basis_state then Some path.amplitude else None)
     paths
 
@@ -492,6 +493,300 @@ let test_probabilities_interference () =
           Alcotest.check (Alcotest.float 1e-9) "probabilities sum to 1" 1.
             total)
 
+(* --- Exact grouping (group_exact, exact_is_zero, exact_equal) --- *)
+
+(* Builds a synthetic expanded path. [expanded_path] is a public record, so
+   the exact-grouping tests feed [group_exact] directly, without running a
+   circuit. *)
+let synthetic_path (basis_state : bool array) (phase : Q.t) :
+    Simulation.expanded_path =
+  { basis_state = basis_state; phase = phase }
+
+(* Executes [circuit] on [input], expands its path sum and groups it
+   exactly. *)
+let exact_group_of_circuit ?max_root_exponent (input : bool array)
+    (circuit : Program.t) :
+    (Simulation.exact_grouped_path list, Simulation.exact_error) result =
+  match Simulation.execute ~input circuit with
+  | Error _ -> Alcotest.fail "circuit must execute successfully"
+  | Ok state -> (
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "expand must succeed"
+      | Ok paths ->
+          Simulation.group_exact ?max_root_exponent
+            ~path_var_count:(List.length state.path_var) paths)
+
+(* Asserts that [group_exact] succeeds and returns its grouped paths. *)
+let must_group_exact ?max_root_exponent ~(path_var_count : int)
+    (paths : Simulation.expanded_path list) :
+    Simulation.exact_grouped_path list =
+  match Simulation.group_exact ?max_root_exponent ~path_var_count paths with
+  | Ok grouped -> grouped
+  | Error Simulation.PhaseNotDyadic ->
+      Alcotest.fail "group_exact: unexpected non-dyadic phase"
+  | Error Simulation.RootExponentTooLarge ->
+      Alcotest.fail "group_exact: unexpected root exponent overflow"
+
+(* Finds the exact amplitude of a basis state in an exact grouping.
+   Returns [None] when no path leads to the state. *)
+let exact_amplitude_of (grouped : Simulation.exact_grouped_path list)
+    (basis_state : bool array) : Simulation.exact_amplitude option =
+  List.find_map
+    (fun (path : Simulation.exact_grouped_path) ->
+      let open Simulation in
+      if path.basis_state = basis_state then Some path.amplitude else None)
+    grouped
+
+(* Asserts that the exact grouping contains [basis_state] and returns its
+   amplitude. *)
+let must_exact_amplitude (grouped : Simulation.exact_grouped_path list)
+    (basis_state : bool array) : Simulation.exact_amplitude =
+  match exact_amplitude_of grouped basis_state with
+  | Some amplitude -> amplitude
+  | None -> Alcotest.fail "grouped paths must contain the basis state"
+
+(* The exact amplitude of a single synthetic path with the given phase. *)
+let synthetic_amplitude (phase : Q.t) : Simulation.exact_amplitude =
+  must_exact_amplitude
+    (must_group_exact ~path_var_count:0 [ synthetic_path [| false |] phase ])
+    [| false |]
+
+(* X on |0>: m = 0, null phase, amplitude 1. *)
+let test_group_exact_x_on_zero () =
+  match exact_group_of_circuit [| false |] (Program.Macros.x 0) with
+  | Error _ -> Alcotest.fail "group_exact must succeed for X on |0>"
+  | Ok grouped ->
+      Alcotest.check Alcotest.int "one basis state" 1 (List.length grouped);
+      let amp = must_exact_amplitude grouped [| true |] in
+      Alcotest.check Alcotest.bool "amplitude of |1> is 1" true
+        (Simulation.exact_equal amp (synthetic_amplitude Q.zero));
+      Alcotest.check Alcotest.bool "amplitude of |1> is not zero" false
+        (Simulation.exact_is_zero amp)
+
+(* S on |1>: m = 0, phase 1/4, amplitude i = e^(2πi·1/4). *)
+let test_group_exact_s_on_one () =
+  match exact_group_of_circuit [| true |] (Program.Macros.ss 0) with
+  | Error _ -> Alcotest.fail "group_exact must succeed for S on |1>"
+  | Ok grouped ->
+      Alcotest.check Alcotest.int "one basis state" 1 (List.length grouped);
+      let amp = must_exact_amplitude grouped [| true |] in
+      Alcotest.check Alcotest.bool "amplitude of |1> is i" true
+        (Simulation.exact_equal amp (synthetic_amplitude (Q.of_ints 1 4)));
+      Alcotest.check Alcotest.bool "amplitude of |1> is not 1" false
+        (Simulation.exact_equal amp (synthetic_amplitude Q.zero))
+
+(* H on |0>: m = 1 (odd normalization). Both paths have phase 0, so each
+   amplitude is 1/sqrt(2) = 2^(-1) * sqrt(2) with sqrt(2) = zeta_8 +
+   zeta_8^(-1). The same value is built with even m = 2 and phases 1/8 and
+   7/8: 2^(-1) * (zeta_8 + zeta_8^7) = 2^(-1) * sqrt(2). *)
+let test_group_exact_h_on_zero_odd_normalization () =
+  match exact_group_of_circuit [| false |] (Program.Macros.h 0) with
+  | Error _ -> Alcotest.fail "group_exact must succeed for H on |0>"
+  | Ok grouped ->
+      Alcotest.check Alcotest.int "two basis states" 2 (List.length grouped);
+      let amp_zero = must_exact_amplitude grouped [| false |] in
+      let amp_one = must_exact_amplitude grouped [| true |] in
+      Alcotest.check Alcotest.bool "both amplitudes are equal" true
+        (Simulation.exact_equal amp_zero amp_one);
+      let even_construction =
+        must_exact_amplitude
+          (must_group_exact ~path_var_count:2
+             [ synthetic_path [| false |] (Q.of_ints 1 8);
+               synthetic_path [| false |] (Q.of_ints 7 8) ])
+          [| false |]
+      in
+      Alcotest.check Alcotest.bool "odd normalization gives 1/sqrt(2)" true
+        (Simulation.exact_equal amp_zero even_construction)
+
+(* Scale alignment: amplitude 2 built with m = 0 (two paths, phase 0)
+   equals amplitude 2 built with m = 2 (four paths, phase 0):
+   2 * 2^0 = 4 * 2^(-1). *)
+let test_exact_equal_scale_alignment () =
+  let amp_two_m0 =
+    must_exact_amplitude
+      (must_group_exact ~path_var_count:0
+         [ synthetic_path [| false |] Q.zero;
+           synthetic_path [| false |] Q.zero ])
+      [| false |]
+  in
+  let amp_two_m2 =
+    must_exact_amplitude
+      (must_group_exact ~path_var_count:2
+         [ synthetic_path [| false |] Q.zero;
+           synthetic_path [| false |] Q.zero;
+           synthetic_path [| false |] Q.zero;
+           synthetic_path [| false |] Q.zero ])
+      [| false |]
+  in
+  Alcotest.check Alcotest.bool "2 = 4 * 2^(-1)" true
+    (Simulation.exact_equal amp_two_m0 amp_two_m2)
+
+(* Destructive interference: phases 0 and 1/2 to the same state cancel. *)
+let test_exact_is_zero () =
+  let amp =
+    must_exact_amplitude
+      (must_group_exact ~path_var_count:0
+         [ synthetic_path [| false |] Q.zero;
+           synthetic_path [| false |] (Q.of_ints 1 2) ])
+      [| false |]
+  in
+  Alcotest.check Alcotest.bool "1 + (-1) = 0" true
+    (Simulation.exact_is_zero amp)
+
+(* exact_equal on synthetic amplitudes: 1 = 1, but 1 <> i and 1 <> 2. *)
+let test_exact_equal () =
+  Alcotest.check Alcotest.bool "1 = 1" true
+    (Simulation.exact_equal (synthetic_amplitude Q.zero)
+       (synthetic_amplitude Q.zero));
+  Alcotest.check Alcotest.bool "1 <> i" false
+    (Simulation.exact_equal (synthetic_amplitude Q.zero)
+       (synthetic_amplitude (Q.of_ints 1 4)));
+  let amp_two =
+    must_exact_amplitude
+      (must_group_exact ~path_var_count:0
+         [ synthetic_path [| false |] Q.zero;
+           synthetic_path [| false |] Q.zero ])
+      [| false |]
+  in
+  Alcotest.check Alcotest.bool "1 <> 2" false
+    (Simulation.exact_equal (synthetic_amplitude Q.zero) amp_two)
+
+(* Field alignment: 1 = 1 + i - i, built with m = 0 and the phases [0]
+   against [0; 1/4; 3/4]. The left side has k = 1, the right side k = 2;
+   exact_equal must align the root exponents before comparing. *)
+let test_exact_equal_field_alignment () =
+  let amp_one_plus_i_minus_i =
+    must_exact_amplitude
+      (must_group_exact ~path_var_count:0
+         [ synthetic_path [| false |] Q.zero;
+           synthetic_path [| false |] (Q.of_ints 1 4);
+           synthetic_path [| false |] (Q.of_ints 3 4) ])
+      [| false |]
+  in
+  Alcotest.check Alcotest.bool "1 = 1 + i - i (k = 1 vs k = 2)" true
+    (Simulation.exact_equal (synthetic_amplitude Q.zero)
+       amp_one_plus_i_minus_i)
+
+(* A non-dyadic phase is rejected with a typed error, not an exception:
+   the denominator is checked (strictly positive, power of two) before
+   Common.Rational.find_k. *)
+let test_group_exact_phase_not_dyadic () =
+  match
+    Simulation.group_exact ~path_var_count:0
+      [ synthetic_path [| false |] (Q.of_ints 1 3) ]
+  with
+  | Error Simulation.PhaseNotDyadic -> ()
+  | Error Simulation.RootExponentTooLarge ->
+      Alcotest.fail "phase 1/3 must fail with PhaseNotDyadic"
+  | Ok _ -> Alcotest.fail "phase 1/3 must be rejected"
+
+(* The root exponent bound is checked before allocation: S on |1> needs
+   k = 2 (phase 1/4), so max_root_exponent = 1 rejects it. *)
+let test_group_exact_root_exponent_too_large () =
+  match
+    exact_group_of_circuit ~max_root_exponent:1 [| true |]
+      (Program.Macros.ss 0)
+  with
+  | Error Simulation.RootExponentTooLarge -> ()
+  | Error Simulation.PhaseNotDyadic ->
+      Alcotest.fail "phase 1/4 is dyadic; expected RootExponentTooLarge"
+  | Ok _ -> Alcotest.fail "max_root_exponent = 1 must reject k = 2"
+
+(* Former field size bound: k = 62 used to overflow 1 lsl k. With the
+   sparse map there is no array to allocate, so the phase 1/2^62 is
+   accepted and gives a non-zero, self-equal amplitude. *)
+let test_group_exact_accepts_former_field_size_bound () =
+  let den = Z.pow (Z.of_int 2) 62 in
+  let amp =
+    must_exact_amplitude
+      (must_group_exact ~max_root_exponent:62 ~path_var_count:0
+         [ synthetic_path [| false |] (Q.make Z.one den) ])
+      [| false |]
+  in
+  Alcotest.check Alcotest.bool "amplitude is not zero" false
+    (Simulation.exact_is_zero amp);
+  Alcotest.check Alcotest.bool "amplitude equals itself" true
+    (Simulation.exact_equal amp amp)
+
+(* Former shift bound: k = Sys.int_size + 1 used to make 1 lsl k
+   unspecified. With the sparse map the phase 1/2^(Sys.int_size+1) is
+   accepted and gives a non-zero, self-equal amplitude. *)
+let test_group_exact_accepts_former_shift_bound () =
+  let k = Sys.int_size + 1 in
+  let den = Z.pow (Z.of_int 2) k in
+  let amp =
+    must_exact_amplitude
+      (must_group_exact ~max_root_exponent:k ~path_var_count:0
+         [ synthetic_path [| false |] (Q.make Z.one den) ])
+      [| false |]
+  in
+  Alcotest.check Alcotest.bool "amplitude is not zero" false
+    (Simulation.exact_is_zero amp);
+  Alcotest.check Alcotest.bool "amplitude equals itself" true
+    (Simulation.exact_equal amp amp)
+
+(* Keys beyond the int range: with k = Sys.int_size + 3, the phase 1/2^k
+   stores the key 1, while 1/4 + 1/2^k stores the key 2^(k-2) + 1, which
+   exceeds max_int. Both groupings succeed and the amplitudes differ.
+   The former dense code rejected this k before any allocation, so this
+   test fails cleanly (typed error) before the sparse representation. *)
+let test_group_exact_keys_beyond_int () =
+  let k = Sys.int_size + 3 in
+  let den = Z.pow (Z.of_int 2) k in
+  let amp_unit =
+    must_exact_amplitude
+      (must_group_exact ~max_root_exponent:k ~path_var_count:0
+         [ synthetic_path [| false |] (Q.make Z.one den) ])
+      [| false |]
+  in
+  (* 1/4 + 1/2^k = (2^(k-2) + 1) / 2^k; the numerator is odd, so the
+     fraction is already reduced. *)
+  let num = Z.add (Z.pow (Z.of_int 2) (k - 2)) Z.one in
+  let amp_shifted =
+    must_exact_amplitude
+      (must_group_exact ~max_root_exponent:k ~path_var_count:0
+         [ synthetic_path [| false |] (Q.make num den) ])
+      [| false |]
+  in
+  Alcotest.check Alcotest.bool "unit amplitude is not zero" false
+    (Simulation.exact_is_zero amp_unit);
+  Alcotest.check Alcotest.bool "shifted amplitude is not zero" false
+    (Simulation.exact_is_zero amp_shifted);
+  Alcotest.check Alcotest.bool "the two amplitudes differ" false
+    (Simulation.exact_equal amp_unit amp_shifted)
+
+(* Scale overflow: path_var_count = max_int must not overflow the scale
+   (m / 2 + m mod 2 instead of (m + 1) / 2). The grouping succeeds and the
+   amplitude is a non-zero, self-equal value. *)
+let test_group_exact_scale_no_overflow () =
+  match
+    Simulation.group_exact ~path_var_count:max_int
+      [ synthetic_path [| false |] Q.zero ]
+  with
+  | Error _ -> Alcotest.fail "max_int path variables must not overflow"
+  | Ok grouped ->
+      let amp = must_exact_amplitude grouped [| false |] in
+      Alcotest.check Alcotest.bool "amplitude is not zero" false
+        (Simulation.exact_is_zero amp);
+      Alcotest.check Alcotest.bool "amplitude equals itself" true
+        (Simulation.exact_equal amp amp)
+
+(* --- Equivalence by instantiation (Equiv.simulation) --- *)
+
+(* First integration test: X vs X on one qubit, full-circuit equivalence.
+   Default metadata means full inputs and outputs, a supported
+   configuration. X is a permutation: m = 0, null phase, k = 1, s = 0.
+
+   Disabled while Equiv.simulation is a stub; re-enabled with the
+   implementation of the simulation-based check. *)
+(* let test_simulation_x_x () =
+  let result =
+    Equiv.simulation ~equivalence:Equiv.FullCircuit
+      (Program.Macros.x 0) (Program.Macros.x 0)
+  in
+  Alcotest.(check string) "X vs X is FullCircuitEquivalent"
+    "FullCircuitEquivalent" (Equiv.result_to_string result) *)
+
 (* Keeps the experimental simulation checks in a separate executable. *)
 let () =
   Alcotest.run "SQbricks simulation"
@@ -539,4 +834,41 @@ let () =
           Alcotest.test_case "probabilities of the interference circuit" `Quick
             test_probabilities_interference;
         ] );
+      ( "Exact grouping",
+        [
+          Alcotest.test_case "group_exact X on |0> (m=0, null phase)" `Quick
+            test_group_exact_x_on_zero;
+          Alcotest.test_case "group_exact S on |1> (m=0, phase 1/4)" `Quick
+            test_group_exact_s_on_one;
+          Alcotest.test_case "group_exact H on |0> (odd normalization)" `Quick
+            test_group_exact_h_on_zero_odd_normalization;
+          Alcotest.test_case "exact_equal aligns scales" `Quick
+            test_exact_equal_scale_alignment;
+          Alcotest.test_case "exact_is_zero on cancellation" `Quick
+            test_exact_is_zero;
+          Alcotest.test_case "exact_equal on synthetic amplitudes" `Quick
+            test_exact_equal;
+          Alcotest.test_case "exact_equal aligns root fields" `Quick
+            test_exact_equal_field_alignment;
+          Alcotest.test_case "group_exact rejects non-dyadic phase" `Quick
+            test_group_exact_phase_not_dyadic;
+          Alcotest.test_case "group_exact rejects large root exponent" `Quick
+            test_group_exact_root_exponent_too_large;
+          Alcotest.test_case "group_exact accepts k = 62 (former field size)"
+            `Quick test_group_exact_accepts_former_field_size_bound;
+          Alcotest.test_case
+            "group_exact accepts k = Sys.int_size + 1 (former shift bound)"
+            `Quick test_group_exact_accepts_former_shift_bound;
+          Alcotest.test_case "group_exact keys beyond the int range" `Quick
+            test_group_exact_keys_beyond_int;
+          Alcotest.test_case "group_exact does not overflow the scale" `Quick
+            test_group_exact_scale_no_overflow;
+        ] );
+      (* Disabled while Equiv.simulation is a stub; re-enabled with the
+         implementation of the simulation-based check.
+      ( "Equiv.simulation",
+        [
+          Alcotest.test_case "X vs X is FullCircuitEquivalent" `Quick
+            test_simulation_x_x;
+        ] ); *)
     ]

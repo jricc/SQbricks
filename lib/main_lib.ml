@@ -371,6 +371,9 @@ let run () =
         | Sequence ->
             Equiv.seq ~debug ~equivalence ~inputs1 ~inputs2 ~outputs1 ~outputs2
               p1 p2
+        | Simulation ->
+            Equiv.simulation ~debug ~equivalence ~inputs1 ~inputs2 ~outputs1
+              ~outputs2 p1 p2
       in
       let end_time = Unix.gettimeofday () in
       let end_mem = Gc.allocated_bytes () in

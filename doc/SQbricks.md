@@ -371,12 +371,34 @@ amplitudes complexes. Les chemins de phases opposées s'annulent
 constructive). La probabilité d'un état de base est le module au carré de son
 amplitude (`Complex.norm2`).
 
+Le noyau exact complète ce prototype : `Simulation.group_exact` regroupe les
+chemins par état de base sans flottant. Chaque amplitude y est représentée
+exactement par `2^(-s) · Σ c_j ζ^j` avec `ζ = e^(2πi / 2^k)` et des
+coefficients entiers, sous forme réduite modulo le polynôme cyclotomique
+`Φ_{2^k}(x) = x^(2^(k-1)) + 1` (vecteur de coefficients de longueur
+`2^(k-1)`). L'exposant racine vaut `k = max(1, max k_phases, 3 si m est
+impair)` : la normalisation impaire `2^(-m/2) = 2^(-(r+1)) · √2` se représente
+avec `√2 = ζ_8 + ζ_8^(-1)`, ce qui exige `k ≥ 3`. `Simulation.exact_is_zero`
+teste l'annulation et `Simulation.exact_equal` décide l'égalité exacte en
+alignant les exposants racines et les échelles avant de comparer les vecteurs
+de coefficients. Aucune décision ne passe par les flottants ;
+`Simulation.group` reste un affichage. Une phase non dyadique retourne
+`Error PhaseNotDyadic` ; un exposant racine dépassant `~max_root_exponent`
+(ou hors de la plage des entiers ou de `Sys.max_array_length`) retourne
+`Error RootExponentTooLarge`, vérifié avant toute allocation.
+
 Limites actuelles du prototype :
 
 - `Simulation.expand` énumère les `2^m` affectations sans limite de taille ;
 - les probabilités affichées couvrent tous les qubits du registre ; la somme
   sur les sorties non observées n'est pas encore implémentée ;
-- la simulation des mesures n'est pas encore implémentée.
+- la simulation des mesures n'est pas encore implémentée ;
+- `Simulation.exact_mul`, prévu pour la comparaison de phase globale sans
+  division, n'est pas encore implémenté (l'appel lève `Failure`) ;
+- `Equiv.simulation`, qui connectera le noyau exact à la vérification
+  d'équivalence par instanciation de variables, est un bouchon (l'appel lève
+  `Failure`) ; l'algorithme `Simulation` n'est pas exposé en ligne de
+  commande.
 
 ## Prototype d'inspection
 

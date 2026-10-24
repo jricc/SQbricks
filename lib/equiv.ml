@@ -38,6 +38,7 @@ type result =
   | NotEquivDiffOutputs
   | NotEquivDiffInputs
   | NotEquivDiffInputsOutputs
+  | NotEquivDiffStates of bool array * bool array
   | SubCircuitInconclusive
   | Entanglement1
   | Entanglement2
@@ -60,6 +61,7 @@ let result_to_string = function
   | NotEquivDiffOutputs -> "NotEquivDiffOutputs"
   | NotEquivDiffInputs -> "NotEquivDiffInputs"
   | NotEquivDiffInputsOutputs -> "NotEquivDiffInputsOutputs"
+  | NotEquivDiffStates _ -> "NotEquivDiffStates"
   | SubCircuitInconclusive -> "SubCircuitInconclusive"
   | Entanglement1 -> "Entanglement1"
   | Entanglement2 -> "Entanglement2"
@@ -736,7 +738,29 @@ let parallel ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
                         | FullCircuit -> ErrorFullCircuitNotImplemented)))))
 
 (* Defines the type 'algo' representing the algorithm type to use. *)
-type algo = Parallel | Sequence
+type algo = Parallel | Sequence | Simulation
+
+(* Temporary stub: the simulation-based equivalence check is implemented
+   increment by increment after review of the tests. *)
+let simulation ?(debug = false) ?(inputs1 = []) ?(inputs2 = [])
+    ?(outputs1 = []) ?(outputs2 = []) ?(meas1 = []) ?(meas2 = [])
+    ?(equivalence = SubCircuit) ?(max_inputs = 256) ?(max_path_vars = 16)
+    ?(max_root_exponent = 32) unitary1 unitary2 =
+  ignore
+    ( debug,
+      inputs1,
+      inputs2,
+      outputs1,
+      outputs2,
+      meas1,
+      meas2,
+      equivalence,
+      max_inputs,
+      max_path_vars,
+      max_root_exponent,
+      unitary1,
+      unitary2 );
+  failwith "Equiv.simulation: not implemented yet"
 
 (* Function SQV (Sequence or Parallel Verification) to verify the partial-unitary-equivalence of two quantum circuits *)
 let sqv ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
@@ -745,6 +769,9 @@ let sqv ?(debug = false) ?(inputs1 = []) ?(inputs2 = []) ?(outputs1 = [])
   (* Determines the equivalence result based on the algorithm and the requested equivalence type *)
   let result =
     match (algo, equivalence) with
+    | Simulation, _ ->
+        simulation ~debug ~inputs1 ~inputs2 ~outputs1 ~outputs2 ~meas1 ~meas2
+          ~equivalence p1 p2
     | _, FullCircuit -> ErrorFullCircuitNotImplemented
     | Parallel, _ ->
         parallel p1 p2 ~debug ~equivalence ~inputs1 ~inputs2 ~outputs1 ~outputs2
