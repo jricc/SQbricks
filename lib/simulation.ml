@@ -190,3 +190,31 @@ let group ~(path_var_count : int) (paths : expanded_path list) :
     aux [] acc
   in
   List.fold_left add_path [] paths
+
+(** No exact amplitude is constructed at this step.
+    For example, grouping [] needs no amplitude value. *)
+type exact_amplitude = |
+
+(** A basis state and its exact summed amplitude.
+    For example, grouping [] produces no entry of this type. *)
+type exact_grouped_path = {
+  basis_state : bool array;
+      (** Concrete output state shared by the grouped paths. *)
+  amplitude : exact_amplitude;
+      (** Exact sum of the amplitudes leading to this state. *)
+}
+
+(** No exact grouping error is produced at this step.
+    For example, grouping [] succeeds without an error value. *)
+type exact_error = |
+
+(** Handles exact grouping when no path contributes.
+    For example, [group_exact ~path_var_count:0 []] returns [Ok []].
+    Non-empty paths are not implemented yet and raise [Failure]. *)
+let group_exact ~path_var_count:(_ : int) (paths : expanded_path list) :
+    (exact_grouped_path list, exact_error) result =
+  match paths with
+  | [] -> Ok []
+  | _ :: _ ->
+      (* Temporary boundary: non-empty grouping needs its own test first. *)
+      failwith "Simulation.group_exact: non-empty paths not implemented yet"

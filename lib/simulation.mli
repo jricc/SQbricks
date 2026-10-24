@@ -100,3 +100,32 @@ val group : path_var_count:int -> expanded_path list -> grouped_path list
 
     Example: grouping the expansion of H on |0> gives two entries, |0> and
     |1>, both with amplitude [1/sqrt(2)]. *)
+
+(** An exact amplitude, without conversion to floating-point numbers.
+    Example: the amplitude 1 will be represented exactly. *)
+type exact_amplitude
+
+(** A basis state and the exact sum of its contributions.
+    Example: two paths leading to |0> produce a single entry. *)
+type exact_grouped_path = {
+  basis_state : bool array;
+      (** Basis state; [false] represents |0>, [true] represents |1>. *)
+  amplitude : exact_amplitude;
+      (** Exact sum of the amplitudes leading to this state. *)
+}
+
+(** An exact grouping error.
+    Error cases will be specified with their dedicated tests. *)
+type exact_error
+
+val group_exact :
+  path_var_count:int ->
+  expanded_path list ->
+  (exact_grouped_path list, exact_error) result
+(** [group_exact ~path_var_count paths] groups paths by basis state,
+    summing their amplitudes exactly.
+
+    [path_var_count] is the number of path variables in the expanded
+    path sum; it fixes the common normalization [2^(-path_var_count/2)].
+
+    Example: [group_exact ~path_var_count:0 []] returns [Ok []]. *)

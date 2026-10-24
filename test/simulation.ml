@@ -100,7 +100,7 @@ let count_expanded_paths (paths : Simulation.expanded_path list)
 let amplitude_of (paths : Simulation.grouped_path list)
     (basis_state : bool array) : Complex.t option =
   List.find_map
-    (fun path ->
+    (fun (path : Simulation.grouped_path) ->
       let open Simulation in
       if path.basis_state = basis_state then Some path.amplitude else None)
     paths
@@ -492,6 +492,13 @@ let test_probabilities_interference () =
           Alcotest.check (Alcotest.float 1e-9) "probabilities sum to 1" 1.
             total)
 
+(* No paths contribute to a basis state: exact grouping of [] returns Ok []. *)
+let test_group_exact_empty () =
+  match Simulation.group_exact ~path_var_count:0 [] with
+  | Ok [] -> ()
+  | Ok _ -> Alcotest.fail "no paths must produce no grouped basis states"
+  | Error _ -> Alcotest.fail "exact grouping must succeed for no paths"
+
 (* Keeps the experimental simulation checks in a separate executable. *)
 let () =
   Alcotest.run "SQbricks simulation"
@@ -538,5 +545,10 @@ let () =
             test_group_h_s_on_zero;
           Alcotest.test_case "probabilities of the interference circuit" `Quick
             test_probabilities_interference;
+        ] );
+      ( "Exact grouping",
+        [
+          Alcotest.test_case "group_exact on no paths" `Quick
+            test_group_exact_empty;
         ] );
     ]
