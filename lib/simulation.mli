@@ -133,7 +133,7 @@ val group_exact :
     [path_var_count] is the number of path variables in the expanded
     path sum; it fixes the common normalization [2^(-path_var_count/2)].
 
-    Currently supports no paths, or one path with phase 0 or 1/2 and
+    Currently supports no paths, or one path with phase 0, 1/2 or 1/4 and
     [path_var_count = 0]. Other cases raise [Failure] until implemented.
 
     Example: [group_exact ~path_var_count:0 []] returns [Ok []]. *)

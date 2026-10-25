@@ -231,7 +231,7 @@ type exact_grouped_path = {
     For example, grouping [] succeeds without an error value. *)
 type exact_error = |
 
-(** Handles no paths or one path with phase 0 or 1/2 and no path variables.
+(** Handles no paths or one path with phase 0, 1/2 or 1/4 and no path variables.
     For example, one path to |0> with phase 0 and path count 0 has amplitude 1.
     Other cases are not implemented yet and raise [Failure]. *)
 let group_exact ~(path_var_count : int) (paths : expanded_path list) :
@@ -256,6 +256,17 @@ let group_exact ~(path_var_count : int) (paths : expanded_path list) :
           root_exponent = 1;
           scale = 0;
           coeffs = ExponentMap.singleton Z.zero Z.minus_one;
+        }
+      in
+      Ok [ { basis_state = path.basis_state; amplitude } ]
+  | [ path ]
+    when path_var_count = 0 && Q.equal path.phase (Q.make Z.one (Z.of_int 4)) ->
+      (* At k=2, the quarter-turn phase is the first power of root=i. *)
+      let amplitude =
+        {
+          root_exponent = 2;
+          scale = 0;
+          coeffs = ExponentMap.singleton Z.one Z.one;
         }
       in
       Ok [ { basis_state = path.basis_state; amplitude } ]

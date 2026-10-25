@@ -527,6 +527,20 @@ let test_group_exact_half_phase () =
   | Ok _ -> Alcotest.fail "one path must produce one grouped basis state"
   | Error _ -> Alcotest.fail "exact grouping must succeed for a half-phase path"
 
+(* One quarter-turn phase with no path variables contributes amplitude i. *)
+let test_group_exact_quarter_phase () =
+  let path : Simulation.expanded_path =
+    { basis_state = [| false |]; phase = Q.make Z.one (Z.of_int 4) }
+  in
+  match Simulation.group_exact ~path_var_count:0 [ path ] with
+  | Ok [ grouped_path ] ->
+      Alcotest.check (Alcotest.array Alcotest.bool) "basis state" [| false |]
+        grouped_path.basis_state;
+      Alcotest.check Alcotest.string "exact amplitude" "k=2; s=0; coeffs=[1:1]"
+        (Simulation.exact_to_string grouped_path.amplitude)
+  | Ok _ -> Alcotest.fail "one path must produce one grouped basis state"
+  | Error _ -> Alcotest.fail "exact grouping must succeed for a quarter-phase path"
+
 (* Keeps the experimental simulation checks in a separate executable. *)
 let () =
   Alcotest.run "SQbricks simulation"
@@ -582,5 +596,7 @@ let () =
             test_group_exact_zero_phase;
           Alcotest.test_case "group_exact on one half-phase path" `Quick
             test_group_exact_half_phase;
+          Alcotest.test_case "group_exact on one quarter-phase path" `Quick
+            test_group_exact_quarter_phase;
         ] );
     ]
