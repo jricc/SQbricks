@@ -353,6 +353,21 @@ For trivial edits, typo fixes, formatting fixes, or very small bug fixes:
 
 Use the full quality process for non-trivial changes.
 
+## Mathematical design and validation
+
+- Use mathematics to clarify the intended behavior and derive concrete
+  expected results for readable tests.
+- Reuse published definitions and cite their sources. For path-sums and
+  well-formedness, use Amy's 2019 definitions.
+- Archive mathematical design notes in the private documentation repository,
+  with their references, assumptions, and limitations.
+- Discuss concrete mathematical examples with the user before translating
+  them into tests, then implement the agreed behavior for user review and
+  test execution.
+- Do not present design notes as proofs of new general mathematical
+  properties. Limit validation claims to the behavior supported by the
+  recorded evidence; passing tests are not a general correctness proof.
+
 ## Testing rules
 
 - Prefer small, deterministic tests.
