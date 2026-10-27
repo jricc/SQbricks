@@ -492,6 +492,34 @@ let test_probabilities_interference () =
           Alcotest.check (Alcotest.float 1e-9) "probabilities sum to 1" 1.
             total)
 
+(* Follows the identity through execution, expansion and exact grouping.
+   On |0>, m=0 gives one phase-zero path and exact amplitude 1. *)
+let test_group_exact_identity_on_zero () =
+  match Simulation.execute ~input:[| false |] Program.Macros.id with
+  | Error _ -> Alcotest.fail "identity on |0> must execute successfully"
+  | Ok state -> (
+      Alcotest.check (Alcotest.list Alcotest.int) "no path variables" []
+        state.path_var;
+      match Simulation.expand state with
+      | Error _ -> Alcotest.fail "identity on |0> must expand successfully"
+      | Ok paths -> (
+          Alcotest.check Alcotest.int "one expanded path" 1 (List.length paths);
+          Alcotest.check Alcotest.bool "path to |0> with phase 0" true
+            (has_expanded_path paths [| false |] Q.zero);
+          match
+            Simulation.group_exact
+              ~path_var_count:(List.length state.path_var)
+              paths
+          with
+          | Ok [ grouped_path ] ->
+              Alcotest.check (Alcotest.array Alcotest.bool) "basis state"
+                [| false |] grouped_path.basis_state;
+              Alcotest.check Alcotest.string "exact amplitude"
+                "k=1; s=0; coeffs=[0:1]"
+                (Simulation.exact_to_string grouped_path.amplitude)
+          | Ok _ -> Alcotest.fail "identity must produce one grouped basis state"
+          | Error _ -> Alcotest.fail "exact grouping must succeed for identity"))
+
 (* No paths contribute to a basis state: exact grouping of [] returns Ok []. *)
 let test_group_exact_empty () =
   match Simulation.group_exact ~path_var_count:0 [] with
@@ -590,6 +618,8 @@ let () =
         ] );
       ( "Exact grouping",
         [
+          Alcotest.test_case "identity on |0> through exact grouping" `Quick
+            test_group_exact_identity_on_zero;
           Alcotest.test_case "group_exact on no paths" `Quick
             test_group_exact_empty;
           Alcotest.test_case "group_exact on one zero-phase path" `Quick

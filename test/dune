@@ -1,9 +1,17 @@
 (executables
  (names qiskit mbqc unitary primitives verif simulation)
+ (modules qiskit mbqc unitary primitives verif simulation)
  (modes exe)
  (libraries alcotest sQbricks)
  ;  (flags :standard -w -a)
  )
+
+; Keep other test runners out of this executable: their initializers run tests.
+(executable
+ (name simulation_exact_pending)
+ (modules simulation_exact_pending)
+ (modes exe)
+ (libraries alcotest sQbricks))
 
 (rule
  (alias qiskit)
@@ -34,3 +42,9 @@
  (alias simulation)
  (action
   (run ./simulation.exe)))
+
+; Accepted examples awaiting implementation; run explicitly, outside default CI.
+(rule
+ (alias simulation-exact-pending)
+ (action
+  (run ./simulation_exact_pending.exe)))

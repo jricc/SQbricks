@@ -19,6 +19,23 @@ SQbricks est un prototype de recherche pour la vérification de circuits
 quantiques hybrides. Un programme peut combiner des portes quantiques, des
 mesures, des initialisations et du contrôle classique.
 
+Le cadrage du projet distingue trois usages :
+
+- **vérification de spécification** : établir qu'un circuit satisfait une
+  propriété donnée ;
+- **vérification d'équivalence** : établir que deux circuits ont le même
+  comportement selon une notion d'équivalence explicite ;
+- **simulation** : calculer le résultat d'une requête pour une entrée donnée,
+  par exemple une amplitude ou une probabilité.
+
+L'exécution symbolique et les règles de réduction sont les moyens centraux.
+La simulation vise à les compléter en instanciant des entrées et en sommant
+les chemins restants. Sommer les chemins pour une entrée ne suffit pas à
+établir une propriété pour toutes les entrées. L'énumération peut être
+exponentielle ; aucune complétude ni efficacité générale n'est garantie.
+Ce cadrage décrit la direction du projet ; les fonctions disponibles et leurs
+limites sont précisées dans les sections suivantes.
+
 Le workflow principal comporte deux parties :
 
 - **SQbricks-Lift (SQL)** transforme un circuit hybride en déplaçant les
@@ -362,7 +379,7 @@ au carré de l'amplitude, `Complex.norm2`) :
 dune exec -- ./bin/main.exe -simulate_group circuit.qasm 010
 ```
 
-Au niveau bibliothèque, `lib/simulation.ml` expose trois fonctions :
+Le pipeline de simulation approchée repose sur trois fonctions :
 `Simulation.execute` exécute le circuit et réduit son path-sum ;
 `Simulation.expand` énumère les affectations des variables de chemin ;
 `Simulation.group` regroupe les chemins par état de base en sommant leurs
