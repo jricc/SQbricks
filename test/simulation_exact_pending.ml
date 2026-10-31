@@ -69,6 +69,31 @@ let test_group_exact_h_on_zero () =
   | Ok _ -> Alcotest.fail "H must produce exactly the states |0> and |1>"
   | Error _ -> Alcotest.fail "exact grouping must succeed for complete H paths"
 
+(* Checks the complete two-path expansion of H on |1>, with m=1.
+   The half-turn phase negates both coefficients of the normalization for |1>.
+   Opposite amplitudes belong to different states and must not cancel. *)
+let test_group_exact_h_on_one () =
+  let paths : Simulation.expanded_path list =
+    [
+      { basis_state = [| false |]; phase = Q.zero };
+      { basis_state = [| true |]; phase = Q.make Z.one (Z.of_int 2) };
+    ]
+  in
+  match Simulation.group_exact ~path_var_count:1 paths with
+  | Ok [ zero_state; one_state ] ->
+      Alcotest.check (Alcotest.array Alcotest.bool) "first state is |0>"
+        [| false |] zero_state.basis_state;
+      Alcotest.check (Alcotest.array Alcotest.bool) "second state is |1>"
+        [| true |] one_state.basis_state;
+      Alcotest.check Alcotest.string "amplitude of |0>: 1/sqrt(2)"
+        "k=3; s=1; coeffs=[1:1; 3:-1]"
+        (Simulation.exact_to_string zero_state.amplitude);
+      Alcotest.check Alcotest.string "amplitude of |1>: -1/sqrt(2)"
+        "k=3; s=1; coeffs=[1:-1; 3:1]"
+        (Simulation.exact_to_string one_state.amplitude)
+  | Ok _ -> Alcotest.fail "H must produce exactly the states |0> and |1>"
+  | Error _ -> Alcotest.fail "exact grouping must succeed for complete H paths"
+
 (* Runs accepted tests awaiting implementation only through this executable.
    Example: dune build @simulation-exact-pending; failures are expected for now. *)
 let () =
@@ -80,5 +105,7 @@ let () =
             test_group_exact_hh_on_zero;
           Alcotest.test_case "H on |0>, odd normalization and two output states"
             `Quick test_group_exact_h_on_zero;
+          Alcotest.test_case "H on |1>, odd normalization and opposite signs"
+            `Quick test_group_exact_h_on_one;
         ] );
     ]
