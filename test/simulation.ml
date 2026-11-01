@@ -520,13 +520,6 @@ let test_group_exact_identity_on_zero () =
           | Ok _ -> Alcotest.fail "identity must produce one grouped basis state"
           | Error _ -> Alcotest.fail "exact grouping must succeed for identity"))
 
-(* No paths contribute to a basis state: exact grouping of [] returns Ok []. *)
-let test_group_exact_empty () =
-  match Simulation.group_exact ~path_var_count:0 [] with
-  | Ok [] -> ()
-  | Ok _ -> Alcotest.fail "no paths must produce no grouped basis states"
-  | Error _ -> Alcotest.fail "exact grouping must succeed for no paths"
-
 (* One phase-zero path with no path variables contributes amplitude 1. *)
 let test_group_exact_zero_phase () =
   let path : Simulation.expanded_path =
@@ -620,8 +613,6 @@ let () =
         [
           Alcotest.test_case "identity on |0> through exact grouping" `Quick
             test_group_exact_identity_on_zero;
-          Alcotest.test_case "group_exact on no paths" `Quick
-            test_group_exact_empty;
           Alcotest.test_case "group_exact on one zero-phase path" `Quick
             test_group_exact_zero_phase;
           Alcotest.test_case "group_exact on one half-phase path" `Quick

@@ -227,9 +227,26 @@ type exact_grouped_path = {
       (** Exact sum of the amplitudes leading to this state. *)
 }
 
-(** No exact grouping error is produced at this step.
-    For example, grouping [] succeeds without an error value. *)
-type exact_error = |
+(** Input errors for complete exact grouping; checks are pending implementation.
+    For example, zero paths at m=0 must give [Invalid_path_count]. *)
+type exact_error =
+  | Negative_path_var_count of int
+      (** The supplied number of path variables is negative. *)
+  | Invalid_path_count of {
+      path_var_count : int;
+      actual_count : int;
+    }
+      (** Expected [2^path_var_count] paths; [actual_count] is the list length. *)
+  | Inconsistent_state_width of {
+      path_index : int;
+      expected_width : int;
+      actual_width : int;
+    }
+      (** A state's width differs from the first state's width. *)
+  | Non_finite_phase of { path_index : int }
+      (** The phase is infinite or undefined. *)
+  | Non_dyadic_phase of { path_index : int; phase : Q.t }
+      (** The finite phase cannot be written with a power-of-two denominator. *)
 
 (** Handles no paths or one path with phase 0, 1/2 or 1/4 and no path variables.
     For example, one path to |0> with phase 0 and path count 0 has amplitude 1.

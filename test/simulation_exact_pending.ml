@@ -100,7 +100,7 @@ let test_group_exact_h_on_one () =
    root = exp(2*pi*i / 2^k), s = ceil(m/2), without scale simplification.
    Choose the smallest common k >= 1 for phases modulo 1; odd m also needs k >= 3.
    Omit zero coefficients and zero-amplitude states; sort states lexicographically.
-   Error cases await an agreed typed contract. *)
+   Input errors are tested below; their checks await implementation. *)
 
 (* Checks complete grouped coordinates, including multiplicity and output order.
    For example, amplitude 1/2 on |00> is ([|false; false|], "k=1; s=1; coeffs=[0:1]").
@@ -283,6 +283,78 @@ let test_group_exact_integer_phase (phase : Q.t) () =
     [ { basis_state = [| false |]; phase } ]
     [ ([| false |], "k=1; s=0; coeffs=[0:1]") ]
 
+(* E1: reject m=-1 before attempting to determine the expected path count. *)
+let test_group_exact_negative_path_var_count () =
+  let paths : Simulation.expanded_path list =
+    [ { basis_state = [| false |]; phase = Q.zero } ]
+  in
+  match Simulation.group_exact ~path_var_count:(-1) paths with
+  | Error (Simulation.Negative_path_var_count count) ->
+      Alcotest.check Alcotest.int "negative path variable count" (-1) count
+  | Error _ -> Alcotest.fail "expected Negative_path_var_count"
+  | Ok _ -> Alcotest.fail "negative path variable count must be rejected"
+
+(* E2-E4: report the supplied list length, e.g. one path instead of two at m=1.
+   All states have the same width and phase zero to isolate the count error. *)
+let test_group_exact_invalid_path_count path_var_count actual_count () =
+  let paths : Simulation.expanded_path list =
+    List.init actual_count (fun _ ->
+        ({ basis_state = [| false |]; phase = Q.zero }
+          : Simulation.expanded_path))
+  in
+  match Simulation.group_exact ~path_var_count paths with
+  | Error (Simulation.Invalid_path_count details) ->
+      Alcotest.check Alcotest.int "path variable count" path_var_count
+        details.path_var_count;
+      Alcotest.check Alcotest.int "supplied path count" actual_count
+        details.actual_count
+  | Error _ -> Alcotest.fail "expected Invalid_path_count"
+  | Ok _ -> Alcotest.fail "an incomplete or oversized expansion must be rejected"
+
+(* E5: at m=1 there are two paths, but the second state has two qubits instead
+   of one. Its zero-based position must be reported as 1. *)
+let test_group_exact_inconsistent_state_width () =
+  let paths : Simulation.expanded_path list =
+    [
+      { basis_state = [| false |]; phase = Q.zero };
+      { basis_state = [| false; false |]; phase = Q.zero };
+    ]
+  in
+  match Simulation.group_exact ~path_var_count:1 paths with
+  | Error (Simulation.Inconsistent_state_width details) ->
+      Alcotest.check Alcotest.int "path index" 1 details.path_index;
+      Alcotest.check Alcotest.int "expected width" 1 details.expected_width;
+      Alcotest.check Alcotest.int "actual width" 2 details.actual_width
+  | Error _ -> Alcotest.fail "expected Inconsistent_state_width"
+  | Ok _ -> Alcotest.fail "states of different widths must be rejected"
+
+(* E6: Q.inf, Q.minus_inf and Q.undef are representable rationals but invalid
+   phases. Register each separately, e.g. Q.undef must report path index 0. *)
+let test_group_exact_non_finite_phase (phase : Q.t) () =
+  let paths : Simulation.expanded_path list =
+    [ { basis_state = [| false |]; phase } ]
+  in
+  match Simulation.group_exact ~path_var_count:0 paths with
+  | Error (Simulation.Non_finite_phase { path_index }) ->
+      Alcotest.check Alcotest.int "path index" 0 path_index
+  | Error _ -> Alcotest.fail "expected Non_finite_phase"
+  | Ok _ -> Alcotest.fail "a non-finite phase must be rejected"
+
+(* E7: phase 1/3 is finite but outside the supported dyadic phases.
+   Check the reported rational by value, as well as the path position. *)
+let test_group_exact_non_dyadic_phase () =
+  let phase = 1 /// 3 in
+  let paths : Simulation.expanded_path list =
+    [ { basis_state = [| false |]; phase } ]
+  in
+  match Simulation.group_exact ~path_var_count:0 paths with
+  | Error (Simulation.Non_dyadic_phase details) ->
+      Alcotest.check Alcotest.int "path index" 0 details.path_index;
+      Alcotest.check Alcotest.bool "reported phase is 1/3" true
+        (Q.equal phase details.phase)
+  | Error _ -> Alcotest.fail "expected Non_dyadic_phase"
+  | Ok _ -> Alcotest.fail "a non-dyadic phase must be rejected"
+
 (* Runs accepted tests awaiting implementation only through this executable.
    Example: dune build @simulation-exact-pending; failures are expected for now. *)
 let () =
@@ -331,5 +403,26 @@ let () =
             (test_group_exact_integer_phase Q.one);
           Alcotest.test_case "V5: phase -1" `Quick
             (test_group_exact_integer_phase ((-1) /// 1));
+        ] );
+      ( "Exact grouping errors",
+        [
+          Alcotest.test_case "E1: negative path variable count" `Quick
+            test_group_exact_negative_path_var_count;
+          Alcotest.test_case "E2: no paths at m=0" `Quick
+            (test_group_exact_invalid_path_count 0 0);
+          Alcotest.test_case "E3: one path instead of two" `Quick
+            (test_group_exact_invalid_path_count 1 1);
+          Alcotest.test_case "E4: three paths instead of two" `Quick
+            (test_group_exact_invalid_path_count 1 3);
+          Alcotest.test_case "E5: inconsistent state widths" `Quick
+            test_group_exact_inconsistent_state_width;
+          Alcotest.test_case "E6a: positive infinite phase" `Quick
+            (test_group_exact_non_finite_phase Q.inf);
+          Alcotest.test_case "E6b: negative infinite phase" `Quick
+            (test_group_exact_non_finite_phase Q.minus_inf);
+          Alcotest.test_case "E6c: undefined phase" `Quick
+            (test_group_exact_non_finite_phase Q.undef);
+          Alcotest.test_case "E7: non-dyadic phase 1/3" `Quick
+            test_group_exact_non_dyadic_phase;
         ] );
     ]

@@ -119,9 +119,26 @@ type exact_grouped_path = {
       (** Exact sum of the amplitudes leading to this state. *)
 }
 
-(** An exact grouping error.
-    Error cases will be specified with their dedicated tests. *)
-type exact_error
+(** Input errors for complete exact grouping. Path indices start at zero.
+    For example, zero paths at m=0 must give [Invalid_path_count]. *)
+type exact_error =
+  | Negative_path_var_count of int
+      (** The supplied number of path variables is negative. *)
+  | Invalid_path_count of {
+      path_var_count : int;
+      actual_count : int;
+    }
+      (** Expected [2^path_var_count] paths; [actual_count] is the list length. *)
+  | Inconsistent_state_width of {
+      path_index : int;
+      expected_width : int;
+      actual_width : int;
+    }
+      (** A state's width differs from the first state's width. *)
+  | Non_finite_phase of { path_index : int }
+      (** The phase is infinite or undefined. *)
+  | Non_dyadic_phase of { path_index : int; phase : Q.t }
+      (** The finite phase cannot be written with a power-of-two denominator. *)
 
 val group_exact :
   path_var_count:int ->
@@ -133,7 +150,16 @@ val group_exact :
     [path_var_count] is the number of path variables in the expanded
     path sum; it fixes the common normalization [2^(-path_var_count/2)].
 
-    Currently supports no paths, or one path with phase 0, 1/2 or 1/4 and
-    [path_var_count = 0]. Other cases raise [Failure] until implemented.
+    Accepted contract, pending implementation: require a nonnegative
+    [path_var_count], then exactly [2^path_var_count] paths. In list order,
+    check each state's width against the first state, then check that its
+    phase is finite and dyadic. Return the first error encountered.
+    Zero-qubit states are allowed; an empty path list is rejected.
+    These checks do not establish that the paths describe an isometry.
 
-    Example: [group_exact ~path_var_count:0 []] returns [Ok []]. *)
+    Example: the intended result for [group_exact ~path_var_count:0 []] is
+    [Error (Invalid_path_count { path_var_count = 0; actual_count = 0 })].
+
+    The current partial implementation still returns [Ok []] for no paths.
+    It also supports one path with phase 0, 1/2 or 1/4 and [path_var_count = 0].
+    Other cases raise [Failure]; the input checks above are not implemented yet. *)
