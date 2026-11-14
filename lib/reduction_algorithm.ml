@@ -66,8 +66,11 @@ let reduction_algorithm ?(debug = false) input =
             then aux state_case
             else continue_after_case acc state_case
   and continue_after_case acc state_case =
+    (* No Case match occurred on this pass, so [state_case] is the output of
+       [hh] on a simplified input: its phase and ket are already simplified. *)
     match
-      Rules.Variable_replacement.variable_replacement ~debug state_case
+      Rules.Variable_replacement.variable_replacement ~debug
+        ~input_is_simplified:true state_case
     with
     | Error reduction_error -> Error reduction_error
     | Ok (Some state_replace) ->

@@ -3717,11 +3717,64 @@ let test_replace_not_path_var_by_var_ignores_path_dependent_shift () =
 
 (* TODO : restore variable replacement without reordening *)
 
+(* Rendering of a [variable_replacement] result for exact comparison. *)
+let variable_replacement_result_exact = function
+  | Ok (Some ps) -> "Some " ^ PSS.exact ps
+  | Ok None -> "None"
+  | Error (Rules.MalformedPathSum _) -> "Error"
+
+let test_variable_replacement_simplified_input_flag () =
+  (* On an already simplified input, [~input_is_simplified:true] must return the
+     same result as the default call. Example with a match:
+     phase = 1/4*y1, ket = |x0 + y0, y1> becomes ket = |y0, y1>. *)
+  let raw : Path_sum.t =
+    { phase = Prod (Scal div4, Qubit (v 3)) +++ Poly.empty;
+      ket = [| x0 ++ v 2; v 3 |];
+      path_var = [ 2; 3 ] }
+  in
+  let simplified = Rules.Simplification.simplify raw in
+  let default_result =
+    Rules.Variable_replacement.variable_replacement simplified
+  in
+  let flagged_result =
+    Rules.Variable_replacement.variable_replacement ~input_is_simplified:true
+      simplified
+  in
+  check string "flagged call matches default on simplified input"
+    (variable_replacement_result_exact default_result)
+    (variable_replacement_result_exact flagged_result)
+
+let test_variable_replacement_default_simplifies_arbitrary_input () =
+  (* Without the flag, an arbitrary input is still simplified before matching:
+     the result on a raw input equals the result on its simplified form. The
+     raw phase below has a duplicated monome, so it is not simplified. *)
+  let raw : Path_sum.t =
+    { phase =
+        Prod (Scal div4, Qubit (v 3))
+        +++ (Prod (Scal div4, Qubit (v 3)) +++ Poly.empty);
+      ket = [| x0 ++ v 2; v 3 |];
+      path_var = [ 2; 3 ] }
+  in
+  let on_raw = Rules.Variable_replacement.variable_replacement raw in
+  let on_simplified =
+    Rules.Variable_replacement.variable_replacement
+      (Rules.Simplification.simplify raw)
+  in
+  check string "default call simplifies the input"
+    (variable_replacement_result_exact on_simplified)
+    (variable_replacement_result_exact on_raw)
+
 let variable_replacement =
   [
     ( "variable_replacement returns typed replacement",
       `Quick,
       test_variable_replacement_returns_typed_replacement );
+    ( "variable_replacement simplified input flag",
+      `Quick,
+      test_variable_replacement_simplified_input_flag );
+    ( "variable_replacement default simplifies arbitrary input",
+      `Quick,
+      test_variable_replacement_default_simplifies_arbitrary_input );
     ( "variable_replacement preserves path-variable names",
       `Quick,
       test_variable_replacement_preserves_path_variable_names );

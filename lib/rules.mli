@@ -301,12 +301,16 @@ module Variable_replacement : sig
 
   val variable_replacement :
     ?debug:bool ->
+    ?input_is_simplified:bool ->
     Path_sum.t ->
     (Path_sum.t option, reduction_error) result
-  (** [variable_replacement ?debug ps] returns [Ok (Some ps')] when one
-      replacement is applied, [Ok None] when no replacement applies, and
-      [Error (MalformedPathSum message)] when an internal matcher invariant is
-      violated. *)
+  (** [variable_replacement ?debug ?input_is_simplified ps] returns
+      [Ok (Some ps')] when one replacement is applied, [Ok None] when no
+      replacement applies, and [Error (MalformedPathSum message)] when an
+      internal matcher invariant is violated. [input_is_simplified] defaults to
+      [false] and [ps] is simplified first; set it to [true] only when [ps] is
+      already simplified, as [Reduction_algorithm] guarantees at its call site,
+      to skip a redundant simplification. *)
 
   val variable_replacement_factorisation :
     ?debug:bool -> Path_sum.t -> Path_sum.t

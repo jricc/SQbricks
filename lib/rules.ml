@@ -1190,15 +1190,21 @@ module Variable_replacement = struct
     in
     substitute_in_ket None 0
 
-  let variable_replacement ?(debug = false) (input : Path_sum.t) :
-      (Path_sum.t option, reduction_error) result =
+  let variable_replacement ?(debug = false) ?(input_is_simplified = false)
+      (input : Path_sum.t) : (Path_sum.t option, reduction_error) result =
     let width = Array.length input.ket in
 
     if debug then
       printf "Reduction_rules.variable_replacement, input.phase = %s\n\n"
         (PS.pretty input.phase width);
 
-    let ps = Simplification.simplify input in
+    (* [input_is_simplified] lets the reduction pipeline skip a simplification
+       that is already the identity: [Reduction_algorithm] calls this rule on a
+       path sum whose phase and ket were just simplified. Direct callers with an
+       arbitrary input keep the default [false] and are still simplified. *)
+    let ps =
+      if input_is_simplified then input else Simplification.simplify input
+    in
 
     if debug then
       printf "Reduction_rules.variable_replacement, ps.phase = %s\n\n"
