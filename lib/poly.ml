@@ -726,13 +726,19 @@ let distribution ?(debug = false) ?(s1 = Q.one) (m1 : Monome.t) (p2 : t) : t =
 
 let prod ?(debug = false) ?(s1 = Q.one) p1 p2 =
   if debug then printf "Phase.prod, p2 = %s\n" (String.exact p2);
+  (* [p2] is constant across the loop over the monomials of [p1], so simplify
+     it once here instead of once per monomial. [distribution] maps each
+     monomial of [p2] independently and the outer [simplify_monomes] merges the
+     results, so the terms merged or dropped here would be merged or dropped
+     identically after the distribution: the product is unchanged. *)
+  let p2_simplified = simplify_monomes p2 in
   let rec aux p1 acc =
     if equal p1 empty then acc
     else
       let m1, p1_remain = (find p1, del p1) in
       if debug then printf "Phase.prod, m1 = %s\n" (Monome.String.exact m1);
       aux p1_remain
-        (acc @@ simplify_monomes (distribution ~s1 m1 (simplify_monomes p2)))
+        (acc @@ simplify_monomes (distribution ~s1 m1 p2_simplified))
   in
   aux (simplify_monomes p1) empty
 

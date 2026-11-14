@@ -2497,6 +2497,51 @@ let test_poly_lift_half_coefficient_returns_input () =
   let output = Poly.lift input div2 in
   check bool "half-coefficient lift" true (Poly.equal input output)
 
+let test_poly_prod_merges_duplicate_rhs_monomes () =
+  (* [prod] simplifies the right-hand side once, before distributing each
+     monomial of the left-hand side. Duplicate bodies and zero coefficients on
+     the right must still merge exactly once in the result:
+     (x0 + x1) * (1/2 y2 + 1/4 y2 + 0*y3) = 3/4 x0 y2 + 3/4 x1 y2. *)
+  let y2 = Monome.Qubit (Qubit.Var 2) in
+  let three_quarters = Q.add div2 div4 in
+  let p1 = Monome.Qubit x0 +++ (Monome.Qubit x1 +++ Poly.empty) in
+  let p2 =
+    Monome.Prod (Monome.Scal div2, y2)
+    +++ (Monome.Prod (Monome.Scal div4, y2)
+        +++ ( Monome.Prod (Monome.Scal Q.zero, Monome.Qubit (Qubit.Var 3))
+            +++ Poly.empty ))
+  in
+  let expected =
+    Monome.Prod
+      (Monome.Scal three_quarters, Monome.Prod (Monome.Qubit x0, y2))
+    +++ ( Monome.Prod
+            (Monome.Scal three_quarters, Monome.Prod (Monome.Qubit x1, y2))
+        +++ Poly.empty )
+  in
+  check bool "product merges duplicate rhs monomes" true
+    (Poly.equal expected (Poly.prod p1 p2))
+
+let test_poly_prod_with_scalar_and_empty_operands () =
+  (* The optional scalar [s1] multiplies every distributed coefficient, and an
+     empty operand gives the canonical zero polynomial [Poly.zero], because
+     [simplify_monomes] normalizes the empty heap to [Scal Q.zero]:
+     1/2 * x0 * (y1 + y2) = 1/2 x0 y1 + 1/2 x0 y2. *)
+  let y1 = Monome.Qubit (Qubit.Var 1) in
+  let y2 = Monome.Qubit (Qubit.Var 2) in
+  let p1 = Monome.Qubit x0 +++ Poly.empty in
+  let p2 = y1 +++ (y2 +++ Poly.empty) in
+  let expected =
+    Monome.Prod (Monome.Scal div2, Monome.Prod (Monome.Qubit x0, y1))
+    +++ (Monome.Prod (Monome.Scal div2, Monome.Prod (Monome.Qubit x0, y2))
+        +++ Poly.empty)
+  in
+  check bool "product with scalar s1" true
+    (Poly.equal expected (Poly.prod ~s1:div2 p1 p2));
+  check bool "empty left operand" true
+    (Poly.equal Poly.zero (Poly.prod Poly.empty p2));
+  check bool "empty right operand" true
+    (Poly.equal Poly.zero (Poly.prod p1 Poly.empty))
+
 let poly_algebra =
   [
     ( "distribution_result returns poly",
@@ -2508,6 +2553,12 @@ let poly_algebra =
     ( "lift with half coefficient adds no cross term",
       `Quick,
       test_poly_lift_half_coefficient_returns_input );
+    ( "prod merges duplicate rhs monomes",
+      `Quick,
+      test_poly_prod_merges_duplicate_rhs_monomes );
+    ( "prod with scalar and empty operands",
+      `Quick,
+      test_poly_prod_with_scalar_and_empty_operands );
   ]
 
 let test_path_sum_equal_result_returns_true () =
