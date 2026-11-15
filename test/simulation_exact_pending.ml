@@ -355,6 +355,37 @@ let test_group_exact_non_dyadic_phase () =
   | Error _ -> Alcotest.fail "expected Non_dyadic_phase"
   | Ok _ -> Alcotest.fail "a non-dyadic phase must be rejected"
 
+(* E8: m=max_int with one path reports Invalid_path_count without building
+   2^max_int; log2(1)=0 differs from max_int. *)
+let test_group_exact_huge_path_var_count () =
+  let paths : Simulation.expanded_path list =
+    [ { basis_state = [| false |]; phase = Q.zero } ]
+  in
+  match Simulation.group_exact ~path_var_count:max_int paths with
+  | Error (Simulation.Invalid_path_count details) ->
+      Alcotest.check Alcotest.int "path variable count" max_int
+        details.path_var_count;
+      Alcotest.check Alcotest.int "supplied path count" 1 details.actual_count
+  | Error _ -> Alcotest.fail "expected Invalid_path_count"
+  | Ok _ -> Alcotest.fail "a single path cannot be a 2^max_int expansion"
+
+(* E9: per-path checks run in list order, so the non-dyadic phase at index 0
+   is reported before the width mismatch at index 1. *)
+let test_group_exact_error_priority () =
+  let paths : Simulation.expanded_path list =
+    [
+      { basis_state = [| false |]; phase = 1 /// 3 };
+      { basis_state = [| false; false |]; phase = Q.zero };
+    ]
+  in
+  match Simulation.group_exact ~path_var_count:1 paths with
+  | Error (Simulation.Non_dyadic_phase details) ->
+      Alcotest.check Alcotest.int "path index" 0 details.path_index;
+      Alcotest.check Alcotest.bool "reported phase is 1/3" true
+        (Q.equal (1 /// 3) details.phase)
+  | Error _ -> Alcotest.fail "expected Non_dyadic_phase at path index 0"
+  | Ok _ -> Alcotest.fail "a non-dyadic phase must be rejected"
+
 (* Runs accepted tests awaiting implementation only through this executable.
    Example: dune build @simulation-exact-pending; failures are expected for now. *)
 let () =
@@ -424,5 +455,9 @@ let () =
             (test_group_exact_non_finite_phase Q.undef);
           Alcotest.test_case "E7: non-dyadic phase 1/3" `Quick
             test_group_exact_non_dyadic_phase;
+          Alcotest.test_case "E8: path_var_count = max_int, one path" `Quick
+            test_group_exact_huge_path_var_count;
+          Alcotest.test_case "E9: error priority, phase before later width"
+            `Quick test_group_exact_error_priority;
         ] );
     ]

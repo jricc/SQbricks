@@ -562,6 +562,58 @@ let test_group_exact_quarter_phase () =
   | Ok _ -> Alcotest.fail "one path must produce one grouped basis state"
   | Error _ -> Alcotest.fail "exact grouping must succeed for a quarter-phase path"
 
+(* Phase equality modulo 1: phases are defined up to an integer and
+   [Poly.simplify] normalizes them into [0,1). *)
+let phase_mod_one (q : Q.t) : Q.t =
+  Q.make (Z.erem (Q.num q) (Q.den q)) (Q.den q)
+
+(* expand_direct must produce exactly the paths of expand, in the same order,
+   on unreduced path sums with several path variables. Uses execution_result
+   directly so that no reduction collapses the path variables first. *)
+let test_expand_direct_matches_expand () =
+  let circuits =
+    [
+      ("H on |0>", Program.Macros.h 0, [| false |]);
+      ("HH on |0>", Program.Macros.(h 0 -- h 0), [| false |]);
+      ("H S H on |0>", Program.Macros.(h 0 -- ss 0 -- h 0), [| false |]);
+      ("Bell", Program.Macros.(h 0 -- cx 0 1), [| false; false |]);
+      ("H on |1>", Program.Macros.h 0, [| true |]);
+      ( "mixed 3q",
+        Program.Macros.(h 0 -- h 1 -- h 2 -- ss 0 -- tt 1 -- cx 0 1 -- cx 1 2),
+        [| false; false; false |] );
+    ]
+  in
+  List.iter
+    (fun (name, circuit, input) ->
+      let input_state : Path_sum.t =
+        {
+          phase = Poly.empty;
+          ket =
+            Array.map (function false -> Qubit.Zero | true -> Qubit.One) input;
+          path_var = [];
+        }
+      in
+      match Program.execution_result ~input_state circuit with
+      | Error _ -> Alcotest.failf "%s: execution must succeed" name
+      | Ok state -> (
+          match
+            (Simulation.expand state, Simulation.expand_direct state)
+          with
+          | Ok paths, Ok direct ->
+              Alcotest.check Alcotest.int (name ^ ": same path count")
+                (List.length paths) (List.length direct);
+              List.iter2
+                (fun (a : Simulation.expanded_path)
+                     (b : Simulation.expanded_path) ->
+                  Alcotest.check (Alcotest.array Alcotest.bool)
+                    (name ^ ": same basis state") a.basis_state b.basis_state;
+                  Alcotest.check Alcotest.bool (name ^ ": same phase mod 1")
+                    true
+                    (Q.equal (phase_mod_one a.phase) (phase_mod_one b.phase)))
+                paths direct
+          | _ -> Alcotest.failf "%s: expand or expand_direct failed" name))
+    circuits
+
 (* Keeps the experimental simulation checks in a separate executable. *)
 let () =
   Alcotest.run "SQbricks simulation"
@@ -576,6 +628,8 @@ let () =
           Alcotest.test_case "expand X on |0>" `Quick test_expand_x_on_zero;
           Alcotest.test_case "expand H on |0>" `Quick test_expand_h_on_zero;
           Alcotest.test_case "expand H on |1>" `Quick test_expand_h_on_one;
+          Alcotest.test_case "expand_direct matches expand" `Quick
+            test_expand_direct_matches_expand;
         ] );
       ( "Multi-qubit expansion",
         [

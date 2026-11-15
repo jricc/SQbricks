@@ -48,3 +48,23 @@
  (alias simulation-exact-pending)
  (action
   (run ./simulation_exact_pending.exe)))
+
+; Prototype benchmark of exact vs approximate grouping; run explicitly.
+(executable
+ (name simulation_exact_bench)
+ (modules simulation_exact_bench)
+ (modes exe)
+ (libraries sQbricks unix))
+
+(rule
+ (alias simulation-exact-bench)
+ (action
+  (run ./simulation_exact_bench.exe)))
+
+; Prototype external comparison runner (SQbricks vs Qiskit/myQLM), driven by
+; benchmarks/external_comparison/run_all.sh; takes qasm files as arguments.
+(executable
+ (name simulation_external_bench)
+ (modules simulation_external_bench)
+ (modes exe)
+ (libraries sQbricks unix))

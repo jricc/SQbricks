@@ -76,6 +76,14 @@ val expand : Path_sum.t -> (expanded_path list, expand_error) result
     Example: expanding the reduced path sum of H on |0> gives two paths, |0>
     and |1>, both with phase 0. *)
 
+val expand_direct : Path_sum.t -> (expanded_path list, expand_error) result
+(** Experimental variant of {!expand}: evaluates the phase and the ket
+    directly on each boolean assignment instead of substituting and
+    simplifying the expressions. Produces the same paths with the same errors
+    ([PhaseNotScalar] before [KetNotConcrete], per path, in assignment
+    order); kept as a faster expansion candidate benchmarked against
+    {!expand}. *)
+
 (** {1 Grouping by Basis State} *)
 
 type grouped_path = {
@@ -109,6 +117,13 @@ val exact_to_string : exact_amplitude -> string
 (** Returns the exact representation for debugging and tests.
     Example: 1 is represented as [k=1; s=0; coeffs=[0:1]].
     No floating-point conversion is performed. *)
+
+val exact_to_complex : exact_amplitude -> Complex.t
+(** [exact_to_complex a] converts [a] to a floating-point complex number,
+    for numeric cross-checks and debugging only: [a = 2^(-s) * sum_j c_j *
+    exp(2*pi*i*j / 2^k)] with [k] the root exponent. The exact grouping
+    itself never goes through this conversion.
+    Example: [k=1; s=0; coeffs=[0:1]] gives [1 + 0i]. *)
 
 (** A basis state and the exact sum of its contributions.
     Example: two paths leading to |0> produce a single entry. *)
@@ -150,16 +165,29 @@ val group_exact :
     [path_var_count] is the number of path variables in the expanded
     path sum; it fixes the common normalization [2^(-path_var_count/2)].
 
-    Accepted contract, pending implementation: require a nonnegative
-    [path_var_count], then exactly [2^path_var_count] paths. In list order,
-    check each state's width against the first state, then check that its
-    phase is finite and dyadic. Return the first error encountered.
-    Zero-qubit states are allowed; an empty path list is rejected.
-    These checks do not establish that the paths describe an isometry.
+    The input contract is checked first and the first error is returned:
+    a nonnegative [path_var_count], then exactly [2^path_var_count] paths
+    (tested through the base-2 logarithm of the list length, so a huge
+    [path_var_count] never allocates [2^path_var_count]), then, per path in
+    list order, the state width against the first state, phase finiteness
+    and phase dyadicity. Zero-qubit states are allowed; an empty path list
+    is rejected. These checks do not establish that the paths describe an
+    isometry.
 
-    Example: the intended result for [group_exact ~path_var_count:0 []] is
+    Example: [group_exact ~path_var_count:0 []] returns
     [Error (Invalid_path_count { path_var_count = 0; actual_count = 0 })].
 
-    The current partial implementation still returns [Ok []] for no paths.
-    It also supports one path with phase 0, 1/2 or 1/4 and [path_var_count = 0].
-    Other cases raise [Failure]; the input checks above are not implemented yet. *)
+    Valid paths are grouped by state content with no floating-point
+    conversion. Phases are reduced modulo 1 with a nonnegative remainder;
+    the smallest common root exponent [k >= 1] represents all phases
+    ([k >= 3] when [path_var_count] is odd) and
+    [scale = ceil(path_var_count/2)] absorbs the normalization, the
+    [sqrt(2)] factor being folded into the coefficients for odd
+    [path_var_count]. Exponents are reduced with [root^(2^(k-1)) = -1];
+    zero coefficients and zero-amplitude states are dropped, and states are
+    sorted lexicographically with [false < true]. The global phase is
+    preserved.
+
+    Example: grouping the two phase-zero paths of H on |0> at
+    [path_var_count = 1] gives |0> then |1>, each with amplitude
+    [k=3; s=1; coeffs=[1:1; 3:-1]]. *)

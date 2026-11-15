@@ -515,3 +515,11 @@ test/logs/
 benchmarks/result/
 
 *.patch
+
+# Synchronization conflict copies
+*.sync-conflict-*
+
+# Generated simulation benchmark results
+/test.txt
+/benchmarks/external_comparison/results/
+/benchmarks/external_comparison/results_reference/

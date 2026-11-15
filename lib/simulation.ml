@@ -146,6 +146,97 @@ let expand (ps : Path_sum.t) : (expanded_path list, expand_error) result =
   in
   collect [] results
 
+(* Evaluates a qubit expression on a boolean assignment: [Var v] looks up [v],
+   [Prod] is AND, [SumMod2] is XOR. Returns [None] when a variable is missing
+   from the assignment, mirroring the [KetNotConcrete] error of {!expand}.
+   For example, eval_qubit [(0, true)] (SumMod2 (One, Var 0)) = Some false. *)
+let rec eval_qubit (assignment : (int * bool) list) (q : Qubit.t) :
+    bool option =
+  match q with
+  | Qubit.Zero -> Some false
+  | Qubit.One -> Some true
+  | Qubit.Var v -> List.assoc_opt v assignment
+  | Qubit.Prod (a, b) -> (
+      match (eval_qubit assignment a, eval_qubit assignment b) with
+      | Some x, Some y -> Some (x && y)
+      | _ -> None)
+  | Qubit.SumMod2 (a, b) -> (
+      match (eval_qubit assignment a, eval_qubit assignment b) with
+      | Some x, Some y -> Some (x <> y)
+      | _ -> None)
+
+(* Evaluates a phase monome to a rational on an assignment: scalars are
+   constants, qubit monomes become 0 or 1, products multiply. [None] mirrors
+   the [PhaseNotScalar] error of {!expand}. *)
+let rec eval_monome (assignment : (int * bool) list) (m : Poly.Monome.t) :
+    Q.t option =
+  match m with
+  | Poly.Monome.Scal q -> Some q
+  | Poly.Monome.Qubit q -> (
+      match eval_qubit assignment q with
+      | Some true -> Some Q.one
+      | Some false -> Some Q.zero
+      | None -> None)
+  | Poly.Monome.Prod (a, b) -> (
+      match (eval_monome assignment a, eval_monome assignment b) with
+      | Some x, Some y -> Some (Q.mul x y)
+      | _ -> None)
+
+(* Sums the evaluated monomes of a phase polynomial on an assignment. *)
+let eval_phase (assignment : (int * bool) list) (p : Poly.t) : Q.t option =
+  let rec aux p acc =
+    if Poly.is_empty p then Some acc
+    else
+      let m = Poly.find p in
+      let p' = Poly.del p in
+      match eval_monome assignment m with
+      | Some q -> aux p' (Q.add acc q)
+      | None -> None
+  in
+  aux p Q.zero
+
+(** Experimental variant of {!expand}: evaluates the phase and each ket
+    qubit directly on every boolean assignment, instead of rebuilding and
+    simplifying substituted expressions. Produces the same paths with the
+    same errors ([PhaseNotScalar] before [KetNotConcrete], per path, in
+    assignment order); kept as a faster expansion candidate, benchmarked
+    against {!expand}. *)
+let expand_direct (ps : Path_sum.t) : (expanded_path list, expand_error) result
+    =
+  let expand_one (assignment : (int * bool) list) :
+      (expanded_path, expand_error) result =
+    match eval_phase assignment ps.phase with
+    | None -> Error PhaseNotScalar
+    | Some phase ->
+        (* [Poly.simplify] drops integer scalars and normalizes negative ones
+           (remove_neg_scal), so [expand] returns phases in [0,1); normalize
+           the same way here. For example, 1 becomes 0. *)
+        let phase =
+          Q.make (Z.erem (Q.num phase) (Q.den phase)) (Q.den phase)
+        in
+        let n = Array.length ps.ket in
+        let basis_state = Array.make n false in
+        let rec fill i =
+          if i >= n then Some basis_state
+          else
+            match eval_qubit assignment ps.ket.(i) with
+            | None -> None
+            | Some b ->
+                basis_state.(i) <- b;
+                fill (i + 1)
+        in
+        match fill 0 with
+        | None -> Error KetNotConcrete
+        | Some basis_state -> Ok { basis_state; phase }
+  in
+  let results = List.map expand_one (enumerate_assignments ps.path_var) in
+  let rec collect acc = function
+    | [] -> Ok (List.rev acc)
+    | Ok path :: rest -> collect (path :: acc) rest
+    | Error e :: _ -> Error e
+  in
+  collect [] results
+
 (** {1 Grouping by Basis State} *)
 
 type grouped_path = { basis_state : bool array; amplitude : Complex.t }
@@ -218,6 +309,27 @@ let exact_to_string (amplitude : exact_amplitude) : string =
   Printf.sprintf "k=%d; s=%d; coeffs=[%s]" amplitude.root_exponent
     amplitude.scale coefficients
 
+(* Converts an exact amplitude to a floating-point complex number, for
+   numeric cross-checks and debugging only; the exact computation itself
+   never uses this. For example, [k=1; s=0; coeffs=[0:1]] gives [1 + 0i]. *)
+let exact_to_complex (amplitude : exact_amplitude) : Complex.t =
+  (* root = exp(2*pi*i / 2^k); term j is c_j * root^j, evaluated by angle. *)
+  let step =
+    2. *. Float.pi /. Float.pow 2.0 (Float.of_int amplitude.root_exponent)
+  in
+  let sum =
+    ExponentMap.fold
+      (fun exponent coefficient acc ->
+        let angle = Z.to_float exponent *. step in
+        let c = Z.to_float coefficient in
+        Complex.add acc
+          { Complex.re = c *. Float.cos angle; Complex.im = c *. Float.sin angle })
+      amplitude.coeffs Complex.zero
+  in
+  let scale = Float.pow 2.0 (Float.neg (Float.of_int amplitude.scale)) in
+  let { Complex.re = re; Complex.im = im } = sum in
+  { Complex.re = scale *. re; Complex.im = scale *. im }
+
 (** A basis state and its exact summed amplitude.
     For example, one path leading to |0> produces a single entry. *)
 type exact_grouped_path = {
@@ -227,8 +339,8 @@ type exact_grouped_path = {
       (** Exact sum of the amplitudes leading to this state. *)
 }
 
-(** Input errors for complete exact grouping; checks are pending implementation.
-    For example, zero paths at m=0 must give [Invalid_path_count]. *)
+(** Input errors for complete exact grouping, checked before any computation.
+    For example, zero paths at m=0 give [Invalid_path_count]. *)
 type exact_error =
   | Negative_path_var_count of int
       (** The supplied number of path variables is negative. *)
@@ -248,45 +360,177 @@ type exact_error =
   | Non_dyadic_phase of { path_index : int; phase : Q.t }
       (** The finite phase cannot be written with a power-of-two denominator. *)
 
-(** Handles no paths or one path with phase 0, 1/2 or 1/4 and no path variables.
-    For example, one path to |0> with phase 0 and path count 0 has amplitude 1.
-    Other cases are not implemented yet and raise [Failure]. *)
+(* A finite rational always has a strictly positive denominator; Q.inf,
+   Q.minus_inf and Q.undef are the only rationals whose denominator is 0.
+   For example, Q.den (1/3) = 3 and Q.den Q.inf = 0. *)
+let is_finite_phase (phase : Q.t) : bool = Z.sign (Q.den phase) > 0
+
+(* A finite phase is dyadic when the denominator of its reduced form is a
+   power of two. For example, 1/8 is dyadic but 1/3 is not. *)
+let is_dyadic_phase (phase : Q.t) : bool =
+  let den = Q.den phase in
+  Z.sign den > 0 && Z.(logand den (den - one)) = Z.zero
+
+(* A positive integer is a power of two iff [n land (n-1) = 0].
+   For example, 4 is a power of two but 0 and 3 are not. *)
+let is_power_of_two (n : int) : bool = n > 0 && (n land (n - 1)) = 0
+
+(* Base-2 logarithm of a positive power of two, counted by shifts.
+   For example, log2_of_power_of_two 8 = 3. *)
+let log2_of_power_of_two (n : int) : int =
+  let rec aux n acc = if n = 1 then acc else aux (n lsr 1) (acc + 1) in
+  aux n 0
+
+(* Non-negative remainder of [a] modulo [b > 0].
+   For example, pos_rem (-1) 4 = 3. *)
+let pos_rem (a : Z.t) (b : Z.t) : Z.t =
+  let r = Z.rem a b in
+  if Z.sign r < 0 then Z.add r b else r
+
+(* Checks the accepted input contract in order: a nonnegative path variable
+   count, then exactly [2^m] paths (tested through log2 of the list length,
+   so a huge [m] never allocates [2^m]), then per path in list order the
+   state width against the first state, phase finiteness and phase
+   dyadicity. Returns the first error encountered, if any.
+   For example, one path of phase 1/3 at m=0 gives [Non_dyadic_phase] at
+   index 0, before any later path is inspected. *)
+let validate_inputs ~(path_var_count : int) (paths : expanded_path list) :
+    exact_error option =
+  if path_var_count < 0 then Some (Negative_path_var_count path_var_count)
+  else
+    let actual_count = List.length paths in
+    if
+      (not (is_power_of_two actual_count))
+      || log2_of_power_of_two actual_count <> path_var_count
+    then Some (Invalid_path_count { path_var_count; actual_count })
+    else
+      match paths with
+      | [] -> None (* unreachable: an empty list fails the count check *)
+      | first :: _ ->
+          let expected_width = Array.length first.basis_state in
+          (* Annotated: [basis_state] also exists on other record types, so an
+             unannotated pattern would resolve to the wrong one. *)
+          let rec aux (path_index : int) (remaining : expanded_path list) :
+              exact_error option =
+            match remaining with
+            | [] -> None
+            | path :: rest ->
+                let actual_width = Array.length path.basis_state in
+                if actual_width <> expected_width then
+                  Some
+                    (Inconsistent_state_width
+                       { path_index; expected_width; actual_width })
+                else if not (is_finite_phase path.phase) then
+                  Some (Non_finite_phase { path_index })
+                else if not (is_dyadic_phase path.phase) then
+                  Some (Non_dyadic_phase { path_index; phase = path.phase })
+                else aux (path_index + 1) rest
+          in
+          aux 0 paths
+
+(* Basis-state map; [compare] on bool arrays is lexicographic with
+   [false < true], which is also the required output order. *)
+module StateMap = Map.Make (struct
+  type t = bool array
+
+  let compare = compare
+end)
+
+(* Smallest root exponent representing a dyadic phase: the reduced
+   denominator is [2^k_phase]. For example, phase_root_exponent (1/8) = 3 and
+   phase_root_exponent 1 = 0. *)
+let phase_root_exponent (phase : Q.t) : int =
+  let den = Q.den phase in
+  if Z.equal den Z.one then 0 else Z.log2 den
+
+(* Adds [c * root^j] to a coefficient map, using [root^(2^(k-1)) = -1] to
+   reduce [j >= 2^(k-1)]; one step suffices because [j < 2^k]. Zero
+   coefficients are removed. For example, at k=2, adding root^3 gives
+   exponent 1 with coefficient -1. *)
+let add_term ~half (coeffs : Z.t ExponentMap.t) (j : Z.t) (c : Z.t) :
+    Z.t ExponentMap.t =
+  let j, c =
+    if Z.compare j half >= 0 then (Z.sub j half, Z.neg c) else (j, c)
+  in
+  let updated =
+    match ExponentMap.find_opt j coeffs with
+    | None -> c
+    | Some previous -> Z.add previous c
+  in
+  if Z.equal updated Z.zero then ExponentMap.remove j coeffs
+  else ExponentMap.add j updated coeffs
+
+(** Checks the input contract, then groups a complete expansion exactly.
+    For example, one path to |0> with phase 0 and path count 0 has amplitude
+    [k=1; s=0; coeffs=[0:1]], and the two phase-zero paths of H on |0> give
+    |0> then |1>, each with [k=3; s=1; coeffs=[1:1; 3:-1]]. *)
 let group_exact ~(path_var_count : int) (paths : expanded_path list) :
     (exact_grouped_path list, exact_error) result =
-  match paths with
-  | [] -> Ok []
-  | [ path ] when path_var_count = 0 && Q.equal path.phase Q.zero ->
-      (* With no path variables, normalization and phase both contribute 1. *)
-      let amplitude =
-        {
-          root_exponent = 1;
-          scale = 0;
-          coeffs = ExponentMap.singleton Z.zero Z.one;
-        }
+  match validate_inputs ~path_var_count paths with
+  | Some error -> Error error
+  | None ->
+      (* Common coordinates: the smallest k >= 1 representing every phase,
+         raised to 3 when m is odd so the sqrt(2) factor fits; s = ceil(m/2)
+         absorbs the 2^(-m/2) normalization without further simplification. *)
+      let k =
+        List.fold_left
+          (fun k (path : expanded_path) ->
+            max k (phase_root_exponent path.phase))
+          1 paths
       in
-      Ok [ { basis_state = path.basis_state; amplitude } ]
-  | [ path ]
-    when path_var_count = 0 && Q.equal path.phase (Q.make Z.one (Z.of_int 2)) ->
-      (* At k=1, the half-turn phase is -1 times the zeroth root power. *)
-      let amplitude =
-        {
-          root_exponent = 1;
-          scale = 0;
-          coeffs = ExponentMap.singleton Z.zero Z.minus_one;
-        }
+      let k = if path_var_count mod 2 = 1 then max k 3 else k in
+      let scale = path_var_count / 2 + (path_var_count mod 2) in
+      let half = Z.pow (Z.of_int 2) (k - 1) in
+      (* Root exponent of one path in [0, 2^k): r = num mod den in [0, den)
+         is shifted by k - k_phase(p); r < 2^k_phase keeps j < 2^k. *)
+      let path_exponent (path : expanded_path) : Z.t =
+        let den = Q.den path.phase in
+        let r = pos_rem (Q.num path.phase) den in
+        Z.mul r (Z.pow (Z.of_int 2) (k - phase_root_exponent path.phase))
       in
-      Ok [ { basis_state = path.basis_state; amplitude } ]
-  | [ path ]
-    when path_var_count = 0 && Q.equal path.phase (Q.make Z.one (Z.of_int 4)) ->
-      (* At k=2, the quarter-turn phase is the first power of root=i. *)
-      let amplitude =
-        {
-          root_exponent = 2;
-          scale = 0;
-          coeffs = ExponentMap.singleton Z.one Z.one;
-        }
+      (* Sum the reduced terms of all paths leading to the same state. *)
+      let grouped =
+        List.fold_left
+          (fun acc (path : expanded_path) ->
+            let terms =
+              match StateMap.find_opt path.basis_state acc with
+              | None -> ExponentMap.empty
+              | Some terms -> terms
+            in
+            StateMap.add path.basis_state
+              (add_term ~half terms (path_exponent path) Z.one)
+              acc)
+          StateMap.empty paths
       in
-      Ok [ { basis_state = path.basis_state; amplitude } ]
-  | _ :: _ ->
-      (* Temporary boundary: other cases need their own tests first. *)
-      failwith "Simulation.group_exact: case not implemented yet"
+      (* For odd m, 2^(-m/2) = 2^(-s) * sqrt(2) with
+         sqrt(2) = root^(2^(k-3)) - root^(3*2^(k-3)); fold it into each sum.
+         New exponents stay below 2^k because stored j < 2^(k-1). *)
+      let grouped =
+        if path_var_count mod 2 = 1 then
+          let eighth = Z.pow (Z.of_int 2) (k - 3) in
+          StateMap.map
+            (fun terms ->
+              ExponentMap.fold
+                (fun j c acc ->
+                  add_term ~half
+                    (add_term ~half acc (Z.add j eighth) c)
+                    (Z.add j (Z.mul (Z.of_int 3) eighth))
+                    (Z.neg c))
+                terms ExponentMap.empty)
+            grouped
+        else grouped
+      in
+      (* Drop zero-amplitude states; bindings are already sorted. *)
+      let result =
+        List.filter_map
+          (fun (basis_state, coeffs) ->
+            if ExponentMap.is_empty coeffs then None
+            else
+              Some
+                {
+                  basis_state;
+                  amplitude = { root_exponent = k; scale; coeffs };
+                })
+          (StateMap.bindings grouped)
+      in
+      Ok result
