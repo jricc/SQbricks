@@ -4060,8 +4060,37 @@ let test_substitute_path_var_does_not_mutate_input () =
   check string "input unchanged" input_before (PSS.exact ps_input);
   check string "substitution result" (PSS.exact ps_expect) (PSS.exact ps_greet)
 
+let test_rename_returns_canonical_path_sum_unchanged () =
+  (* Width 2 with [path_var = [2; 3]] is already canonical: every substitution
+     is the identity, so [rename] returns the path sum unchanged. *)
+  let ps : Path_sum.t =
+    { phase = Prod (Scal div2, Qubit (Var 3)) +++ Poly.empty;
+      ket = [| Var 0; Var 1 |];
+      path_var = [ 2; 3 ] }
+  in
+  check string "canonical path sum unchanged" (PSS.exact ps)
+    (PSS.exact (Rules.Rename.rename ps))
+
+let test_rename_still_renumbers_gapped_path_variables () =
+  (* Width 1 with [path_var = [1; 3]] is not canonical: 3 must become 2 in the
+     path-variable list and in the phase. *)
+  let ps : Path_sum.t =
+    { phase = to_poly (Qubit (Var 3)); ket = [| Var 0 |]; path_var = [ 1; 3 ] }
+  in
+  let expected : Path_sum.t =
+    { phase = to_poly (Qubit (Var 2)); ket = [| Var 0 |]; path_var = [ 1; 2 ] }
+  in
+  check string "gapped path sum renumbered" (PSS.exact expected)
+    (PSS.exact (Rules.Rename.rename ps))
+
 let update_pvs =
   [
+    ( "rename keeps canonical path sum",
+      `Quick,
+      test_rename_returns_canonical_path_sum_unchanged );
+    ( "rename renumbers gapped path variables",
+      `Quick,
+      test_rename_still_renumbers_gapped_path_variables );
     ( "find_pvs ps1",
       `Quick,
       test_find_update_pvs
@@ -5083,6 +5112,36 @@ let test_apply_classical_not_does_not_mutate_input () =
   let _ = Gates.Apply_gates.apply_classical_not input 0 in
   check string "input unchanged" input_before (PSS.exact input)
 
+let test_apply_gates_local_mode_matches_full_simplification () =
+  (* With SQBRICKS_LOCAL_GATE_SIMPLIFICATION=1, each gate simplifies only the
+     components it modifies. On an already simplified input, the result must be
+     identical to the default full simplification. *)
+  let ps : Path_sum.t =
+    { phase = Prod (Scal div2, Qubit (v 1)) +++ Poly.empty;
+      ket = [| x0; x1 |];
+      path_var = [] }
+  in
+  let previous_local_mode =
+    try Some (Unix.getenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION") with
+    | Not_found -> None
+  in
+  Unix.putenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" "1";
+  let local_not = Gates.Apply_gates.apply_not ps [] 0 in
+  let local_u1 = Gates.Apply_gates.apply_u1 div4 ps [] 1 in
+  let local_h = Gates.Apply_gates.apply_hadamard ps [] 0 in
+  (match previous_local_mode with
+  | Some value -> Unix.putenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" value
+  | None -> Unix.unsetenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION");
+  let full_not = Gates.Apply_gates.apply_not ps [] 0 in
+  let full_u1 = Gates.Apply_gates.apply_u1 div4 ps [] 1 in
+  let full_h = Gates.Apply_gates.apply_hadamard ps [] 0 in
+  check string "local apply_not matches full" (PSS.exact full_not)
+    (PSS.exact local_not);
+  check string "local apply_u1 matches full" (PSS.exact full_u1)
+    (PSS.exact local_u1);
+  check string "local apply_hadamard matches full" (PSS.exact full_h)
+    (PSS.exact local_h)
+
 let gates_apply =
   [
     ( "h_result returns path sum",
@@ -5280,6 +5339,9 @@ let gates_apply =
     ( "apply_classical_not does not mutate input",
       `Quick,
       test_apply_classical_not_does_not_mutate_input );
+    ( "local gate simplification matches full simplification",
+      `Quick,
+      test_apply_gates_local_mode_matches_full_simplification );
     ("id", `Quick, test_gates_apply id (Path_sum.ofSize 0));
     ("h", `Quick, test_gates_apply (h 0) (Path_sum_library.h 0 1));
     ("x", `Quick, test_gates_apply (x 0) (Path_sum_library.x 0 1));

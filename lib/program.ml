@@ -370,6 +370,13 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       | Sequence (p1, p2) -> (
           match aux p1 ps with Error error -> Error error | Ok ps' -> aux p2 ps')
     in
+    (* Local gate simplification mode (prototype): normalize the initial path
+       sum once here so that every gate starts from a simplified path sum. *)
+    let ps =
+      if Apply_gates.local_gate_simplification () then
+        Rules.Simplification.simplify ps
+      else ps
+    in
     aux p ps
   in
 

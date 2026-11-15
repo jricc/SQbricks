@@ -1089,8 +1089,22 @@ module Rename = struct
         (PSS.pretty ps_output);
     ps_output
 
+  (* A path-variable list that is already sorted and contiguous from the ket
+     width maps every variable to itself: all substitutions would be
+     identities. Example: width 1 with [path_var = [1; 2]] is canonical, whereas
+     [[1; 3]] still renames 3 to 2. *)
+  let is_already_renamed (ps : Path_sum.t) =
+    let rec aux path_var expected =
+      match path_var with
+      | [] -> true
+      | path_variable :: remaining ->
+          Int.equal path_variable expected && aux remaining (expected + 1)
+    in
+    aux ps.path_var (Array.length ps.ket)
+
   let rename ?(debug = false) (ps : Path_sum.t) =
-    _substitute_path_var ~debug ps (_find_update_path_var ps)
+    if is_already_renamed ps then ps
+    else _substitute_path_var ~debug ps (_find_update_path_var ps)
 end
 
 module Variable_replacement = struct

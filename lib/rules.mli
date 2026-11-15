@@ -185,7 +185,10 @@ module Rename : sig
 
       Output:
       - [phase: 1/2*y2 + 1/2*y2*y1 + 1/4*y0]
-      - [ket: |y2, y1, y0>] *)
+      - [ket: |y2, y1, y0>]
+
+      An already canonical [ps] (sorted path variables, contiguous from the ket
+      width) is returned unchanged. *)
 
   (**/**)
 

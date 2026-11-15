@@ -1,7 +1,7 @@
 (executables
  (names qiskit mbqc unitary primitives verif)
  (modes exe)
- (libraries alcotest sQbricks)
+ (libraries alcotest unix sQbricks)
  ;  (flags :standard -w -a)
  )
 

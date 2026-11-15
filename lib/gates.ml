@@ -66,6 +66,38 @@ module Apply_gates = struct
   let distribution = Poly.distribution
   let int_sort l = List.fast_sort Int.compare l
 
+  (* Prototype [SQBRICKS_LOCAL_GATE_SIMPLIFICATION], disabled by default: when
+     enabled, each gate simplifies only the components it modifies. This is
+     exact when the input path sum is already simplified, because
+     [Qubit.simplify] and [Poly.simplify] are idempotent on untouched
+     components, so the full [Rules.Simplification.simplify] would return the
+     same path sum. [Program.execution_aux] simplifies the initial path sum
+     once in this mode, which establishes that invariant. *)
+  let local_gate_simplification () =
+    match Sys.getenv_opt "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" with
+    | Some ("1" | "true") -> true
+    | _ -> false
+
+  (* Default: full simplification of the path sum. Local mode: simplify the
+     phase only when [phase_changed], and the ket only at [ket_target]. *)
+  let simplify_output ?(phase_changed = true) ?(ket_target = None) ps_output =
+    if not (local_gate_simplification ()) then
+      Rules.Simplification.simplify ps_output
+    else
+      let phase =
+        if phase_changed then Poly.simplify ps_output.phase
+        else ps_output.phase
+      in
+      let ket =
+        match ket_target with
+        | None -> ps_output.ket
+        | Some target ->
+            let ket = Ket.copy ps_output.ket in
+            ket.(target) <- Qubit.simplify ket.(target);
+            ket
+      in
+      { phase; ket; path_var = ps_output.path_var }
+
   let apply_hadamard ps co ta : Path_sum.t =
     (* \(1/2 (x_{co} x_{ta} y) + 1/8 ((1-x_{co}) (1-2y)) \) *)
     let apply_hadamard_phase (xta : Qubit.t) (y0 : int) (control : Qubit.t) :
@@ -112,7 +144,8 @@ module Apply_gates = struct
             path_var = int_sort (y0 :: ps.path_var);
           }
     in
-    Rules.Simplification.simplify ps_output
+    (* H changes the phase and the target qubit. *)
+    simplify_output ~ket_target:(Some ta) ps_output
 
   let apply_not ps co ta =
     let (q : Qubit.t) =
@@ -125,7 +158,8 @@ module Apply_gates = struct
     let ps_output =
       { phase = ps.phase; ket = output_ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    (* X changes only the target qubit; the phase is untouched. *)
+    simplify_output ~phase_changed:false ~ket_target:(Some ta) ps_output
 
   let apply_u1 ?(debug = false) (angle' : Q.t) ps co ta =
     let width = Array.length ps.ket in
@@ -166,7 +200,8 @@ module Apply_gates = struct
     let ps_output =
       { phase = p_output; ket = ps.ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    (* U1 changes only the phase; the ket is untouched. *)
+    simplify_output ps_output
 
   let apply_gp (angle' : Q.t) ps co =
     let angle =
@@ -188,7 +223,8 @@ module Apply_gates = struct
     let ps_output =
       { phase = p_output; ket = ps.ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    (* GP changes only the phase; the ket is untouched. *)
+    simplify_output ps_output
 
   let apply_classical_not ps ta =
     let output_ket = Ket.copy ps.ket in
