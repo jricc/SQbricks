@@ -2,15 +2,36 @@
 
 This file records the user-visible changes in SQbricks releases.
 
-## [Unreleased]
+## [0.2.1] - 2026-11-15
 
 ### Fixed
 
+- Follow indirect phase dependencies when checking separation of observed and
+  discarded outputs. Separation and partial comparison now share the same
+  phase partition, and comparison preserves the full phases when independence
+  is not established. Global-phase comparison ignores only constant terms.
 - Run the development container as the host user so the bind-mounted worktree
   is writable (`container.sh`). With a rootless Docker daemon the container
   user is root, which is the host user there; with a rootful daemon it is the
   host UID/GID. This fixes `make tests` failing with `Permission denied` on
   `/sqbricks/_build` when the host UID differs from the image user `opam`.
+
+### Validation and known limitations
+
+- The recorded post-integration validation includes 1,595 passing tests and a
+  passing light check with 50 functional rows and 14 tracked performance rows.
+- The large comparison completed all ten families; eight passed. A targeted
+  A-B-B-A control did not reproduce the two large teleportation slowdowns and
+  reproduced both OWM Sequence resource failures with and without the fix.
+  These controls do not establish a global performance gain or a fully passing
+  large campaign.
+- The large runner labels exit code 137 as out-of-memory without establishing
+  the cause of SIGKILL. Targeted measurements strongly suggest that the two
+  OWM Sequence failures reach the CPU limit; their exact kill cause remains
+  unconfirmed. Existing CSV statuses are preserved.
+- Direct path-sum comparison does not itself certify separation. The internal
+  phase-partition helper assumes that observed and discarded registers cover
+  all output wires; the equivalence pipeline supplies complementary lists.
 
 ## [0.2.0] - 2026-10-10
 
