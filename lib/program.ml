@@ -314,6 +314,16 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
   in
 
   let execution_aux (p : t) (ps : Path_sum.t) =
+    (* Local to this execution: a custom input may be noncanonical. No-op
+       programs and zero rotations never establish the invariant. *)
+    let canonical_state = ref false in
+    (* After the first effective target gate, e.g. X, all components are
+       canonical. Subsequent gates can normalize only the components changed. *)
+    let apply_target apply ps co target =
+      let output = apply ?canonical_input:(Some !canonical_state) ps co target in
+      canonical_state := true;
+      output
+    in
     let rec apply_forall apply (ps : Path_sum.t) co (ta : int list) =
       match ta with
       | i :: [] -> apply ps co i
@@ -349,15 +359,21 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
       | Apply (_, co, ta) when error_apply co ta ->
           Error (InvalidGateApplication (width, p))
       | Measure _ | It _ | InitQ _ | Not _ -> Error (HybridProgram p)
-      | Apply (H, co, ta) -> Ok (apply_forall Apply_gates.apply_hadamard ps co ta)
-      | Apply (X, co, ta) -> Ok (apply_forall Apply_gates.apply_not ps co ta)
+      | Apply (H, co, ta) ->
+          Ok (apply_forall (apply_target Apply_gates.apply_hadamard) ps co ta)
+      | Apply (X, co, ta) ->
+          Ok (apply_forall (apply_target Apply_gates.apply_not) ps co ta)
       | Apply (GP (s, k), co, _) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
           | Some angle when Q.equal angle Q.zero -> Ok ps
           | Some angle ->
               (* GP is targetless: targets are tolerated in Program.t but ignored. *)
-              Ok (Apply_gates.apply_gp angle ps co))
+              let output =
+                Apply_gates.apply_gp ~canonical_input:!canonical_state angle ps co
+              in
+              canonical_state := true;
+              Ok output)
       | Apply (U1 (s, k), co, ta) -> (
           match canonical_rotation_angle s k with
           | None -> Error (NonDyadicRotationAngle p)
@@ -365,7 +381,11 @@ let execution_result ?(debug = false) ?(input_state = Path_sum.ofSize 0) p =
           | Some angle ->
               if debug then
                 printf "Program.execution.Apply U1, p = %s\n\n%!" (String.exact p);
-              Ok (apply_forall (Apply_gates.apply_u1 ~debug angle) ps co ta))
+              Ok
+                (apply_forall
+                   (apply_target (fun ?canonical_input ps co target ->
+                        Apply_gates.apply_u1 ~debug ?canonical_input angle ps co target))
+                   ps co ta))
       | E -> Ok ps
       | Sequence (p1, p2) -> (
           match aux p1 ps with Error error -> Error error | Ok ps' -> aux p2 ps')

@@ -44,21 +44,37 @@ val equal : t -> t -> bool
 (** {1 Gate Application} *)
 
 module Apply_gates : sig
-  val apply_hadamard : Path_sum.t -> int list -> int -> Path_sum.t
+  (** {2 Simplification contract}
+
+      The optional [canonical_input] argument defaults to [false]: the complete
+      output ket and phase are simplified, including unchanged components.
+      [true] requires the input ket and phase to already be in the normal forms
+      produced by [Path_sum.Ket.simplify] and [Poly.simplify]. This precondition
+      is not checked; it lets the operation simplify only changed components.
+      For example, X simplifies only its target; H simplifies target and phase;
+      U1 and GP simplify only the phase. Path variables are not renamed.
+
+      Inputs, including shared ket arrays, are never modified. Unchanged ket
+      arrays may be shared by phase-only operations. *)
+
+  val apply_hadamard :
+    ?canonical_input:bool -> Path_sum.t -> int list -> int -> Path_sum.t
   (** [apply_hadamard ps controls target] applies a Hadamard gate to target
       qubit, controlled by qubits in [controls]. *)
 
   val apply_u1 :
-    ?debug:bool -> Q.t -> Path_sum.t -> int list -> int -> Path_sum.t
+    ?debug:bool -> ?canonical_input:bool ->
+    Q.t -> Path_sum.t -> int list -> int -> Path_sum.t
   (** [apply_u1 k ps controls target] applies a U1 gate with parameter [k] to
       target qubit, controlled by qubits in [controls]. *)
 
-  val apply_not : Path_sum.t -> int list -> int -> Path_sum.t
+  val apply_not :
+    ?canonical_input:bool -> Path_sum.t -> int list -> int -> Path_sum.t
   (** [apply_not ps controls target] applies a quantum NOT gate. *)
 
   val apply_classical_not : Path_sum.t -> int -> Path_sum.t
   (** [apply_classical_not ps target] applies a classical NOT gate. *)
 
-  val apply_gp : Q.t -> Path_sum.t -> int list -> Path_sum.t
+  val apply_gp : ?canonical_input:bool -> Q.t -> Path_sum.t -> int list -> Path_sum.t
   (** [apply_gp k ps controls] applies a global phase gate. *)
 end

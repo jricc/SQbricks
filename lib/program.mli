@@ -96,6 +96,12 @@ val execution_result :
     [input_state] path-sum or an initialized path sum, or reports why execution
     cannot proceed.
 
+    Each execution starts without assuming that [input_state] is simplified.
+    The first effective gate simplifies the full state; later gates simplify
+    only the components they modify. Empty programs and rotations that are
+    zero modulo one preserve the state without establishing this invariant.
+    The input state, including its ket array, is never modified.
+
     [H], [X], and [U1] applications require a non-empty target list.
     [Apply (GP _, controls, targets)] ignores [targets]: [GP] is semantically
     targetless, even when a target list is present in the program value.

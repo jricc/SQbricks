@@ -244,6 +244,12 @@ execution; the original `Program.t` is not rewritten.
 ### Path sums and reduction
 
 `Program.execution_result` produces a path sum or a typed execution error.
+Execution does not assume that the initial state has already been simplified.
+The first effective gate simplifies the complete ket and phase; subsequent
+gates simplify only the components they change. A rotation that is zero
+modulo one and an empty program preserve the state. The initial state is
+never modified.
+
 `Reduction_algorithm.reduction_algorithm` then applies the reduction rules. A
 rule that does not apply to a valid path sum is distinguished from a malformed
 path sum; the latter reaches `Equiv` as `ErrorMalformedPathSum`.

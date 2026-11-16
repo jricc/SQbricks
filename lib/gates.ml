@@ -66,7 +66,7 @@ module Apply_gates = struct
   let distribution = Poly.distribution
   let int_sort l = List.fast_sort Int.compare l
 
-  let apply_hadamard ps co ta : Path_sum.t =
+  let apply_hadamard ?(canonical_input = false) ps co ta : Path_sum.t =
     (* \(1/2 (x_{co} x_{ta} y) + 1/8 ((1-x_{co}) (1-2y)) \) *)
     let apply_hadamard_phase (xta : Qubit.t) (y0 : int) (control : Qubit.t) :
         poly =
@@ -112,9 +112,14 @@ module Apply_gates = struct
             path_var = int_sort (y0 :: ps.path_var);
           }
     in
-    Rules.Simplification.simplify ps_output
+    if canonical_input then (
+      (* Both H branches copied the input ket above; this target update
+         cannot modify a state sharing the input array. *)
+      ps_output.ket.(ta) <- Qubit.simplify ps_output.ket.(ta);
+      { ps_output with phase = Poly.simplify ps_output.phase })
+    else Rules.Simplification.simplify ps_output
 
-  let apply_not ps co ta =
+  let apply_not ?(canonical_input = false) ps co ta =
     let (q : Qubit.t) =
       match co with
       | [] -> One +++ ps.ket.(ta)
@@ -125,9 +130,14 @@ module Apply_gates = struct
     let ps_output =
       { phase = ps.phase; ket = output_ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    if canonical_input then (
+      (* output_ket is a fresh copy. X preserves the phase and all
+         other components, so only this target needs simplification. *)
+      ps_output.ket.(ta) <- Qubit.simplify ps_output.ket.(ta);
+      ps_output)
+    else Rules.Simplification.simplify ps_output
 
-  let apply_u1 ?(debug = false) (angle' : Q.t) ps co ta =
+  let apply_u1 ?(debug = false) ?(canonical_input = false) (angle' : Q.t) ps co ta =
     let width = Array.length ps.ket in
     if debug then
       printf "Gates.apply_u1, angle' = %s\n\n%!" (Q.to_string angle');
@@ -166,9 +176,11 @@ module Apply_gates = struct
     let ps_output =
       { phase = p_output; ket = ps.ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    if canonical_input then
+      { ps_output with phase = Poly.simplify ps_output.phase }
+    else Rules.Simplification.simplify ps_output
 
-  let apply_gp (angle' : Q.t) ps co =
+  let apply_gp ?(canonical_input = false) (angle' : Q.t) ps co =
     let angle =
       let k = find_k angle'.den in
       if Q.lt angle' Q.zero then
@@ -188,7 +200,9 @@ module Apply_gates = struct
     let ps_output =
       { phase = p_output; ket = ps.ket; path_var = ps.path_var }
     in
-    Rules.Simplification.simplify ps_output
+    if canonical_input then
+      { ps_output with phase = Poly.simplify ps_output.phase }
+    else Rules.Simplification.simplify ps_output
 
   let apply_classical_not ps ta =
     let output_ket = Ket.copy ps.ket in

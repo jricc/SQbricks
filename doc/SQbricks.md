@@ -257,6 +257,11 @@ pas réécrit.
 ### Path-sums et réduction
 
 `Program.execution_result` produit un path-sum ou une erreur d'exécution typée.
+L'exécution ne suppose pas que l'état initial est déjà simplifié. La première
+porte effective simplifie le ket et la phase complets ; les portes suivantes
+ne simplifient que leurs composantes modifiées. Une rotation nulle modulo un
+et un programme vide préservent l'état. L'état initial n'est pas modifié.
+
 `Reduction_algorithm.reduction_algorithm` applique ensuite les règles de
 réduction. Une règle qui ne s'applique pas à un path-sum valide est distinguée
 d'un path-sum mal formé ; ce dernier remonte jusqu'à `Equiv` sous la forme

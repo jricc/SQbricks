@@ -1580,6 +1580,63 @@ let check_omega_does_not_match label input =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail (label ^ ": unexpected malformed path sum: " ^ message)
 
+(* Without any summation variable, even a non-normalized phase cannot match. *)
+let test_omega_without_path_variables () =
+  let quarter_x0 : Monome.t = Prod (Scal div4, Qubit x0) in
+  let input : Path_sum.t =
+    {
+      phase = quarter_x0 +++ (quarter_x0 +++ Poly.empty);
+      ket = [| x0 |];
+      path_var = [];
+    }
+  in
+  let before = PSS.exact input in
+  check_omega_does_not_match "no path variables" input;
+  check string "input unchanged" before (PSS.exact input)
+
+(* Both declared variables occur inside one output expression: neither may be
+   eliminated, including when their quarter terms are not yet combined. *)
+let test_omega_with_all_path_variables_in_ket () =
+  let quarter_y0 : Monome.t = Prod (Scal div4, Qubit (v 1)) in
+  let input : Path_sum.t =
+    {
+      phase = quarter_y0 +++ (quarter_y0 +++ Poly.empty);
+      ket = [| v 1 ++ v 2 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let before = PSS.exact input in
+  check_omega_does_not_match "all path variables occur in ket" input;
+  check string "input unchanged" before (PSS.exact input)
+
+(* The first internal variable has an invalid bare coefficient 1/2. The next
+   one matches after 1/8*y1 + 1/8*y1 is normalized to 1/4*y1. *)
+let test_omega_tries_next_internal_candidate () =
+  let eighth_y1 : Monome.t = Prod (Scal div8, Qubit (v 2)) in
+  let input : Path_sum.t =
+    {
+      phase =
+        Prod (Scal div2, Qubit (v 1))
+        +++ (eighth_y1 +++ (eighth_y1 +++ Poly.empty));
+      ket = [| x0 |];
+      path_var = [ 1; 2 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Poly.simplify (Scal div8 +++
+        (Prod (Scal div2, Qubit (v 1)) +++ Poly.empty));
+      ket = [| x0 |];
+      path_var = [ 1 ];
+    }
+  in
+  match Rules.Omega.omega input with
+  | Ok (Some output) ->
+      check string "next internal candidate" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "expected the second internal candidate to match"
+  | Error (Rules.MalformedPathSum message) -> Alcotest.fail message
+
 (* Case: y0 occurs in the ket, so summing it out would change the output. *)
 let test_omega_rejects_eliminated_variable_in_ket () =
   let y0 = v 1 in
@@ -1717,6 +1774,15 @@ let omega =
     ( "omega normalizes its phase before matching",
       `Quick,
       test_omega_normalizes_phase_before_matching );
+    ( "omega returns none without path variables",
+      `Quick,
+      test_omega_without_path_variables );
+    ( "omega returns none when all path variables occur in ket",
+      `Quick,
+      test_omega_with_all_path_variables_in_ket );
+    ( "omega tries the next internal candidate",
+      `Quick,
+      test_omega_tries_next_internal_candidate );
     ( "omega preserves an independent phase context",
       `Quick,
       test_omega_preserves_independent_phase_context );
@@ -3382,6 +3448,62 @@ let test_variable_replacement_preserves_path_variable_names () =
   | Error (Rules.MalformedPathSum message) ->
       Alcotest.fail ("unexpected malformed path sum: " ^ message)
 
+(* A middle output changes while sparse path indices are renamed in both
+   phase and ket. A second state shares the input ket to detect mutation. *)
+let test_variable_replacement_sparse_spectators_and_shared_input () =
+  let input : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 7)) +++ Poly.empty;
+      ket = [| v 0; v 1 ++ v 5; v 7 |];
+      path_var = [ 5; 7 ];
+    }
+  in
+  let shared_state : Path_sum.t = { input with phase = Poly.zero } in
+  let input_before = PSS.exact input in
+  let shared_before = PSS.exact shared_state in
+  let expected : Path_sum.t =
+    {
+      phase = Prod (Scal div4, Qubit (v 4)) +++ Poly.empty;
+      ket = [| v 0; v 3; v 4 |];
+      path_var = [ 3; 4 ];
+    }
+  in
+  let output =
+    match Rules.Variable_replacement.variable_replacement input with
+    | Ok (Some output) -> output
+    | Ok None -> Alcotest.fail "expected a middle-output replacement"
+    | Error (Rules.MalformedPathSum message) -> Alcotest.fail message
+  in
+  check string "complete result including renamed spectators"
+    (PSS.exact expected) (PSS.exact output);
+  check string "input unchanged" input_before (PSS.exact input);
+  check string "shared input unchanged" shared_before (PSS.exact shared_state)
+
+(* The direct API must still simplify every input component before matching:
+   |1*x0, 0+(x1+y0), x2+x2> becomes |x0, y0, 0>. *)
+let test_variable_replacement_simplifies_noncanonical_spectators () =
+  let quarter_x0 : Monome.t = Prod (Scal div4, Qubit (v 0)) in
+  let input : Path_sum.t =
+    {
+      phase = quarter_x0 +++ (quarter_x0 +++ Poly.empty);
+      ket = [| Qubit.Prod (one, v 0); zero ++ (v 1 ++ v 3); v 2 ++ v 2 |];
+      path_var = [ 3 ];
+    }
+  in
+  let expected : Path_sum.t =
+    {
+      phase = Prod (Scal div2, Qubit (v 0)) +++ Poly.empty;
+      ket = [| v 0; v 3; zero |];
+      path_var = [ 3 ];
+    }
+  in
+  match Rules.Variable_replacement.variable_replacement input with
+  | Ok (Some output) ->
+      check string "simplified phase and spectators" (PSS.exact expected)
+        (PSS.exact output)
+  | Ok None -> Alcotest.fail "expected a replacement after simplification"
+  | Error (Rules.MalformedPathSum message) -> Alcotest.fail message
+
 let test_variable_replacement_returns_none () =
   let input : Path_sum.t =
     { phase = Poly.zero; ket = [| Qubit.Var 0 |]; path_var = [] }
@@ -3674,6 +3796,12 @@ let variable_replacement =
     ( "variable_replacement preserves path-variable names",
       `Quick,
       test_variable_replacement_preserves_path_variable_names );
+    ( "variable_replacement preserves sparse spectators and shared input",
+      `Quick,
+      test_variable_replacement_sparse_spectators_and_shared_input );
+    ( "variable_replacement simplifies noncanonical spectators",
+      `Quick,
+      test_variable_replacement_simplifies_noncanonical_spectators );
     ( "variable_replacement returns none",
       `Quick,
       test_variable_replacement_returns_none );
@@ -4979,6 +5107,105 @@ let test_apply_classical_not_does_not_mutate_input () =
   let _ = Gates.Apply_gates.apply_classical_not input 0 in
   check string "input unchanged" input_before (PSS.exact input)
 
+(* Invalid applications still report the original typed errors, even after
+   an effective gate has established the canonical invariant. *)
+let test_local_gate_execution_errors () =
+  let prefix = Program.Apply (Gates.X, [], [0]) in
+  let input = Path_sum.ofSize 3 in
+  let check_error name invalid expected =
+    match Program.execution_result ~input_state:input (Program.Sequence (prefix, invalid)) with
+    | Error error -> check bool name true (error = expected)
+    | Ok _ -> Alcotest.fail (name ^ ": expected execution error")
+  in
+  let empty = Program.Apply (Gates.H, [], []) in
+  check_error "empty targets" empty (Program.EmptyTargetList empty);
+  let overlap = Program.Apply (Gates.X, [0], [0]) in
+  check_error "control-target overlap" overlap (Program.InvalidGateApplication (3, overlap));
+  let negative = Program.Apply (Gates.X, [], [-1]) in
+  check_error "negative target" negative (Program.InvalidGateApplication (3, negative));
+  let nondyadic = Program.Apply (Gates.U1 (Q.make Z.one (Z.of_int 3), 0), [], [0]) in
+  check_error "nondyadic angle" nondyadic (Program.NonDyadicRotationAngle nondyadic)
+
+(* A full-simplification oracle uses direct gate calls with their default
+   options. It checks the component-local execution against full normalization. *)
+let check_local_gate_execution steps () =
+  let quarter_x0 : Monome.t = Monome.Prod (Monome.Scal div4, Monome.Qubit (v 0)) in
+  let input : Path_sum.t =
+    {
+      phase = quarter_x0 +++ (quarter_x0 +++ Poly.empty);
+      ket =
+        [| Qubit.Prod (Qubit.One, v 0);
+           Qubit.SumMod2 (Qubit.Zero, v 1);
+           Qubit.SumMod2 (v 2, v 2) |];
+      path_var = [];
+    }
+  in
+  let before = PSS.exact input in
+  (* The test angles are nonnegative dyadics in [0,1]; integer turns are no-ops. *)
+  let full_gate ps (gate, controls, targets) =
+    let apply_all apply =
+      List.fold_left (fun state target -> apply state controls target) ps targets
+    in
+    match gate with
+    | Gates.H -> apply_all (Gates.Apply_gates.apply_hadamard ~canonical_input:false)
+    | Gates.X -> apply_all (Gates.Apply_gates.apply_not ~canonical_input:false)
+    | Gates.U1 (s, k) ->
+        let angle = Q.div_2exp s k in
+        if Q.equal angle Q.zero || Q.equal angle Q.one then ps
+        else apply_all (Gates.Apply_gates.apply_u1 angle)
+    | Gates.GP (s, k) ->
+        let angle = Q.div_2exp s k in
+        if Q.equal angle Q.zero || Q.equal angle Q.one then ps
+        else Gates.Apply_gates.apply_gp angle ps controls
+  in
+  let expected = List.fold_left full_gate input steps in
+  let program =
+    List.fold_left
+      (fun prefix (gate, controls, targets) ->
+        Program.Sequence (prefix, Program.Apply (gate, controls, targets)))
+      Program.E steps
+  in
+  let output =
+    match Program.execution_result ~input_state:input program with
+    | Ok output -> output
+    | Error _ -> Alcotest.fail "unexpected execution error"
+  in
+  (* Exact printed trees check canonical form, rather than domain equivalence. *)
+  check string "full and local normal forms" (PSS.exact expected) (PSS.exact output);
+  check string "shared input unchanged" before (PSS.exact input);
+  (* A fresh execution must not inherit the previous call's canonical flag. *)
+  let fresh = Program.execution ~input_state:input (Program.Apply (Gates.X, [], [0])) in
+  let full = Gates.Apply_gates.apply_not input [] 0 in
+  check string "fresh execution normalizes spectators" (PSS.exact full) (PSS.exact fresh)
+
+let local_gate_simplification =
+  let h = (Gates.H, [], [0]) in
+  let x = (Gates.X, [], [0]) in
+  let u1 = (Gates.U1 (Q.one, 2), [], [0]) in
+  let gp = (Gates.GP (Q.one, 3), [], []) in
+  let zero_u1 = (Gates.U1 (Q.zero, 2), [], [0]) in
+  let zero_gp = (Gates.GP (Q.one, 0), [], []) in
+  [
+    ("errors after effective gate", `Quick, test_local_gate_execution_errors);
+    ("empty preserves input", `Quick, check_local_gate_execution []);
+    ("zero angles preserve input", `Quick, check_local_gate_execution [zero_u1; zero_gp]);
+    ("first X normalizes spectators", `Quick, check_local_gate_execution [x]);
+    ("first H normalizes spectators", `Quick, check_local_gate_execution [h]);
+    ("first U1 normalizes spectators", `Quick, check_local_gate_execution [u1]);
+    ("first GP normalizes spectators", `Quick, check_local_gate_execution [gp]);
+    ("zero before effective gate", `Quick, check_local_gate_execution [zero_u1; zero_gp; x; x]);
+    ("X leaves phase and spectators canonical", `Quick, check_local_gate_execution [gp; x; x]);
+    ("mixed gates", `Quick, check_local_gate_execution [h; u1; x; gp; h]);
+    ("controlled gates", `Quick,
+      check_local_gate_execution
+        [x; (Gates.H, [0], [1]); (Gates.X, [1], [2]);
+         (Gates.U1 (Q.one, 3), [0], [2]); (Gates.GP (Q.one, 2), [1;2], [])]);
+    ("multiple targets", `Quick,
+      check_local_gate_execution
+        [(Gates.H, [], [0;1]); (Gates.X, [0], [1;2]);
+         (Gates.U1 (Q.one, 3), [], [0;1;2])]);
+  ]
+
 let gates_apply =
   [
     ( "h_result returns path sum",
@@ -5262,4 +5489,5 @@ let () =
       ("Qubit", qubit);
       ("Ket", ket);
       ("Gates application", gates_apply);
+      ("Local gate simplification", local_gate_simplification);
     ]
