@@ -303,6 +303,14 @@ module HH = struct
   let simplify p = Poly.simplify p
   let qsimplify p = Qubit.simplify p
 
+  (* Collects the variables occurring in a monome. For example, the monome
+     [1/2*y0*x0] yields the variables of [y0] and [x0]. *)
+  let rec monome_variables (monome : Monome.t) variables =
+    match monome with
+    | Scal _ -> variables
+    | Qubit qubit -> List.rev_append (Qubit.extract_var qubit) variables
+    | Prod (m1, m2) -> monome_variables m2 (monome_variables m1 variables)
+
   (* Validate y0 and select yi in one phase traversal. For example, with
      [1/2*y0*y1 + 1/2*y0*y2], the traversal counts both pairs and keeps y1,
      the first valid candidate in the canonical phase order. *)
@@ -311,13 +319,6 @@ module HH = struct
     if Path_sum.Ket.member y0 ps.ket then Ok None
     else
       let width = Array.length ps.ket in
-      let rec monome_variables (monome : Monome.t) variables =
-        match monome with
-        | Scal _ -> variables
-        | Qubit qubit -> List.rev_append (Qubit.extract_var qubit) variables
-        | Prod (m1, m2) ->
-            monome_variables m2 (monome_variables m1 variables)
-      in
       let add_occurrence occurrences variable =
         let count =
           match IntMap.find_opt variable occurrences with
@@ -454,6 +455,47 @@ module HH = struct
     in
     aux phase []
 
+  (* Collects every variable with index at least [width] occurring in a monome
+     of [phase], sorted and deduplicated. For example, [1/4*y2 + 1/8*x1] with
+     width 1 yields [2]. Unlike [path_variables_with_possible_yi], every monome
+     contributes, not only the [1/2*v1*v2] ones. *)
+  let poly_path_variables (phase : Poly.t) width =
+    let rec aux phase variables =
+      if Poly.equal phase Poly.empty then
+        List.sort_uniq Int.compare
+          (List.filter (fun variable -> width <= variable) variables)
+      else
+        let monome, remaining_phase = (Poly.find phase, Poly.del phase) in
+        aux remaining_phase
+          (List.rev_append (monome_variables monome []) variables)
+    in
+    aux phase []
+
+  (* Incremental update of the [analyze_y0] prefilter after a successful HH
+     match on the pair (y0, yi), where [substituted_r_with_yi] is the phase
+     contribution produced by substituting [yi <- Q] in the remainder.
+
+     The exact prefilter of the reduced phase is not recomputed. Every witness
+     monome [1/2*v1*v2] of the reduced phase either comes unchanged from a
+     monome containing neither y0 nor yi — so its variables are already in
+     [candidates] — or its variables occur in [substituted_r_with_yi], because
+     substitution and simplification only preserve or shrink the variable set
+     of each monome. The matched pair y0, yi no longer occurs in the reduced
+     phase and is removed. Restricted to indices at least [width] — the only
+     candidates [hh] tries, because path variables are all >= width — the
+     result is a superset of the exact prefilter, which preserves the semantics
+     of [hh]: a false positive only triggers an [analyze_y0] call that returns
+     [Ok None], exactly like a skipped candidate. *)
+  let update_candidates_after_match (candidates : int list) y0 yi
+      (substituted_r_with_yi : Poly.t) width =
+    let kept =
+      List.filter
+        (fun variable -> not (Int.equal variable y0 || Int.equal variable yi))
+        candidates
+    in
+    List.sort_uniq Int.compare
+      (kept @ poly_path_variables substituted_r_with_yi width)
+
   (* HH removes the summation variable y0 and the constrained variable yi in
      one canonical-to-canonical transformation. *)
   let remove_matched_path_variables path_variables y0 yi =
@@ -462,8 +504,11 @@ module HH = struct
         not (Int.equal path_variable y0 || Int.equal path_variable yi))
       path_variables
 
+  (* Applies the HH transformation for a validated pair (y0, yi). Besides the
+     reduced path sum, returns the substituted remainder so that the caller can
+     update the prefilter incrementally. *)
   let hh_aux y0 yi ?(debug = false) (ps : Path_sum.t) :
-      (Path_sum.t option, reduction_error) result =
+      ((Path_sum.t option * Poly.t), reduction_error) result =
     if debug then
       printf "Rule_hh.hh_aux, y0 = y%d\n%!" (y0 - Array.length ps.ket);
     if debug then printf "Rule_hh.hh_aux, ps =\n%!%s\n%!" (PSS.pretty ps);
@@ -492,7 +537,10 @@ module HH = struct
             path_var = remove_matched_path_variables ps.path_var y0 yi;
           }
         in
-        Ok (Some ps_output)
+        (* The substituted remainder is returned alongside the reduced path sum
+           so that the caller can update the prefilter incrementally instead of
+           rescanning the whole reduced phase. *)
+        Ok (Some ps_output, substituted_r_with_yi)
 
   let hh ?(debug = false) ?(y0_to_remove = -1) (ps : Path_sum.t) :
       (Path_sum.t, reduction_error) result =
@@ -511,7 +559,7 @@ module HH = struct
                     printf "Rule_hh.hh.accepted, y0 = %d\n\n%!" (y0 - width);
                   (match hh_aux y0 yi acc ~debug with
                   | Error reduction_error -> Error reduction_error
-                  | Ok (Some acc_reduced) ->
+                  | Ok (Some acc_reduced, substituted_r_with_yi) ->
                       (if debug then
                          printf "Rule_hh.hh.accepted.match hh_aux, y0 = %d\n%!"
                            (y0 - width);
@@ -524,10 +572,20 @@ module HH = struct
                        (* [hh_aux] already simplifies its phase and ket. For
                           example, [1/2*y0*y1 + 1/2*y2*y3] becomes the already
                           simplified [1/2*y2*y3], so do not simplify it again. *)
+                       (* Incremental prefilter update: after a match, only
+                          the substituted remainder can introduce new
+                          candidates, so the whole reduced phase is not
+                          rescanned. The width <= 0 degenerate case keeps the
+                          exact recomputation. *)
                        aux acc_reduced
-                         (path_variables_with_possible_yi acc_reduced.phase width)
+                         (if width > 0 then
+                            update_candidates_after_match candidates y0 yi
+                              substituted_r_with_yi width
+                          else
+                            path_variables_with_possible_yi acc_reduced.phase
+                              width)
                          y0_remain)
-                  | Ok None -> aux acc candidates y0_remain)
+                  | Ok (None, _) -> aux acc candidates y0_remain)
               | Ok None -> aux acc candidates y0_remain
             else aux acc candidates y0_remain
         | _ -> Ok acc
@@ -546,8 +604,8 @@ module HH = struct
       | Ok (Some yi) -> (
           match hh_aux y0_to_remove yi ps with
           | Error reduction_error -> Error reduction_error
-          | Ok (Some ps_output) -> Ok ps_output
-          | Ok None -> Ok ps)
+          | Ok (Some ps_output, _) -> Ok ps_output
+          | Ok (None, _) -> Ok ps)
       | Ok None -> Ok ps
 
 end
