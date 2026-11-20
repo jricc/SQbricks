@@ -398,99 +398,6 @@ let hh =
       test_reduction_algorithm_reports_malformed_path_sum );
   ]
 
-let test_prefilter_update_removes_matched_pair () =
-  (* Non-match on the substituted part: an empty substitution only removes the
-     matched pair (y0=1, yi=2) from the prefilter [1;2;3;4]. *)
-  let updated =
-    Rules.HH.update_candidates_after_match [ 1; 2; 3; 4 ] 1 2 Poly.empty 1
-  in
-  check (list int) "matched pair removed, other candidates kept" [ 3; 4 ]
-    updated
-
-let test_prefilter_update_adds_substituted_variables () =
-  (* Sous contexte: substituting yi <- Q in the remainder can introduce a new
-     path variable into the reduced phase. Here the substituted remainder is
-     1/4*y3, so y3 enters the prefilter even though it was absent before. *)
-  let substituted = Prod (Scal div4, Qubit (v 3)) +++ Poly.empty in
-  let updated =
-    Rules.HH.update_candidates_after_match [ 1; 2 ] 1 2 substituted 1
-  in
-  check (list int) "substituted path variable added" [ 3 ] updated
-
-let test_prefilter_update_filters_variables_below_width () =
-  (* Variables below the ket width are not path variables: with width 4, the
-     substituted 1/4*y3 yields no candidate. *)
-  let substituted = Prod (Scal div4, Qubit (v 3)) +++ Poly.empty in
-  let updated =
-    Rules.HH.update_candidates_after_match [ 1; 2 ] 1 2 substituted 4
-  in
-  check (list int) "variables below width filtered out" [] updated
-
-let test_prefilter_update_covers_exact_prefilter () =
-  (* Soundness: after a match on (1, 2) whose substituted remainder is
-     1/2*y4*y3, the exact prefilter of the reduced phase 1/2*y3*y4 is [3;4] and
-     the incremental prefilter must contain every exact candidate. *)
-  let reduced_phase =
-    Prod (Scal div2, Prod (Qubit (v 3), Qubit (v 4))) +++ Poly.empty
-  in
-  let substituted =
-    Prod (Scal div2, Prod (Qubit (v 4), Qubit (v 3))) +++ Poly.empty
-  in
-  let exact = Rules.HH.path_variables_with_possible_yi reduced_phase 1 in
-  let updated =
-    Rules.HH.update_candidates_after_match [ 1; 2; 3; 4 ] 1 2 substituted 1
-  in
-  check (list int) "exact prefilter of the reduced phase" [ 3; 4 ] exact;
-  check bool "incremental prefilter covers the exact one"
-    (List.for_all (fun variable -> List.mem variable updated) exact)
-    true
-
-let test_hh_match_on_substitution_created_witness () =
-  (* phase = 1/2 y1y2 + 1/2 y1y4 + 1/2 y2y3, ket = |y2>, path_var = [1;2;3;4].
-     The first match removes (y0=y1, yi=y2) with Q = y4, so the remainder
-     1/2*y2*y3 becomes 1/2*y4*y3: a witness created by the substitution. The
-     incremental prefilter keeps y3 and y4, and the second match removes
-     (y0=y3, yi=y4). *)
-  let phase =
-    Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 2)))
-    +++ (Prod (Scal div2, Prod (Qubit (v 1), Qubit (v 4)))
-         +++ (Prod (Scal div2, Prod (Qubit (v 2), Qubit (v 3)))
-              +++ Poly.empty))
-  in
-  let input : Path_sum.t =
-    { phase; ket = [| v 2 |]; path_var = [ 1; 2; 3; 4 ] }
-  in
-  let expected : Path_sum.t =
-    { phase = p0; ket = [| zero |]; path_var = [] }
-  in
-  let output =
-    match Rules.HH.hh input with
-    | Ok output -> output
-    | Error (Rules.MalformedPathSum message) ->
-        Alcotest.fail ("unexpected malformed path sum: " ^ message)
-  in
-  check string "substitution-created witness matched" (PSS.exact expected)
-    (PSS.exact output)
-
-let hh_prefilter =
-  [
-    ( "prefilter update removes the matched pair",
-      `Quick,
-      test_prefilter_update_removes_matched_pair );
-    ( "prefilter update adds substituted variables",
-      `Quick,
-      test_prefilter_update_adds_substituted_variables );
-    ( "prefilter update filters variables below width",
-      `Quick,
-      test_prefilter_update_filters_variables_below_width );
-    ( "prefilter update covers the exact prefilter",
-      `Quick,
-      test_prefilter_update_covers_exact_prefilter );
-    ( "hh matches a substitution-created witness",
-      `Quick,
-      test_hh_match_on_substitution_created_witness );
-  ]
-
 let minimal_case_phase : Poly.t =
   (* P = 1/4 y0*x0 + 1/2 y0*y1 + 1/4 y1*(1-x0).
      This is the smallest direct instance of Amy's Case rule, with x=x0,
@@ -5501,7 +5408,6 @@ let () =
       ("Poly Normalise", poly_normalize);
       (* ("Normalise Path Variables", normalise_path_var); *)
       ("HH", hh);
-      ("HH prefilter", hh_prefilter);
       ("Case", case_rule);
       ("Omega", omega);
       ("Path-sum equality", path_sum_equality);

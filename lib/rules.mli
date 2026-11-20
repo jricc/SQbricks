@@ -135,25 +135,6 @@ module HH : sig
       The optional [y0_to_remove] parameter specifies which path variable to
       eliminate. If not provided, the rule will automatically select a suitable
       [y0]. *)
-
-  val path_variables_with_possible_yi : Poly.t -> int -> int list
-  (** [path_variables_with_possible_yi phase width] returns the sorted list of
-      variables occurring in a monomial [1/2 * v1 * v2] of [phase] whose other
-      variable is at least [width]. It is the prefilter used by [hh]: a path
-      variable absent from this list cannot match the rule. *)
-
-  val update_candidates_after_match :
-    int list -> int -> int -> Poly.t -> int -> int list
-  (** [update_candidates_after_match candidates y0 yi substituted width]
-      incrementally updates the [hh] prefilter [candidates] after a successful
-      match on the pair [(y0, yi)], where [substituted] is the phase remainder
-      obtained by substituting [yi <- Q]. The matched pair [y0], [yi] is
-      removed and the variables of [substituted] with index at least [width]
-      are added. Restricted to indices at least [width] — the only candidates
-      [hh] tries, because path variables are all >= width — the result is a
-      superset of [path_variables_with_possible_yi] on the reduced phase, which
-      preserves the semantics of [hh]: a false positive only triggers an extra
-      [analyze_y0] call that returns [Ok None]. *)
 end
 
 module Case : sig
