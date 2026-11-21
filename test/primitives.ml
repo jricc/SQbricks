@@ -5115,7 +5115,7 @@ let test_apply_classical_not_does_not_mutate_input () =
 let test_apply_gates_local_mode_matches_full_simplification () =
   (* With SQBRICKS_LOCAL_GATE_SIMPLIFICATION=1, each gate simplifies only the
      components it modifies. On an already simplified input, the result must be
-     identical to the default full simplification. *)
+     identical to the full simplification forced with =0. *)
   let ps : Path_sum.t =
     { phase = Prod (Scal div2, Qubit (v 1)) +++ Poly.empty;
       ket = [| x0; x1 |];
@@ -5129,12 +5129,13 @@ let test_apply_gates_local_mode_matches_full_simplification () =
   let local_not = Gates.Apply_gates.apply_not ps [] 0 in
   let local_u1 = Gates.Apply_gates.apply_u1 div4 ps [] 1 in
   let local_h = Gates.Apply_gates.apply_hadamard ps [] 0 in
-  (match previous_local_mode with
-  | Some value -> Unix.putenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" value
-  | None -> Unix.unsetenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION");
+  Unix.putenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" "0";
   let full_not = Gates.Apply_gates.apply_not ps [] 0 in
   let full_u1 = Gates.Apply_gates.apply_u1 div4 ps [] 1 in
   let full_h = Gates.Apply_gates.apply_hadamard ps [] 0 in
+  (match previous_local_mode with
+  | Some value -> Unix.putenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" value
+  | None -> Unix.unsetenv "SQBRICKS_LOCAL_GATE_SIMPLIFICATION");
   check string "local apply_not matches full" (PSS.exact full_not)
     (PSS.exact local_not);
   check string "local apply_u1 matches full" (PSS.exact full_u1)

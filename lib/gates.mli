@@ -63,9 +63,9 @@ module Apply_gates : sig
   (** [apply_gp k ps controls] applies a global phase gate. *)
 
   val local_gate_simplification : unit -> bool
-  (** [local_gate_simplification ()] is [true] when the environment variable
-      [SQBRICKS_LOCAL_GATE_SIMPLIFICATION] is ["1"] or ["true"] (prototype,
-      disabled by default). In that mode each gate simplifies only the
-      components it modifies; the result is identical to a full simplification
-      because the input path sum is already simplified. *)
+  (** [local_gate_simplification ()] is [true] unless the environment variable
+      [SQBRICKS_LOCAL_GATE_SIMPLIFICATION] is ["0"] or ["false"] (enabled by
+      default). In that mode each gate simplifies only the components it
+      modifies; the result is identical to a full simplification because the
+      input path sum is already simplified. *)
 end

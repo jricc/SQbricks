@@ -66,17 +66,19 @@ module Apply_gates = struct
   let distribution = Poly.distribution
   let int_sort l = List.fast_sort Int.compare l
 
-  (* Prototype [SQBRICKS_LOCAL_GATE_SIMPLIFICATION], disabled by default: when
-     enabled, each gate simplifies only the components it modifies. This is
-     exact when the input path sum is already simplified, because
-     [Qubit.simplify] and [Poly.simplify] are idempotent on untouched
-     components, so the full [Rules.Simplification.simplify] would return the
-     same path sum. [Program.execution_aux] simplifies the initial path sum
-     once in this mode, which establishes that invariant. *)
+  (* Local gate simplification, enabled by default: each gate simplifies only
+     the components it modifies. This is exact when the input path sum is
+     already simplified, because [Qubit.simplify] and [Poly.simplify] are
+     idempotent on untouched components, so the full
+     [Rules.Simplification.simplify] would return the same path sum.
+     [Program.execution_aux] simplifies the initial path sum once in this
+     mode, which establishes that invariant. Set
+     [SQBRICKS_LOCAL_GATE_SIMPLIFICATION=0] to disable and restore a full
+     simplification after every gate. *)
   let local_gate_simplification () =
     match Sys.getenv_opt "SQBRICKS_LOCAL_GATE_SIMPLIFICATION" with
-    | Some ("1" | "true") -> true
-    | _ -> false
+    | Some ("0" | "false") -> false
+    | _ -> true
 
   (* Default: full simplification of the path sum. Local mode: simplify the
      phase only when [phase_changed], and the ket only at [ket_target]. *)
